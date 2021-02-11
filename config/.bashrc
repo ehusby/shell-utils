@@ -32,9 +32,10 @@ fi
 
 ### System-specific settings
 
-#export MY_EMAIL=<your-email-address>  # Necessary for shell-utils 'email_me' script
+### FILL OUT OR COMMENT OUT THE FOLLOWING LINES ###
+export MY_EMAIL=<your-email-address>  # Necessary for shell-utils 'email_me' script
 SHELL_UTILS_PATH=<path-to>/shell-utils/exec  # Necessary for sourcing general purpose shell functions
-#export PATH=$PATH:$SHELL_UTILS_PATH  # Easily call shell-utils scripts
+export PATH=$PATH:$SHELL_UTILS_PATH  # Easily call shell-utils scripts
 #export PATH=$PATH:<path-to>/pyscript-utils  # Easily call pyscript-utils scripts
 
 ## Aliases
