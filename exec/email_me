@@ -1,0 +1,104 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_dir=$(dirname "$script_file")
+script_name=$(basename "$script_file")
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+set +u; shopt -s expand_aliases; source ~/.bashrc; shopt -u expand_aliases; set -u
+source "$bash_functions_script"
+
+## Required envvars
+if [ -z "$(env | grep '^MY_EMAIL=')" ] || [ -z "$MY_EMAIL" ]; then
+    echo "Please run 'export MY_EMAIL=<your-email-address>' in this bash instance and add that to your ~/.bashrc file :)"
+    exit_script_with_status 1
+fi
+email_address="$MY_EMAIL"
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+Usage: ${script_name} [-{email output option:o|e|q}] run_command (can be quoted to perform multiline commands such as for/while loop)
+ Email output option detrmines which text streams are recorded in the email body:
+  -o : stdout only (stdout and stderr are printed to terminal during run command as usual)
+  -e : stderr only (stderr is captured and printed to terminal at end of run command)
+  -q : no output   (stdout and stderr are printed to terminal during run command as usual)
+  (if no option is given, both stdout and stderr are included in email body text)
+EOM
+
+
+cmd_args=("$@")
+email_output_opt=''
+if (( $# == 0 )); then
+    cmd="(none)"
+    cmd_preview="(none)"
+else
+    first_arg="${cmd_args[0]}"
+    if [ "$first_arg" ==  '-h' ] || [ "$first_arg" ==  '--h' ] || [ "$first_arg" ==  '-help' ] || [ "$first_arg" ==  '--help' ]; then
+        echo "$script_usage"
+        exit 0
+    fi
+    if [ "$first_arg" ==  '-o' ] || [ "$first_arg" ==  '-e' ] || [ "$first_arg" ==  '-q' ]; then
+        email_output_opt="$first_arg"
+        cmd_args=("${cmd_args[@]:1}")
+    fi
+
+    cmd=$(echo "${cmd_args[*]}")
+    cmd_preview=$(echo "${cmd_args[@]:0:4}")
+    if (( ${#cmd_args[@]} > 3 )); then
+        cmd_preview=$(echo "${cmd_preview} ...")
+    fi
+fi
+
+email_output_desc=''
+
+time_started=$(date)
+if [ "$cmd" == "(none)" ]; then
+    cmd_output="(none)"
+else
+    set +u
+    if [ "$email_output_opt" == '-q' ]; then
+        eval "$cmd"
+        cmd_output='(suppressed by -q option)'
+    elif [ "$email_output_opt" == '-e' ]; then
+        email_output_desc=" (stderr only)"
+        { cmd_output=$(eval "$cmd" 2>&1 1>&3-) ;} 3>&1
+        echo "$cmd_output"
+    else
+        exec 5>&1
+        if [ "$email_output_opt" == '-o' ]; then
+            email_output_desc=" (stdout only)"
+            cmd_output=$(eval "$cmd" | tee >(cat - >&5))
+        else
+            cmd_output=$(eval "$cmd" 2>&1 | tee >(cat - >&5))
+        fi
+    fi
+    set -u
+fi
+time_finished=$(date)
+
+email_subject="Finished command: ${cmd_preview}"
+email_body=$(cat <<EOF
+-- Command --
+${cmd}
+
+-- Time Started --
+${time_started}
+${time_finished}
+-- Time Finished --
+
+-- Output${email_output_desc} --
+${cmd_output}
+EOF
+)
+
+echo "$email_body" | mail -s "$email_subject" "$email_address"

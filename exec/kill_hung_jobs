@@ -1,0 +1,69 @@
+#!/bin/bash
+
+set -uo pipefail
+
+if [ "$#" -lt 2 -o "$#" -gt 3 ]; then
+    echo "Script requires 2 arguments + 1 optional: mmin_thresh, check_min, [jobname_prefix]"
+    echo "    mmin_thresh      - number of minutes since ~/<jobname>.o<jobnum> job output log file was last modified at which point the job is deemed 'hung'"
+    echo "    check_min        - time interval between checks of 'qstat -r -n1 -u ${USER}' for hung jobs"
+    echo "    [jobname_prefix] - only check running jobs matching this jobname prefix"
+    exit 1
+fi
+
+mmin_thresh="$1"
+check_min="$2"
+jobname_prefix=''
+jobname_prefix_descr=''
+if [ "$#" -ge 3 ]; then
+    jobname_prefix="$3"
+fi
+
+hungjobs_stash_dir="${HOME}/scratch/hungjobs_outfiles/"
+hungjobs_digest="${HOME}/scratch/hungjobs_digest.txt"
+
+if [ ! -d "${hungjobs_stash_dir}" ]; then
+    mkdir -p "${hungjobs_stash_dir}"
+fi
+
+function log() {
+    echo -e "$(date) -- $*" | tee -a "${hungjobs_digest}"
+}
+
+function sec2time() {
+    ((h=${1}/3600))
+    ((m=(${1}%3600)/60))
+    ((s=${1}%60))
+    printf "%02d:%02d:%02d\n" $h $m $s
+}
+
+while true; do
+    while read -r qstat_row; do
+        qstat_cols=($qstat_row)
+        jobnum=$(echo ${qstat_cols[0]} | cut -d"." -f1)
+        jobname=${qstat_cols[3]}
+
+        if [[ "${jobname}" != "${jobname_prefix}"* ]]; then continue; fi
+
+        inactive_outfile=$(find ${HOME}/${jobname}.o${jobnum} -mmin +${mmin_thresh})
+
+        if [ -n "${inactive_outfile}" ]; then
+            inactive_outfname=$(basename "${inactive_outfile}")
+
+            outfile_mtime_sec=$(date +%s -r "${inactive_outfile}")
+            current_time_sec=$(date +%s)
+            inactive_sec=$((current_time_sec - outfile_mtime_sec))
+            inactive_time=$(sec2time "${inactive_sec}")
+
+            log "Deleting hung job with outfile last modified ${inactive_time} ago (mmin_thresh=${mmin_thresh}):\n${qstat_row}"
+            qdel ${jobnum}
+            cp ${inactive_outfile} ${hungjobs_stash_dir}
+        fi
+
+    done < <( qstat -r -n1 -u ${USER} | tail -n +6 )
+
+    for (( min_til_check=${check_min}; min_til_check > 0; min_til_check-- )); do
+        echo -en "\r${min_til_check} minutes until next check for hung jobs (mmin_thresh=${mmin_thresh}, check_min=${check_min}, jobname_prefix='${jobname_prefix}')"
+        sleep 1m
+    done
+    echo -en "\r"
+done

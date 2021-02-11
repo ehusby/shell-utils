@@ -1,0 +1,144 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_dir=$(dirname "$script_file")
+script_name=$(basename "$script_file")
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+source "$bash_functions_script"
+
+
+## Arguments
+use_ssh=false
+remove_all=false
+dryrun=false
+ssh_dryrun=false
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+Remove files from /local directory on cluster nodes
+Usage: ${script_name} (pbs|ssh) [--all] [--dryrun] [--ssh-dryrun]
+  pbs : submit single-core PBS job to every node on the cluster for cleanup
+  ssh : SSH into every node on the cluster in serial and run cleanup command over SSH
+  --all : attempt to remove all files within /local directories regardless of ownership (by default only the USER(${USER})'s files are removed)
+  --dryrun : print actions without executing
+  --ssh-dryrun : print list of files to be deleted over SSH into ~/${script_name}_<timestamp>_removed_files.txt log file without actually deleting
+EOM
+if (( $# < 1 )); then
+    echo_e "$script_usage"
+    exit_script_with_status 1
+fi
+
+
+## Parse arguments
+set +u
+while (( "$#" )); do
+    arg="$1"
+    if [ "$arg" == 'ssh' ]; then
+        use_ssh=true
+    elif [ "$arg" == 'pbs' ]; then
+        use_ssh=false
+    elif [ "$arg" == '--all' ]; then
+        remove_all=true
+    elif [ "$arg" == '--dryrun' ]; then
+        dryrun=true
+    elif [ "$arg" == '--ssh-dryrun' ]; then
+        ssh_dryrun=true
+    else
+        echo_e "Unexpected argument: ${arg}"
+        exit_script_with_status 1
+    fi
+    shift
+done
+set -u
+
+
+log_date=$(date +'%Y%m%d%H%M%S')
+
+qsubscript=$(cat <<EOF
+#!/bin/bash
+
+#PBS -N CleanupLocal
+#PBS -m n
+#PBS -k oe
+#PBS -j oe
+
+echo ________________________________________________________
+echo
+echo PBS Job Log
+echo Start time: \$(date)
+echo
+echo Job name: \$PBS_JOBNAME
+echo Job ID: \$PBS_JOBID
+echo Submitted by user: \$USER
+echo User effective group ID: \$(id -ng)
+echo
+echo Hostname of submission: \$PBS_O_HOST
+echo Submitted to cluster: \$PBS_SERVER
+echo Submitted to queue: \$PBS_QUEUE
+echo Requested nodes per job: \$PBS_NUM_NODES
+echo Requested cores per node: \$PBS_NUM_PPN
+echo Requested cores per job: \$PBS_NP
+echo Node list file: \$PBS_NODEFILE
+echo Nodes assigned to job: \$(cat \$PBS_NODEFILE)
+echo Running node index: \$PBS_O_NODENUM
+echo
+echo Running on hostname: \$HOSTNAME
+echo Parent PID: \$PPID
+echo Process PID: \$\$
+echo
+echo Working directory: \$PBS_O_WORKDIR
+echo ________________________________________________________
+echo
+
+echo "Removed the following files:"
+
+find /local/ -mindepth 1 -user ${USER} -ls -delete
+EOF
+)
+
+nodelist=$(pbsnodes -l up | gawk '{print $1}' | sort)
+
+for host in $nodelist ; do
+
+    if [ "$use_ssh" == "true" ]; then
+
+        cmd="ssh ${host} -f 'find /local -mindepth 1"
+
+        if [ "$remove_all" == "false" ]; then
+            cmd="${cmd} -user ${USER}"
+        fi
+        cmd="${cmd} -ls"
+
+        if [ "$ssh_dryrun" == "false" ]; then
+            cmd="${cmd} -delete"
+        fi
+        cmd="${cmd} >> ~/${script_name}_${log_date}_removed_files.txt'"
+
+        echo "$cmd"
+        if [ "$dryrun" == "false" ]; then
+            eval "$cmd"
+        fi
+
+    else
+        ncpus=$(pbsnodes -a ${host} | grep np | gawk '{print $3}')
+        echo "Host: ${host} -- ncpus: ${ncpus}"
+
+        if [ "$dryrun" == "true" ]; then
+            echo 'echo $qsubscript'" | qsub -l 'nodes=${host},ncpus=${ncpus}'"
+        else
+            echo "$qsubscript" | qsub -l "nodes=${host},ncpus=${ncpus}"
+        fi
+    fi
+
+done
