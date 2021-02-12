@@ -2,10 +2,10 @@
 
 # >>> CHANGE NAME OF YOUR EXISTING SYSTEM-PROVIDED .bashrc FILE
 # >>> to '.bashrc_default', and this .bashrc will source that!!
-
 if [ -e "${HOME}/.bashrc_default" ]; then
     source "${HOME}/.bashrc_default"
 fi
+
 
 ## Set umask to enable rwx for group members
 #umask 002  # allow OTHER read and execute perms, but not write
@@ -31,10 +31,12 @@ if [ -n "$PS1" ]; then
 
 fi
 
+
 ################################
 ### System-specific settings ###
 ################################
 
+## Exports (PATH changes and global vars)
 # >>> FILL OUT OR COMMENT OUT THE FOLLOWING LINES <<< #
 export MY_EMAIL=<your-email-address>  # Necessary for shell-utils 'email_me' script
 SHELL_UTILS_PATH=<path-to>/shell-utils  # Necessary for sourcing general purpose shell functions
@@ -47,6 +49,7 @@ export PATH=$PATH:"${SHELL_UTILS_PATH}/exec"  # Easily call shell-utils executab
 
 ################################
 ################################
+
 
 ### General purpose functions and aliases
 
