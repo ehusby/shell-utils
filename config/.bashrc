@@ -1,8 +1,10 @@
 # .bashrc
 
-## Source global definitions
-if [ -f /etc/bashrc ]; then
-    . /etc/bashrc
+# >>> CHANGE NAME OF YOUR EXISTING SYSTEM-PROVIDED .bashrc FILE
+# >>> to '.bashrc_default', and this .bashrc will source that!!
+
+if [ -e "${HOME}/.bashrc_default" ]; then
+    source "${HOME}/.bashrc_default"
 fi
 
 ## Set umask to enable rwx for group members
@@ -29,10 +31,11 @@ if [ -n "$PS1" ]; then
 
 fi
 
+################################
+### System-specific settings ###
+################################
 
-### System-specific settings
-
-### FILL OUT OR COMMENT OUT THE FOLLOWING LINES ###
+# >>> FILL OUT OR COMMENT OUT THE FOLLOWING LINES <<< #
 export MY_EMAIL=<your-email-address>  # Necessary for shell-utils 'email_me' script
 SHELL_UTILS_PATH=<path-to>/shell-utils/exec  # Necessary for sourcing general purpose shell functions
 export PATH=$PATH:$SHELL_UTILS_PATH  # Easily call shell-utils scripts
@@ -42,6 +45,8 @@ export PATH=$PATH:$SHELL_UTILS_PATH  # Easily call shell-utils scripts
 
 ## Functions
 
+################################
+################################
 
 ### General purpose functions and aliases
 
