@@ -50,7 +50,7 @@ export PATH=$PATH:"${SHELL_UTILS_PATH}/exec"  # Easily call shell-utils executab
 
 ### General purpose functions and aliases
 
-if [ -n "$(env | grep '^SHELL_UTILS_PATH=')" ] && [ -n "$SHELL_UTILS_PATH" ]; then
+if ! [ -z ${SHELL_UTILS_PATH+x} ] && [ -n "$SHELL_UTILS_PATH" ]; then
     source "${SHELL_UTILS_PATH}/lib/bash_shell_func.sh"
 fi
 
