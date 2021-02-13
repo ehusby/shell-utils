@@ -6,7 +6,7 @@ Useful tools for derping around in the Linux terminal (primarily Bash).
 If you don't already have a GitHub account, [sign up for one](https://github.com/join) (it's free). You can thank me later.
 <br>
 When you want to update a code repository you've downloaded ("cloned" is the Git term) to your local machine, GitHub can leverage an SSH key that authorizes the download from the "remote" online repository to your local machine. This SSH key is unique to the local machine, and needs to be tied to your GiHub account to authorize the download.
-<br>
+
 Why go to the trouble of setting up SSH keys when you could instead download over HTTPS or, easier yet, use the "Download ZIP" button?
 - When you want to commit changes to the code, a downloaded ZIP won't be too helpful as your local repository has no connection to your GitHub account.
 - Some systems with access restrictions can't download over HTTPS, and SSH is the only option to have the local repo connected to your GitHub account.
@@ -29,8 +29,6 @@ cd ~/scratch/repos
 git clone git@github.com:ehusby/shell-utils.git
 ```
 
-Next we're going to go down one of two routes... depending on how much you trust me. :)
-
 
 ### <a name="shell_config_files"></a>`.bashrc`, `.screenrc`,  and other shell config files
 - The [`.bashrc`](./config/.bashrc_standalone) file contains shell commands that are run every time you open a new Bash shell. It is executed when you open a new Terminal/Bash window, when you SSH into a remote machine you interface with using Bash, and every time you open up a new tab in the `screen` program.
@@ -38,6 +36,8 @@ Next we're going to go down one of two routes... depending on how much you trust
 - The [`.inputrc`](./config/.inputrc) file contains important keybindings that make sure keys like HOME and END function as expected on older Linux systems.
 
 Before proceeding, I **strongly** suggest you familiarize yourself with the contents of [`.bashrc_standalone`](./config/.bashrc_standalone) in particular. The main purpose of this setup is to allow you to leverage the custom settings and Bash functions made available in this script.
+
+Next we're going to go down one of two routes...
 
 
 ### Option 1: Safer and clearer for work on a single system
