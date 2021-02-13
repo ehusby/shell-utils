@@ -1,9 +1,16 @@
 # .bashrc
 
-## Source global definitions
-if [ -f /etc/bashrc ]; then
-    . /etc/bashrc
+# >>> CHANGE NAME OF YOUR EXISTING SYSTEM-PROVIDED .bashrc FILE
+# >>> to '.bashrc_system_default', and this .bashrc will source that!!
+if [ -e "${HOME}/.bashrc_system_default" ]; then
+    source "${HOME}/.bashrc_system_default"
 fi
+
+### Source global definitions
+#if [ -f /etc/bashrc ]; then
+#    . /etc/bashrc
+#fi
+
 
 ## Set umask to enable rwx for group members
 #umask 002  # allow OTHER read and execute perms, but not write
