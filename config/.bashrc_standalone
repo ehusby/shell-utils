@@ -37,16 +37,23 @@ if [ -n "$PS1" ]; then
 fi
 
 
-### System-specific settings
+################################
+### System-specific settings ###
+################################
 
-### FILL OUT OR COMMENT OUT THE FOLLOWING LINES ###
-#export MY_EMAIL=<your-email-address>  # Necessary for shell-utils 'email_me' script
-#export PATH=$PATH:<path-to>/shell-utils/exec  # Easily call shell-utils scripts
-#export PATH=$PATH:<path-to>/pyscript-utils  # Easily call pyscript-utils scripts
+## Exports (PATH changes and global vars)
+# >>> FILL OUT OR COMMENT OUT THE FOLLOWING LINES <<< #
+SHELL_UTILS_PATH="<path-to>/shell-utils"  # Necessary for sourcing general purpose shell functions
+export MY_EMAIL="<your-email-address>"  # Necessary for shell-utils 'email_me' script
+export PATH="${PATH}:${SHELL_UTILS_PATH}/exec"  # Easily call shell-utils executable scripts
+#export PATH="${PATH}:<path-to>/pyscript-utils"  # Easily call pyscript-utils executable scripts
 
 ## Aliases
 
 ## Functions
+
+################################
+################################
 
 
 ### General purpose functions and aliases
