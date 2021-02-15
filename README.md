@@ -55,7 +55,7 @@ Copying the config files into your home directory, as done in Option 1, will dis
 <br>
 Instead of copying the config files, we can _symlink_ these files into your home directory. The "symbolic link" files you create in your home directory will function similar to Windows Shortcuts, which "point" to the real files that continue to exist in your local `shell-utils` repo. Any changes you make to these symlink files will also be reflected in the files within the repo, and vice versa when you use `git` to update the files in the repo.
 ```
-ln -s $(readlink -f ~/scratch/repos/shell-utils/config)/* ~/
+ln -s $(readlink -f ~/scratch/repos/shell-utils/config/)* ~/
 mv ~/.bashrc ~/.bashrc_system_default
 mv ~/.bashrc_integrated ~/.bashrc
 ```
