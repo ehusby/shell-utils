@@ -120,14 +120,15 @@ function git_drop_all_changes() {
 
 function git_make_exec() {
     chmod -x $*
-    git config -c core.fileMode=false update-index --chmod=+x $*
+    git -c core.fileMode=false update-index --chmod=+x $*
     chmod +x $*
 }
 
 function git_cmd_in() {
     local cmd_name
     local ssh_passphrase no_ssh_passphrase
-    local start_dir repo_dir_arr repo_dir
+    local start_dir repo_dir_arr repo_dir repo_name
+
     cmd_name='cmd'
     if [ -n "$1" ]; then
         cmd_name="$1"; shift
@@ -136,6 +137,7 @@ function git_cmd_in() {
         echo "Usage: git_${cmd_name}_in [-p ssh_passphrase] <repo-root-dir> ..."
         return
     fi
+
     ssh_passphrase=''
     no_ssh_passphrase=false
     if [ "$1" == '--no-ssh-passphrase' ]; then
@@ -144,19 +146,24 @@ function git_cmd_in() {
     if [ "$1" == '-p' ]; then
         shift; if [ "$no_ssh_passphrase" == "false" ]; then ssh_passphrase="$1"; fi; shift
     fi
+
     start_dir=$(pwd)
     repo_dir_arr=($(fullpath $*))
     for repo_dir in "${repo_dir_arr[@]}"; do
         echo -e "\nChanging to repo dir: ${repo_dir}"
         cd "$repo_dir" || return
-        echo "Pulling changes"
+        repo_name=$(basename "$repo_dir")
+
+        echo "'${repo_name}' results of 'git ${cmd_name}' command:"
         if [ -n "$ssh_passphrase" ]; then
             expect -c "spawn git ${cmd_name}; expect \"passphrase\"; send \"${ssh_passphrase}\r\"; interact"
         else
-            git ${cmd_name}
+            git -c pager.branch=false ${cmd_name}
         fi
+
         shift
     done
+
     echo -e "\nChanging back to starting dir: ${start_dir}"
     cd "$start_dir" || return
     echo "Done!"
