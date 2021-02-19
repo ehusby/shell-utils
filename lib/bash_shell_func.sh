@@ -13,6 +13,7 @@ function strcat() { sed -r "s|(.*)|\1${1}|" < /dev/stdin; }
 ## Path representation
 
 function fullpath() {
+    local dirent_arr
     if (( $# > 0 )); then
         dirent_arr=("$@")
     else
@@ -23,6 +24,7 @@ function fullpath() {
     done
 }
 function basename_all() {
+    local dirent_arr
     if (( $# > 0 )); then
         dirent_arr=("$@")
     else
@@ -33,6 +35,7 @@ function basename_all() {
     done
 }
 function dirname_all() {
+    local dirent_arr
     if (( $# > 0 )); then
         dirent_arr=("$@")
     else
@@ -47,6 +50,7 @@ function dirname_all() {
 ## File operations
 
 function absymlink() {
+    local cmd_arr arg cmd
     cmd_arr=()
     while (( "$#" )); do
         arg="$1"
@@ -121,6 +125,9 @@ function git_make_exec() {
 }
 
 function git_cmd_in() {
+    local cmd_name
+    local ssh_passphrase no_ssh_passphrase
+    local start_dir repo_dir_arr repo_dir
     cmd_name='cmd'
     if [ -n "$1" ]; then
         cmd_name="$1"; shift
@@ -164,6 +171,8 @@ function git_pull_in() {
 }
 
 function git_clone_replace() {
+    local repo_url repo_url_bname repo_name
+    local cmd status
     if (( $# == 0 )); then
         echo "Usage: git_clone_replace <github-repo-url>"
         return

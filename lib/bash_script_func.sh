@@ -138,6 +138,7 @@ function run_and_catch_out_custom() {
 function run_and_catch_out() {
     local command_redirect_fun='run_and_show_all'
     local __return_out="$1"; shift
+    local status=0
 
     run_and_catch_out_custom "$command_redirect_fun" "$__return_out" "$*"
     status=$?
@@ -148,6 +149,7 @@ function run_and_catch_out() {
 function run_and_catch_swapped_err() {
     local command_redirect_fun='run_and_swap_out_err'
     local __return_out="$1"; shift
+    local status=0
 
     run_and_catch_out_custom "$command_redirect_fun" "$__return_out" "$*"
     status=$?
@@ -158,6 +160,7 @@ function run_and_catch_swapped_err() {
 function run_and_catch_mix() {
     local command_redirect_fun='run_and_send_err_to_out'
     local __return_out="$1"; shift
+    local status=0
 
     run_and_catch_out_custom "$command_redirect_fun" "$__return_out" "$*"
     status=$?
@@ -183,6 +186,7 @@ function exit_script_with_status() {
 #while true; do read -p "Continue? (y/n): " confirm && [[ $confirm == [yY] || $confirm == [nN] ]] && break ; done ; [[ $confirm == [nN] ]] && exit 1
 function prompt_y_or_n() {
     local prompt="$1"
+    local confirm=''
 
     while true; do
         read -p "$prompt" confirm
