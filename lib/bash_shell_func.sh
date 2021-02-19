@@ -172,7 +172,6 @@ function git_cmd_in() {
 function git_branch_in() {
     git_cmd_in branch '--no-ssh-passphrase' $*
 }
-
 function git_pull_in() {
     git_cmd_in pull $*
 }
@@ -180,10 +179,12 @@ function git_pull_in() {
 function git_clone_replace() {
     local repo_url repo_url_bname repo_name
     local cmd status
+
     if (( $# == 0 )); then
         echo "Usage: git_clone_replace <github-repo-url>"
         return
     fi
+
     repo_url="$1"
     repo_url_bname=$(basename "$repo_url")
     repo_name="${repo_url_bname/.git/}"
@@ -199,8 +200,10 @@ function git_clone_replace() {
         echo "ERROR: New repo folder already exists: ${repo_name}_new"
         return
     fi
+
     cmd="git clone ${repo_url} ${repo_name}_new"
     echo -e "\nCOMMAND: ${cmd}"; eval "$cmd"
+
     cmd="mv ${repo_name} ${repo_name}_old; mv ${repo_name}_new ${repo_name};"
     echo -e "\nCOMMAND: ${cmd}\n(sleeping 3 seconds...)"; sleep 5s; eval "$cmd"
     status=$?
@@ -208,5 +211,7 @@ function git_clone_replace() {
         cmd="rm -rf ${repo_name}_old"
         echo -e "\nCOMMAND: ${cmd}\n(sleeping 5 seconds...)"; sleep 5s; eval "$cmd"
     fi
+
+    echo -e "\nDone!"
 }
 
