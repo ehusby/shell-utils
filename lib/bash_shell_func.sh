@@ -6,7 +6,7 @@
 function line2space() { tr '\n' ' ' < /dev/stdin; }
 function space2line() { tr ' ' '\n' < /dev/stdin; }
 
-function strrep() { sed -r "s|(${1})|${2}|g" < /dev/stdin; }
+function strrep() { sed -r "s|${1}|${2}|g" < /dev/stdin; }
 function strcat() { sed -r "s|(.*)|\1${1}|" < /dev/stdin; }
 
 
@@ -213,5 +213,43 @@ function git_clone_replace() {
     fi
 
     echo -e "\nDone!"
+}
+
+
+## Other
+
+function layz() {
+    local cmd_arr_in cmd_arr_out
+    local arg_idx rep_idx
+    local arg_out arg_rep
+    local cmd_out debug arg_opt
+    debug=false
+    if [[ $1 == -* ]]; then
+        arg_opt=$(echo "$1" | sed -r 's|\-+(.*)|\1|')
+        if [ "$arg_opt" == 'dryrun' ] || [ "$arg_opt" == 'debug' ]; then
+            debug=true
+            shift
+        fi
+    fi
+    cmd_arr_in=("$@")
+    cmd_arr_out=()
+    for arg_idx in "${!cmd_arr_in[@]}"; do
+        arg_out="${cmd_arr_in[$arg_idx]}"
+        for rep_idx in "${!cmd_arr_in[@]}"; do
+            if (( rep_idx < arg_idx )); then
+                arg_rep="${cmd_arr_out[$rep_idx]}"
+            else
+                arg_rep="${cmd_arr_in[$rep_idx]}"
+            fi
+            arg_out=$(echo "$arg_out" | sed -r "s|%${rep_idx}([^0-9]\|$)|${arg_rep}\1|g")
+        done
+        cmd_arr_out+=( "$arg_out" )
+    done
+    cmd_out="${cmd_arr_out[*]}"
+    if [ "$debug" == "true" ]; then
+        echo "$cmd_out"
+    else
+        $cmd_out
+    fi
 }
 
