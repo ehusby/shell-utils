@@ -43,7 +43,7 @@ Next we're going to go down one of two routes...
 ### Option 1: Safer and clearer for work on a single system
 Copy the config files into your home directory. Check if either of the `~/.screenrc` or `~/.inputrc` files already exist before running the following commands. If they do, you should consider [**Option 3**](#shell_config_opt3) for those two files.
 ```
-cp ~/scratch/repos/shell-utils/config/* ~/
+cp ~/scratch/repos/shell-utils/linux_bash/config/* ~/
 mv ~/.bashrc ~/.bashrc_system_default
 mv ~/.bashrc_standalone ~/.bashrc
 ```
@@ -70,8 +70,8 @@ Did I mention there's a third option? You can always just copy & paste what you 
 <br>
 At a bare minimum, you can add the following lines to your existing `~/.bashrc` file to utilize the custom Bash functions made available in this repo:
 ```
-export PATH="${PATH}:<path-to>/shell-utils/exec"  # Easily call shell-utils executable scripts
-source "<path-to>/shell-utils/lib/bash_shell_func.sh"  # Source general purpose shell functions
+export PATH="${PATH}:<path-to>/shell-utils/linux_bash/exec"  # Easily call shell-utils executable scripts
+source "<path-to>/shell-utils/linux_bash/lib/bash_shell_func.sh"  # Source general purpose shell functions
 ```
 These lines should be modified as instructed in the next section.
 
@@ -120,7 +120,7 @@ However, this will only work if the files in that folder have the _executable bi
 <br>
 To make the files in this folder executable again, run the following command:
 ```
-chmod +x <path-to>/shell-utils/exec/*
+chmod +x <path-to>/shell-utils/linux_bash/exec/*
 ```
 Troubleshooting steps:
 - Make sure the path to the [`exec`](./exec) folder is being properly appended to the `PATH` environment variable. You can check the value of this variable by running `echo $PATH`.

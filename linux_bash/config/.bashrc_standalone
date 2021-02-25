@@ -45,7 +45,7 @@ fi
 # >>> FILL OUT OR COMMENT OUT THE FOLLOWING LINES <<< #
 SHELL_UTILS_PATH="<path-to>/shell-utils"  # Necessary for sourcing general purpose shell functions
 export MY_EMAIL="<your-email-address>"  # Necessary for shell-utils 'email_me' script
-export PATH="${PATH}:${SHELL_UTILS_PATH}/exec"  # Easily call shell-utils executable scripts
+export PATH="${PATH}:${SHELL_UTILS_PATH}/linux_bash/exec"  # Easily call shell-utils executable scripts
 #export PATH="${PATH}:<path-to>/pyscript-utils"  # Easily call pyscript-utils executable scripts
 
 ## Aliases
@@ -60,7 +60,7 @@ export PATH="${PATH}:${SHELL_UTILS_PATH}/exec"  # Easily call shell-utils execut
 
 ### Source general purpose shell functions from library script
 #if ! [ -z ${SHELL_UTILS_PATH+x} ] && [ -n "$SHELL_UTILS_PATH" ]; then
-#    source "${SHELL_UTILS_PATH}/lib/bash_shell_func.sh"
+#    source "${SHELL_UTILS_PATH}/linux_bash/lib/bash_shell_func.sh"
 #fi
 
 
