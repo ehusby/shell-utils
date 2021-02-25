@@ -22,6 +22,6 @@ With Git now installed, we can generate an SSH key on your local machine and tie
 3. Go to the ["SSH and GPG keys"](https://github.com/settings/keys) section of your GitHub account settings, and click the "New SSH key" button. Now copy and paste the key that was printed in your terminal into the "Key" box. In the "Title" box, give a concise name for your local machine.
 
 ## Next steps
-If you're on Linux, there are [additional steps you should take to configure your Bash shell](./linux_bash/README.md).
+If you're on Linux, there are [additional steps you should take to configure your Bash shell](./linux_bash).
 <br>
-If you're on Windows, follow [this guide to enable the shortcuts and learn how to use them](./windows_cmd/README.md).
+If you're on Windows, follow [this guide to enable the shortcuts and learn how to use them](./windows_cmd).
