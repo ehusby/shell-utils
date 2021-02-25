@@ -1,6 +1,6 @@
 ## <a name="shell_config"></a>Setting up your Bash shell
 Since the home directory (`$HOME`, aka `~/`) can get often get cluttered by processes outside of your control, I recommend keeping most of your activity within a "scratch" folder that we'll place in your home directory. The repos you clone can be neatly kept within a "repos" folder within your scratch space.
-<br>
+
 Run the following commands to set up your scratch space and clone the `shell-utils` repo into your new repos folder.
 ```
 mkdir -p ~/scratch/repos
@@ -28,7 +28,7 @@ mv ~/.bashrc_standalone ~/.bashrc
 
 ### Option 2: More easily updatable for work on multiple systems
 Copying the config files into your home directory, as done in Option 1, will dissociate those files from your local `shell-utils` GitHub repo. This means that if you want to commit and track changes to these files, or update them by pulling changes from GitHub, you will need to manually perform steps like those in Option 1 every time, shuffling these files around on every system you work on. And if you've made changes to those files in your home directory on those systems, you would also need to manage those changes manually.
-<br>
+
 Instead of copying the config files, we can _symlink_ these files into your home directory. The "symbolic link" files you create in your home directory will function similar to Windows Shortcuts, which "point" to the real files that continue to exist in your local `shell-utils` repo. Any changes you make to these symlink files will also be reflected in the files within the repo, and vice versa when you use `git` to update the files in the repo.
 ```
 shell_utils_abspath=$(readlink -f ~/scratch/repos/shell-utils)
@@ -43,7 +43,7 @@ mv ~/.bashrc_standalone ~/.bashrc
 
 ### <a name="shell_config_opt3"></a>Option 3: Copy and paste only what you want
 Did I mention there's a third option? You can always just copy & paste what you want from [`.bashrc_standalone`](./config/.bashrc_standalone) straight into your existing `~/.bashrc` file (same with the [`.screenrc`](./config/.screenrc) and [`.inputrc`](./config/.inputrc) files). It can be that easy. This approach, similar to Option 1, is OK if you're working on a single system, and you only have a single set of configuration files to manage. You may even be able to handle this copy & paste routine on multiple systems for some time... until you go to add an awesome new function to your `.bashrc` and later realize you forgot to update the other 10 `.bashrc` files you have on every system you use, files which are all slightly different.
-<br>
+
 At a bare minimum, you can add the following lines to your existing `~/.bashrc` file to utilize the custom Bash functions made available in this repo:
 ```
 export PATH="${PATH}:<path-to>/shell-utils/linux_bash/exec"  # Easily call shell-utils executable scripts
