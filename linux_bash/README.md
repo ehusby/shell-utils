@@ -20,7 +20,7 @@ Next we're going to go down one of two routes...
 ### Option 1: Safer and clearer for work on a single system
 Copy the config files into your home directory. Check if either of the `~/.screenrc` or `~/.inputrc` files already exist before running the following commands. If they do, you should consider [**Option 3**](#shell_config_opt3) for those two files.
 ```
-cp ~/scratch/repos/shell-utils/linux_bash/config/* ~/
+cp ~/scratch/repos/shell-utils/linux_bash/config/.* ~/
 mv ~/.bashrc ~/.bashrc_system_default
 mv ~/.bashrc_standalone ~/.bashrc
 ```
