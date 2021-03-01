@@ -52,7 +52,7 @@ Usage: ${script_name}
   [--no-resample]: make hillshade directly from source files, ignoring -tr -r -o arguments
   [--keep-downsampled]: keep intermediate downsampled rasters if --hillshade is provided and -o is not provided
   [--overwrite]: overwrite existing output downsampled and/or hillshade raster files
-  [srcfile]...
+  SRCFILE...
 EOM
 if (( $# < 1 )); then
     echo_e "$script_usage"
@@ -71,6 +71,7 @@ while (( "$#" )); do
     else
         arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
         arg_opt_nargs=''
+        arg_val_can_start_with_dash=false
 
         if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
             arg_opt_nargs=0
@@ -139,7 +140,7 @@ while (( "$#" )); do
         for i in $(seq 1 $arg_opt_nargs); do
             shift
             arg_val="$1"
-            if [[ $arg_val == -* ]]; then
+            if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
                 echo_e "Unexpected argument value: ${arg} ${arg_val}"
                 exit_script_with_status 1
             fi

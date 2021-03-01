@@ -39,7 +39,7 @@ Usage: ${script_name}
   [-{unit:$(string_join '|' ${unit_abrev_arr[@]})}] [--si]
   [-d,--decimals <int> (default=${decimals})}] [-r,--round {$(string_join '|' ${round_choices_arr[@]})} (default=${round_mode})]
   [-n,--name {'find'-like filename pattern}]...
-  [path]...
+  PATH...
 EOM
 if (( $# < 1 )); then
     echo_e "$script_usage"
@@ -58,6 +58,7 @@ while (( "$#" )); do
     else
         arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
         arg_opt_nargs=''
+        arg_val_can_start_with_dash=false
 
         if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
             arg_opt_nargs=0
@@ -70,15 +71,15 @@ while (( "$#" )); do
 
         elif [ "$arg_opt" == 'd' ] || [ "$arg_opt" == 'decimals' ]; then
             arg_opt_nargs=1
-            decimals="$1"
+            decimals="$2"
 
         elif [ "$arg_opt" == 'r' ] || [ "$arg_opt" == 'round' ]; then
             arg_opt_nargs=1
-            round_mode="$1"
+            round_mode="$2"
 
         elif [ "$arg_opt" == 'n' ] || [ "$arg_opt" == 'name' ]; then
             arg_opt_nargs=1
-            namepat_arr+=( "$1" )
+            namepat_arr+=( "$2" )
 
         else
             arg_opt_nargs=0
@@ -103,7 +104,7 @@ while (( "$#" )); do
         for i in $(seq 1 $arg_opt_nargs); do
             shift
             arg_val="$1"
-            if [[ $arg_val == -* ]]; then
+            if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
                 echo_e "Unexpected argument value: ${arg} ${arg_val}"
                 exit_script_with_status 1
             fi
