@@ -18,10 +18,13 @@ source "$bash_functions_script"
 
 
 ## Arguments
+cleanup_mode_choices_arr=( 'pbs' 'ssh' )
+cleanup_mode=''
 use_ssh=false
+ssh_passphrase=''
 remove_all=false
-dryrun=false
 ssh_dryrun=false
+dryrun=false
 
 
 ## Script usage
@@ -30,9 +33,10 @@ Remove files from /local directory on cluster nodes
 Usage: ${script_name} (pbs|ssh) [--all] [--dryrun] [--ssh-dryrun]
   pbs : submit single-core PBS job to every node on the cluster for cleanup
   ssh : SSH into every node on the cluster in serial and run cleanup command over SSH
+  --ssh-pw : passPHRASE for all SSH connections (if not provided, may need to be entered for every node)
   --all : attempt to remove all files within /local directories regardless of ownership (by default only the USER(${USER})'s files are removed)
-  --dryrun : print actions without executing
   --ssh-dryrun : print list of files to be deleted over SSH into ~/${script_name}_<timestamp>_removed_files.txt log file without actually deleting
+  --dryrun : print actions without executing
 EOM
 if (( $# < 1 )); then
     echo_e "$script_usage"
@@ -44,23 +48,76 @@ fi
 set +u
 while (( "$#" )); do
     arg="$1"
-    if [ "$arg" == 'ssh' ]; then
-        use_ssh=true
-    elif [ "$arg" == 'pbs' ]; then
-        use_ssh=false
-    elif [ "$arg" == '--all' ]; then
-        remove_all=true
-    elif [ "$arg" == '--dryrun' ]; then
-        dryrun=true
-    elif [ "$arg" == '--ssh-dryrun' ]; then
-        ssh_dryrun=true
+
+    if ! [[ $arg == -* ]]; then
+
+        if [ -z "$cleanup_mode" ]; then
+            cleanup_mode="$arg"
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
     else
-        echo_e "Unexpected argument: ${arg}"
-        exit_script_with_status 1
+        arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+        arg_opt_nargs=''
+        arg_val_can_start_with_dash=false
+
+        if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+            arg_opt_nargs=0
+            echo "$script_usage"
+            exit 0
+
+        elif [ "$arg_opt" == 'ssh-pw' ]; then
+            arg_opt_nargs=1
+            ssh_passphrase="$2"
+
+        elif [ "$arg_opt" == 'all' ]; then
+            arg_opt_nargs=0
+            remove_all=true
+
+        elif [ "$arg_opt" == 'ssh-dryrun' ]; then
+            arg_opt_nargs=0
+            ssh_dryrun=true
+
+        elif [ "$arg_opt" == 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ -z "$arg_opt_nargs" ]; then
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        for i in $(seq 1 $arg_opt_nargs); do
+            shift
+            arg_val="$1"
+            if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
+                echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                exit_script_with_status 1
+            fi
+        done
     fi
+
     shift
 done
 set -u
+
+
+## Validate arguments
+
+if (( $(indexOf "$cleanup_mode" "${cleanup_mode_choices_arr[@]}") == -1 )); then
+    echo_e "Rounding mode must be one of the following: ${cleanup_mode_choices_arr[*]}"
+    exit_script_with_status 1
+fi
+if [ "$cleanup_mode" == 'ssh' ]; then
+    use_ssh=true
+fi
 
 
 log_date=$(date +'%Y%m%d%H%M%S')
@@ -124,6 +181,11 @@ for host in $nodelist ; do
             cmd="${cmd} -delete"
         fi
         cmd="${cmd} >> ~/${script_name}_${log_date}_removed_files.txt'"
+
+        if [ -n "$ssh_passphrase" ]; then
+            cmd="expect -c \"spawn ${cmd}; expect 'passphrase'; send '${ssh_passphrase}\r'; interact\""
+            cmd=$(echo "$cmd" | sed -r "s|'|\\\\\"|g")
+        fi
 
         echo "$cmd"
         if [ "$dryrun" == "false" ]; then
