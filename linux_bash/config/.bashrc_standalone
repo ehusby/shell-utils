@@ -34,6 +34,14 @@ if [ -n "$PS1" ]; then
     # AND you don't accidentally freeze your screen with CTRL+S
     stty -ixon
 
+    # Make sure files/dirs have pretty colors in `ls`
+    export LS_OPTIONS='--color=auto'
+    eval "$(dircolors -b)"
+    alias ls='ls $LS_OPTIONS'
+
+    # Enable 256 color support in tmux
+    alias tmux="tmux -2"
+
 fi
 
 
