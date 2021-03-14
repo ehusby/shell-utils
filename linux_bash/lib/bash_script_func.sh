@@ -1,5 +1,8 @@
 #!/bin/bash
 
+## Source base functions
+source "$(dirname $(readlink -f "${BASH_SOURCE[0]}"))/bash_base_func.sh"
+
 
 ## Basic printing
 
@@ -204,23 +207,6 @@ function prompt_y_or_n() {
 
 
 ## Other
-
-#function indexOf() { local el="$1"; shift; local arr=("$@"); local index=-1; for i in "${!arr[@]}"; do [ "${arr[$i]}" == "$el" ] && { index=$i; break; } done; echo $index; }
-
-function indexOf() {
-    local el="$1"     # Save first argument in a variable
-    shift             # Shift all arguments to the left (original $1 gets lost)
-    local arr=("$@")  # Rebuild the array with rest of arguments
-    local index=-1
-    for i in "${!arr[@]}"; do
-        if [ "${arr[$i]}" == "$el" ]; then
-            index=$i
-            break
-        fi
-    done
-    echo $index
-}
-
 
 function round() {
     local number="$1"

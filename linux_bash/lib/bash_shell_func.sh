@@ -1,5 +1,8 @@
 #!/bin/bash
 
+## Source base functions
+source "$(dirname $(readlink -f "${BASH_SOURCE[0]}"))/bash_base_func.sh"
+
 
 ## String manipulation
 
@@ -118,6 +121,10 @@ function git_drop_all_changes() {
     git checkout -- .
 }
 
+function git_reset_keep_changes() {
+    git reset HEAD^
+}
+
 function git_make_exec() {
     chmod -x $*
     git -c core.fileMode=false update-index --chmod=+x $*
@@ -125,43 +132,94 @@ function git_make_exec() {
 }
 
 function git_cmd_in() {
-    local cmd_name
-    local ssh_passphrase no_ssh_passphrase
+
+    ## Arguments
+    local start_dir; start_dir="$(pwd)"
+    local git_cmd_name='cmd'
+    local git_cmd_arr=()
+    local repo_dir_arr=()
+    local ssh_passphrase=''
+
+    ## Custom globals
+    local git_cmd_choices_arr=( 'clone' 'branch' 'stash' 'apply' 'stash apply' 'pull' 'plush' )
+    local git_cmd_need_ssh_arr=( 'clone' 'pull' 'push' )
     local start_dir repo_dir_arr repo_dir repo_name
 
-    cmd_name='cmd'
     if [ -n "$1" ]; then
-        cmd_name="$1"; shift
+        git_cmd_name="$1"; shift
     fi
+    ## Usage
+    read -r -d '' script_usage << EOM
+Usage: git_${git_cmd_name}_in [-p ssh_passphrase] REPO_DIR...
+EOM
     if (( $# == 0 )); then
-        echo "Usage: git_${cmd_name}_in [-p ssh_passphrase] <repo-root-dir> ..."
+        echo_e "$script_usage"
         return
     fi
 
-    ssh_passphrase=''
-    no_ssh_passphrase=false
-    if [ "$1" == '--no-ssh-passphrase' ]; then
-        no_ssh_passphrase=true; shift
-    fi
-    if [ "$1" == '-p' ]; then
-        shift; if [ "$no_ssh_passphrase" == "false" ]; then ssh_passphrase="$1"; fi; shift
-    fi
+    ## Parse arguments
+    local arg arg_opt arg_opt_nargs arg_val_can_start_with_dash
+    while (( "$#" )); do
+        arg="$1"
 
-    start_dir=$(pwd)
-    repo_dir_arr=($(fullpath $*))
+        if ! [[ $arg == -* ]]; then
+            if (( $(indexOf "$arg" ${git_cmd_choices_arr[@]+"${git_cmd_choices_arr[@]}"}) != -1 )); then
+                git_cmd_arr+=( "$arg" )
+            else
+                repo_dir_arr+=( "$(fullpath "$arg")" )
+            fi
+
+        else
+            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+            arg_opt_nargs=''
+            arg_val_can_start_with_dash=false
+
+            if [ "$arg_opt" == 'p' ] || [ "$arg_opt" == 'pw' ]; then
+                arg_opt_nargs=1
+                ssh_passphrase="$2"
+
+            elif [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+                arg_opt_nargs=0
+                echo "$script_usage"
+                return
+
+            else
+                echo_e "Unexpected argument: ${arg}"
+                return
+            fi
+
+            if [ -z "$arg_opt_nargs" ]; then
+                echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+                return
+            fi
+
+            local i
+            for i in $(seq 1 $arg_opt_nargs); do
+                shift
+                arg_val="$1"
+                if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
+                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                    return
+                fi
+            done
+        fi
+
+        shift
+    done
+
     for repo_dir in "${repo_dir_arr[@]}"; do
         echo -e "\nChanging to repo dir: ${repo_dir}"
         cd "$repo_dir" || return
         repo_name=$(basename "$repo_dir")
 
-        echo "'${repo_name}' results of 'git ${cmd_name}' command:"
-        if [ -n "$ssh_passphrase" ]; then
-            expect -c "spawn git ${cmd_name}; expect \"passphrase\"; send \"${ssh_passphrase}\r\"; interact"
-        else
-            git -c pager.branch=false ${cmd_name}
-        fi
-
-        shift
+        for git_cmd in "${git_cmd_arr[@]}"; do
+            echo "'${repo_name}' results of 'git ${git_cmd}' command:"
+            if [ -n "$ssh_passphrase" ] && (( $(indexOf "$git_cmd" ${git_cmd_need_ssh_arr[@]+"${git_cmd_need_ssh_arr[@]}"}) != -1 )); then
+                expect -c "spawn git ${git_cmd}; expect \"passphrase\"; send \"${ssh_passphrase}\r\"; interact"
+            else
+                git -c pager.branch=false ${git_cmd}
+            fi
+        done
     done
 
     echo -e "\nChanging back to starting dir: ${start_dir}"
@@ -170,10 +228,37 @@ function git_cmd_in() {
 }
 
 function git_branch_in() {
-    git_cmd_in branch '--no-ssh-passphrase' $*
+    git_cmd_in branch branch $*
 }
 function git_pull_in() {
-    git_cmd_in pull $*
+    local func_args_in=("$@")
+    local func_args_out=()
+
+    local do_stashing=false
+
+    local arg arg_opt
+    for arg in "${func_args_in[@]}"; do
+        if [[ $arg == -* ]]; then
+            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+
+            if [ "$arg_opt" == 'stash' ]; then
+                do_stashing=true
+                arg=''
+            fi
+        fi
+
+        if [ -n "$arg" ]; then
+            func_args_out+=( "$arg" )
+        fi
+    done
+
+    if [ "$do_stashing" == "true" ]; then
+        git_cmd_arr=( 'stash' 'pull' "'stash apply'" )
+    else
+        git_cmd_arr=( 'pull' )
+    fi
+
+    eval git_cmd_in pull ${git_cmd_arr[*]} ${func_args_out[*]}
 }
 
 function git_clone_replace() {
