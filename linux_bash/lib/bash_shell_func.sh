@@ -125,6 +125,11 @@ function git_reset_keep_changes() {
     git reset HEAD^
 }
 
+function git_stash_apply_no_merge() {
+    git read-tree stash^{tree}
+    git checkout-index -af
+}
+
 function git_make_exec() {
     chmod -x $*
     git -c core.fileMode=false update-index --chmod=+x $*
