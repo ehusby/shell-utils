@@ -34,10 +34,11 @@ if [ -n "$PS1" ]; then
     # AND you don't accidentally freeze your screen with CTRL+S
     stty -ixon
 
-    # Make sure files/dirs have pretty colors in `ls`
+    # Colorize standard commands
     export LS_OPTIONS='--color=auto'
     eval "$(dircolors -b)"
     alias ls='ls $LS_OPTIONS'
+    alias grep='grep --color=auto'
 
     # Enable 256 color support in tmux
     alias tmux="tmux -2"
@@ -59,6 +60,8 @@ export PATH="${PATH}:${SHELL_UTILS_PATH}/linux_bash/exec"  # Easily call shell-u
 ## Aliases
 
 ## Functions
+
+## Startup processes
 
 ################################
 ################################
