@@ -34,14 +34,13 @@ if [ -n "$PS1" ]; then
     # AND you don't accidentally freeze your screen with CTRL+S
     stty -ixon
 
-    # Colorize standard commands
+    # Set options for standard programs
     export LS_OPTIONS='--color=auto'
     eval "$(dircolors -b)"
     alias ls='ls $LS_OPTIONS'
     alias grep='grep --color=auto'
-
-    # Enable 256 color support in tmux
-    alias tmux="tmux -2"
+    export LESS='RXM'  # https://man7.org/linux/man-pages/man1/less.1.html#OPTIONS
+    alias tmux="tmux -2"  # enable 256 color support
 
 fi
 
