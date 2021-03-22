@@ -1,0 +1,137 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_dir=$(dirname "$script_file")
+script_name=$(basename "$script_file")
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+source "$bash_functions_script"
+
+
+## Arguments
+drive_arr=()
+dryrun=false
+
+## Custom globals
+re_drive_letter='[a-zA-Z]'
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+Usage: ${script_name} DRIVE_LETTER...
+EOM
+if (( $# < 1 )); then
+    echo_e -e "${script_usage}\n"
+    exit_script_with_status 1
+fi
+
+
+## Parse arguments
+set +u
+while (( "$#" )); do
+    arg="$1"
+
+    if ! [[ $arg == -* ]]; then
+        if [[ $arg =~ $re_drive_letter ]]; then
+            drive_arr+=( "$arg" )
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+    else
+        arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+        arg_opt_nargs=''
+        arg_val_can_start_with_dash=false
+
+        if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+            arg_opt_nargs=0
+            echo "$script_usage"
+            exit 0
+
+        elif [ "$arg_opt" == 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ -z "$arg_opt_nargs" ]; then
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        for i in $(seq 1 $arg_opt_nargs); do
+            shift
+            arg_val="$1"
+            if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
+                echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                exit_script_with_status 1
+            fi
+        done
+    fi
+
+    shift
+done
+set -u
+
+
+## Validate arguments
+
+if (( ${#drive_arr[@]} == 0 )); then
+    echo_e "At least one drive letter argument must be provided"
+    exit_script_with_status 1
+fi
+
+
+## Mount drives
+
+for drive in "${drive_arr[@]}"; do
+    drive_lower=$(string_to_lowercase "$drive")
+    drive_upper=$(string_to_uppercase "$drive")
+    echo -e "\nConfiguring ${drive_upper} drive"
+
+    drive_path="/mnt/${drive_lower}"
+
+    if [ -d "$drive_path" ]; then
+        cmd="sudo chmod 777 ${drive_path}"
+    else
+        cmd="sudo mkdir -m 777 ${drive_path}"
+    fi
+    echo -e "-> Initializing drive path with command:\n    ${cmd}"
+    if [ "$dryrun" == "false" ]; then
+        eval "$cmd"
+    fi
+
+    fstab_drive_line="${drive_upper}: /mnt/${drive_lower} drvfs defaults 0 0"
+    fstab_line_exists=$(grep "$fstab_drive_line" "/etc/fstab")
+    if [ -n "$fstab_line_exists" ]; then
+        echo -e "-> Drive setting already exists in /etc/fstab:\n    ${fstab_drive_line}"
+    else
+        cmd="sudo bash -c 'echo ${drive_upper}: /mnt/${drive_lower} drvfs defaults 0 0 >> /etc/fstab'"
+        echo -e "-> Adding drive setting to /etc/fstab with command:\n    ${cmd}"
+        if [ "$dryrun" == "false" ]; then
+            eval "$cmd"
+        fi
+    fi
+done
+echo
+
+cmd="sudo mount -a"
+echo -e "Mounting all drives with command:\n    ${cmd}"
+if [ "$dryrun" == "false" ]; then
+    eval "$cmd"
+fi
+
+echo -e "\nDone!"
