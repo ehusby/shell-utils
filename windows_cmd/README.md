@@ -16,8 +16,7 @@ Access the Windows Environment Variable settings through either "Control Panel" 
 - Through Control Panel, navigate:<br>
 `Control Panel` -> `System` -> `Advanced system settings` (on left side) -> `Advanced` tab -> `Environment Variables...` (at bottom)
 
-- Or in Command Prompt, run this command:
-<br>
+- Or in Command Prompt, run this command:<br>
 `rundll32 sysdm.cpl,EditEnvironmentVariables`
 
 In the "User variables for ___" section (top half), edit the "Path" variable. Click "New" and add the path to the [`shell-utils\windows_cmd\exec`](./exec) folder in the location where you cloned this repo on your local machine. If you followed the recommendation to make `C:\Users\%USERNAME%\scratch\repos` your space for code repositories, the new path addition would be `C:\Users\%USERNAME%\scratch\repos\shell-utils\windows_cmd\exec`.
