@@ -1,4 +1,4 @@
-## <a name="shell_config"></a>Setting up your Bash shell
+# <a name="shell_config"></a>Setting up your Bash shell
 Since the home directory (`$HOME`, aka `~/`) can get often get cluttered by processes outside of your control, I recommend keeping most of your activity within a "scratch" folder that we'll place in your home directory. The repos you clone can be neatly kept within a "repos" folder within your scratch space.
 
 Run the following commands to set up your scratch space and clone the `shell-utils` repo into your new repos folder.
