@@ -1,0 +1,113 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_dir=$(dirname "$script_file")
+script_name=$(basename "$script_file")
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+source "$bash_functions_script"
+
+
+## Arguments
+src=''
+new_name=''
+mv_opt_arg_arr=()
+dryrun=false
+
+## Custom globals
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+Usage: ${script_name} ['mv' option]... SOURCE NEW_NAME [--dryrun]
+EOM
+if (( $# < 1 )); then
+    echo_e -e "${script_usage}\n"
+    exit_script_with_status 1
+fi
+
+
+## Parse arguments
+set +u
+while (( "$#" )); do
+    arg="$1"
+
+    if ! [[ $arg == -* ]]; then
+        if [ -z "$src" ]; then
+            src="$arg"
+        elif [ -z "$new_name" ]; then
+            new_name="$arg"
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+    else
+        arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+        arg_opt_nargs=''
+        arg_val_can_start_with_dash=false
+
+        if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+            arg_opt_nargs=0
+            echo "$script_usage"
+            exit 0
+
+        elif [ "$arg_opt" == 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        else
+            arg_opt_nargs=0
+            mv_opt_arg_arr+=( "$arg" )
+        fi
+
+        if [ -z "$arg_opt_nargs" ]; then
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        for i in $(seq 1 $arg_opt_nargs); do
+            shift
+            arg_val="$1"
+            if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
+                echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                exit_script_with_status 1
+            fi
+        done
+    fi
+
+    shift
+done
+set -u
+
+
+## Validate arguments
+
+if [ -z "$src" ] || [ -z "$new_name" ]; then
+    echo_e "Both SOURCE and NEW_NAME arguments must be provided"
+    exit_script_with_status 1
+fi
+if [[ $new_name == /* ]]; then
+    echo_e "NEW_NAME cannot begin with '/'" >&2
+    exit_script_with_status 1
+fi
+
+
+## Perform renaming
+
+src_dir=$(dirname "$src")
+cmd="mv ${mv_opt_arg_arr[*]+${mv_opt_arg_arr[*]}} ${src} ${src_dir}/${new_name}"
+if [ "$dryrun" == "true" ]; then
+    echo "$cmd"
+else
+    eval "$cmd"
+fi
