@@ -14,16 +14,16 @@ While the Address bar is typically used to change to a different location on you
 ### <a name="path_config_1"></a>Add a folder to the PATH environment variable
 Access the Windows Environment Variable settings through either "Control Panel" or "Command Prompt" from the Start Menu.
 - Through Control Panel, navigate:<br>
-`Control Panel` -> `System` -> `Advanced system settings` (on left side) -> `Advanced` tab -> `Environment Variables...` (at bottom)
+`Control Panel` -> `System and Security` -> `System` -> `Advanced system settings` (on left side) -> `Advanced` tab -> `Environment Variables...` (at bottom)
 
 - Or in Command Prompt, run this command:<br>
 `rundll32 sysdm.cpl,EditEnvironmentVariables`
 
-In the "User variables for ___" section (top half), edit the "Path" variable. Click "New" and add the path to the [`shell-utils\windows_cmd\exec`](./exec) folder in the location where you cloned this repo on your local machine. If you followed the recommendation to make `C:\Users\%USERNAME%\scratch\repos` your space for code repositories, the new path addition would be `C:\Users\%USERNAME%\scratch\repos\shell-utils\windows_cmd\exec`.
+In the "User variables for ___" section (top half), highlight the "Path" variable and select "Edit...". Click "New" and add the path to the [`shell-utils\windows_cmd\exec`](./exec) folder in the location where you cloned this repo on your local machine. If you have this folder open in File Explorer, the easiest way to get the path is to click in the blank space of the Address bar and the path should appear. If you followed the earlier recommendation to make `C:\Users\%USERNAME%\scratch\repos` your space for code repositories, the new path addition would be `C:\Users\%USERNAME%\scratch\repos\shell-utils\windows_cmd\exec`.
 
 (Whatever your path is, **verify that you can navigate directly to this folder by typing it into the Address bar in File Explorer**.)
 
-Save this setting. To check that it works, open a new Command Prompt window and run `where mybash`. If it prints out the location to the script located at `shell-utils\windows_cmd\exec\mybash.bat` in your local copy of this repo, then your addition to the `PATH` variable was successful! If instead it prints an error message such as `INFO: Could not find files for the given pattern(s)`, then double-check that the path you added is the correct path that takes you to the [`shell-utils\windows_cmd\exec`](./exec) folder when you navigate to it in the File Explorer Address bar.
+Save this change by clicking "OK" in all of the settings windows. To check that it works, open a new Command Prompt window and run `where mybash`. If it prints out the location to the script located at `shell-utils\windows_cmd\exec\mybash.bat` in your local copy of this repo, then your addition to the `PATH` variable was successful! If instead it prints an error message such as `INFO: Could not find files for the given pattern(s)`, then double-check that the path you added is the correct path that takes you to the [`shell-utils\windows_cmd\exec`](./exec) folder when you navigate to it in the File Explorer Address bar.
 
 ### OSGeo4W
 The OSGeo4W package manager can quickly get you set up with a GDAL environment for Python scripting on Windows. You can [download OSGeo4W here](https://trac.osgeo.org/osgeo4w/). If you're going to be using Python 3 (you should as *Python 2 is now deprecated*), it's recommended you choose the "Advanced Install" method and select at least the following packages for install:
@@ -40,7 +40,7 @@ There are four "starter commands" (shortcut scripts) you can use to fire up an O
 - [osgeo_vanilla](./exec/osgeo_vanilla.bat)
   <br>Runs [`shell-utils/windows_cmd/starter_scripts/start_osgeo.bat`](./starter_scripts/start_osgeo.bat), which opens which the OSGeo4W Shell without running any additional initialization commands. The only Python version that is callable by default would be Python 2, but only if you installed the `python2-core` package through the OSGeo4W installer. If you installed the `python3-core` package, you can instead run the `py3_env` command to load an environment that should then make Python 3 callable with the `python` name. You can test this by running `py3_env` followed by `python` to fire up the Python 3 command-line interpreter.
 - [osgeo2](./exec/osgeo2.bat)
-  <br>Runs [`shell-utils/windows_cmd/starter_scripts/start_osgeo_py2.bat`](./starter_scripts/start_osgeo_py2.bat). This starter script is the same as `osgeo_vanilla`, except that the [system `PATH` environment variable](#path_config_1) is inherited in the new shell. If you've [added frequently-used script locations to your `PATH`](#path_config_2), they should be accessible in shells started by this starter script.
+  <br>Runs [`shell-utils/windows_cmd/starter_scripts/start_osgeo_py2.bat`](./starter_scripts/start_osgeo_py2.bat). This starter script is the same as `osgeo_vanilla`, except that **the [system `PATH` environment variable](#path_config_1) is inherited in the new shell**. If you've [added frequently-used script locations to your `PATH`](#path_config_2), they should be accessible in shells started by this starter script.
 - [osgeo3](./exec/osgeo3.bat)
   <br>Runs [`shell-utils/windows_cmd/starter_scripts/start_osgeo_py3.bat`](./starter_scripts/start_osgeo_py3.bat). This starter script is the same as `osgeo2`, except that the `py3_env` command is invoked during shell startup so that Python 3 should be callable with the `python` name (provided you installed the `python3-core` package through the OSGeo4W installer).
 - [osgeo](./exec/osgeo.bat)
@@ -88,7 +88,7 @@ This is because the `PATH` variable typically only helps the shell locate the *p
 
 In order to call a Python script that is on the `PATH`, you have two options. The first option is to try running the script directly with the command `my_tool.py`. When you run a Python script directly in this manner, the system default Python program will be used. If this fails, see the next section on [how to configure the system default Python program](#set_system_default_python).
 
-The more careful and correct way to call a Python script that is on the `PATH` is to use the [`pyexec` wrapper script](./exec/pyexec.bat) from this repo. When you run `pyexec my_tool.py`, this wrapper script will search the `PATH` variable for the full path to your `my_tool.py` script and then automatically call `python <full-path-to>/my_tool.py`. It will also forward any arguments you provide in your command following `my_tool.py`. So when you want to call your script by name, run the following command in your shell:
+The more careful and correct way to call a Python script that is on the `PATH` is to use the [`pyexec` wrapper script](./exec/pyexec.bat) from this repo. When you run `pyexec my_tool.py`, this wrapper script will search the `PATH` variable for the full path to your `my_tool.py` script and then automatically call `python <full-path-to>\my_tool.py`. It will also forward any arguments you provide in your command following `my_tool.py`. So when you want to call your script by name, run the following command in your shell:
 ```
 pyexec my_tool.py [script arguments]
 ```
