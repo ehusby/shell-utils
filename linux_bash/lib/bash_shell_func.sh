@@ -52,7 +52,7 @@ function dirname_all() {
 
 ## File operations
 
-function absymlink() {
+function absymlink_defunct() {
     local cmd_arr arg cmd
     cmd_arr=()
     while (( "$#" )); do
@@ -63,7 +63,7 @@ function absymlink() {
         cmd_arr+=( "$arg" )
         shift
     done
-    cmd=$(echo "ln -s ${cmd_arr[*]}")
+    cmd="ln -s ${cmd_arr[*]}"
     eval "$cmd"
 }
 
