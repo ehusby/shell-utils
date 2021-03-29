@@ -16,33 +16,54 @@ function strcat() { sed -r "s|(.*)|\1${1}|" < /dev/stdin; }
 ## Path representation
 
 function fullpath() {
-    local dirent_arr
-    if (( $# > 0 )); then
-        dirent_arr=("$@")
+    local dirent dirent_arr
+    if [[ -p /dev/stdin ]]; then
+        dirent_arr=()
+        while IFS= read -r dirent; do
+            dirent_arr+=( "$dirent" )
+        done
     else
-        dirent_arr=(*)
+        if (( $# > 0 )); then
+            dirent_arr=("$@")
+        else
+            dirent_arr=(*)
+        fi
     fi
     for dirent in "${dirent_arr[@]}"; do
         readlink -f "$dirent"
     done
 }
 function basename_all() {
-    local dirent_arr
-    if (( $# > 0 )); then
-        dirent_arr=("$@")
+    local dirent dirent_arr
+    if [[ -p /dev/stdin ]]; then
+        dirent_arr=()
+        while IFS= read -r dirent; do
+            dirent_arr+=( "$dirent" )
+        done
     else
-        dirent_arr=(*)
+        if (( $# > 0 )); then
+            dirent_arr=("$@")
+        else
+            dirent_arr=(*)
+        fi
     fi
     for dirent in "${dirent_arr[@]}"; do
         basename "$dirent"
     done
 }
 function dirname_all() {
-    local dirent_arr
-    if (( $# > 0 )); then
-        dirent_arr=("$@")
+    local dirent dirent_arr
+    if [[ -p /dev/stdin ]]; then
+        dirent_arr=()
+        while IFS= read -r dirent; do
+            dirent_arr+=( "$dirent" )
+        done
     else
-        dirent_arr=(*)
+        if (( $# > 0 )); then
+            dirent_arr=("$@")
+        else
+            dirent_arr=(*)
+        fi
     fi
     for dirent in "${dirent_arr[@]}"; do
         dirname "$dirent"
@@ -343,3 +364,5 @@ function layz() {
     fi
 }
 
+
+}
