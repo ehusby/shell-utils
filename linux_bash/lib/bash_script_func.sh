@@ -178,7 +178,7 @@ function exit_script_with_status() {
     local status="$1"
     local script_file="$CURRENT_PARENT_BASH_SCRIPT_FILE"
 
-    echo_e "Error executing bash script, exiting with status code (${status}): ${script_file}"
+    echo_e -e "\nError executing bash script, exiting with status code (${status}): ${script_file}"
 
     exit $status
 }

@@ -31,7 +31,7 @@ read -r -d '' script_usage << EOM
 Usage: ${script_name} ['ln' option (-s already provided)]... TARGET LINK_NAME [--dryrun]
 EOM
 if (( $# < 1 )); then
-    echo_e -e "${script_usage}\n"
+    echo_e -e "$script_usage"
     exit_script_with_status 1
 fi
 

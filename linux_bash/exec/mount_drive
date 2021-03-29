@@ -30,7 +30,7 @@ read -r -d '' script_usage << EOM
 Usage: ${script_name} DRIVE_LETTER... [--dryrun]
 EOM
 if (( $# < 1 )); then
-    echo_e -e "${script_usage}\n"
+    echo_e -e "$script_usage"
     exit_script_with_status 1
 fi
 
