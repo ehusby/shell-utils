@@ -1,0 +1,157 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_dir=$(dirname "$script_file")
+script_name=$(basename "$script_file")
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+source "$bash_functions_script"
+
+
+## Arguments
+program=''
+field_name=''
+file_path=''
+layer_name=''
+dryrun=false
+program_choices_arr=( 'list' 'get' )
+
+## Custom globals
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+${script_name} programs:
+  list FILE_PATH
+  get FIELD_NAME FILE_PATH [LAYER_NAME]
+Optionals:
+  --dryrun :: print actions without executing
+EOM
+if (( $# < 1 )); then
+    echo_e -e "$script_usage"
+    exit_script_with_status 1
+fi
+
+
+## Parse arguments
+set +u
+while (( "$#" )); do
+    arg="$1"
+
+    if [ -z "$program" ]; then
+        program="$arg"
+
+    elif ! [[ $arg == -* ]]; then
+        if [ "$program" == 'list' ]; then
+            if [ -z "$file_path" ]; then
+                file_path="$arg"
+            else
+                echo_e "Unexpected argument: ${arg}"
+                exit_script_with_status 1
+            fi
+        elif [ "$program" == 'get' ]; then
+            if [ -z "$field_name" ]; then
+                field_name="$arg"
+            elif [ -z "$file_path" ]; then
+                file_path="$arg"
+            elif [ -z "$layer_name" ]; then
+                layer_name="$arg"
+            else
+                echo_e "Unexpected argument: ${arg}"
+                exit_script_with_status 1
+            fi
+        fi
+
+    else
+        arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+        arg_opt_nargs=''
+        arg_val_can_start_with_dash=false
+
+        if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+            arg_opt_nargs=0
+            echo "$script_usage"
+            exit 0
+
+        elif [ "$arg_opt" == 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ -z "$arg_opt_nargs" ]; then
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        for i in $(seq 1 $arg_opt_nargs); do
+            shift
+            arg_val="$1"
+            if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
+                echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                exit_script_with_status 1
+            fi
+        done
+    fi
+
+    shift
+done
+set -u
+
+
+## Validate arguments
+
+if (( $(indexOf "$program" "${program_choices_arr[@]}") == -1 )); then
+    echo_e -e "${script_usage}\n"
+    echo_e "Program name must be one of the following: ${program_choices_arr[*]}"
+    exit_script_with_status 1
+fi
+if [ "$program" == 'list' ]; then
+    if [ -z "$file_path" ]; then
+        echo_e "FILE_PATH argument must be provided"
+        exit_script_with_status 1
+    fi
+elif [ "$program" == 'get' ]; then
+    if [ -z "$field_name" ] || [ -z "$file_path" ]; then
+        echo_e "Both FIELD_NAME and FILE_PATH arguments must be provided"
+        exit_script_with_status 1
+    fi
+fi
+if [ ! -f "$file_path" ]; then
+    echo_e "FILE_PATH file does not exist: ${file_path}"
+    exit_script_with_status 1
+fi
+
+
+## Adjust arguments
+
+if [ "$program" == 'get' ] && [ -z "$layer_name" ]; then
+    # Assume layer name is the same as the filename (works for most shapefiles)
+    layer_name=$(basename "$file_path")
+    layer_name="${layer_name%.*}"
+fi
+
+
+## Main program
+
+if [ "$program" == 'list' ]; then
+    cmd="ogrinfo -so -al '${file_path}' | sed -e '1,/Data axis to CRS axis mapping/d' | sed -r 's|(.*?):.*|\1|g'"
+elif [ "$program" == 'get' ]; then
+    cmd="ogrinfo -dialect sqlite -sql 'SELECT ${field_name} FROM ${layer_name}' '${file_path}' | grep -E '= .*' | sed -r 's|.*? = (.*)|\1|g'"
+fi
+if [ "$dryrun" == "true" ]; then
+    echo "$cmd"
+else
+    eval "$cmd"
+fi
