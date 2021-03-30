@@ -1,0 +1,27 @@
+#!/bin/bash
+
+script_name="$1"
+if [ -n "$script_name" ]; then
+    script_path=$(which "$script_name")
+else
+    script_path=''
+fi
+shift
+
+script_args=()
+if [ -n "$script_path" ]; then
+    while (( "$#" )); do
+        arg="$1"
+        script_args+=( "$arg" )
+        shift
+    done
+fi
+
+if [ -z "$script_name" ]; then
+    python
+elif [ -n "$script_path" ]; then
+    run_cmd="python ${script_path} ${script_args[*]}"
+    echo "$run_cmd"
+    echo
+    eval "$run_cmd"
+fi
