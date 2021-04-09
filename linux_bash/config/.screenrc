@@ -160,3 +160,6 @@ hardstatus alwayslastline
 hardstatus string '%{= kG}[ %{G}%H - %l %{g}][%= %{= kw}%?%-Lw%?%{r}(%{W}%n*%f%t%?(%u)%?%{r})%{w}%?%+Lw%?%?%= %{g}][%{B} %m/%d %{W}%c %{g}]'
 
 defscrollback 10000
+
+# Force Bash shell if not default shell
+#shell "/bin/bash"
