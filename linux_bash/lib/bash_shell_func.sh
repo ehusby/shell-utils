@@ -70,22 +70,93 @@ function dirname_all() {
     done
 }
 
+#alias findl='find -mindepth 1 -maxdepth 1'
+#alias findls='find -mindepth 1 -maxdepth 1 -ls | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
+#alias findlsh='find -mindepth 1 -maxdepth 1 -type f -exec ls -lh {} \; | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
+function find_alias() {
+    local find_func_name="$1"; shift
+
+    local pos_args opt_args debug
+    pos_args=()
+    opt_args=()
+
+    debug=false
+    local mindepth maxdepth
+    mindepth=1
+    maxdepth=1
+    local find_func_suffix
+
+    local parsing_opt_args arg arg_opt
+    parsing_opt_args=false
+    while (( "$#" )); do
+        arg="$1"
+        if [[ $arg == -* ]]; then
+            parsing_opt_args=true
+            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+            if [ "$arg_opt" == 'debug' ]; then
+                debug=true
+                shift; continue
+            elif [ "$arg_opt" == 'mindepth' ]; then
+                shift; mindepth="$1"
+                shift; continue
+            elif [ "$arg_opt" == 'maxdepth' ]; then
+                shift; maxdepth="$1"
+                shift; continue
+            fi
+        elif [[ $arg == [\(\)\;] ]]; then
+            parsing_opt_args=true
+            arg="\\${arg}"
+        fi
+        if [ "$parsing_opt_args" == "true" ]; then
+            if [[ $arg == *"*"* ]] || [[ $arg == *" "* ]]; then
+                arg="'${arg}'"
+            fi
+            opt_args+=( "$arg" )
+        else
+            pos_args+=( "$arg" )
+        fi
+        shift
+    done
+
+    if [ "$find_func_name" == 'findl' ]; then
+        find_func_suffix=''
+    elif [ "$find_func_name" == 'findls' ]; then
+        find_func_suffix="-ls | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+    elif [ "$find_func_name" == 'findlsh' ]; then
+        find_func_suffix=" -type f -exec ls -lh {} \; | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+    fi
+
+    cmd="find ${pos_args[*]} -mindepth ${mindepth} -maxdepth ${maxdepth} ${opt_args[*]} ${find_func_suffix}"
+    if [ "$debug" == "true" ]; then
+        echo "$cmd"
+    fi
+    eval "$cmd"
+}
+function findl() {
+    find_alias findl "$@"
+}
+function findls() {
+    find_alias findls "$@"
+}
+function findlsh() {
+    find_alias findlsh "$@"
+}
+
 
 ## File operations
 
 function absymlink_defunct() {
-    local cmd_arr arg cmd
-    cmd_arr=()
+    local arg_arr arg
+    arg_arr=()
     while (( "$#" )); do
         arg="$1"
         if ! [[ $arg == -* ]]; then
             arg=$(readlink -f "$arg")
         fi
-        cmd_arr+=( "$arg" )
+        arg_arr+=( "$arg" )
         shift
     done
-    cmd="ln -s ${cmd_arr[*]}"
-    eval "$cmd"
+    ln -s "${arg_arr[@]}"
 }
 
 

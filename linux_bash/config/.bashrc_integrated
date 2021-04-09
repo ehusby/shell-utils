@@ -34,7 +34,7 @@ if [ -n "$PS1" ]; then
     eval "$(dircolors -b)"
     alias ls='ls $LS_OPTIONS'
     alias grep='grep --color=auto'
-    export LESS='RXM'  # https://man7.org/linux/man-pages/man1/less.1.html#OPTIONS
+    export LESS='RXMi'  # https://man7.org/linux/man-pages/man1/less.1.html#OPTIONS
     alias tmux="tmux -2"  # enable 256 color support
 
 fi
