@@ -76,15 +76,13 @@ function dirname_all() {
 function find_alias() {
     local find_func_name="$1"; shift
 
-    local pos_args opt_args debug
+    local pos_args opt_args debug mindepth maxdepth find_func_suffix
     pos_args=()
     opt_args=()
-
     debug=false
-    local mindepth maxdepth
     mindepth=1
     maxdepth=1
-    local find_func_suffix
+    find_func_suffix=''
 
     local parsing_opt_args arg arg_opt
     parsing_opt_args=false
@@ -433,5 +431,49 @@ function layz() {
     else
         $cmd_out
     fi
+}
+
+function tokentx() {
+    local tx="$1"
+    local token_arr=()
+    local token_tx_arr=()
+    local token_delim='\n'
+    local token
+    while IFS= read -r token; do
+        token_arr+=( "$token" )
+    done
+    if (( ${#token_arr[@]} == 1 )); then
+        token_delim=' '
+        IFS="$token_delim" read -r -a token_arr <<< "${token_arr[0]}"
+    fi
+    local token_tx
+    for token in "${token_arr[@]}"; do
+        token_tx=${tx//'%'/${token}}
+        token_tx_arr+=( "$token_tx" )
+    done
+    printf "%s${token_delim}" "${token_tx_arr[@]}"
+}
+
+function echoeval() {
+    local echo_args
+    if [[ -p /dev/stdin ]]; then
+        IFS= read -r echo_args
+    else
+        echo_args="$*"
+    fi
+    cmd="echo ${echo_args}"
+    eval "$cmd"
+}
+
+function sum_col() {
+    local col_num=1
+    local col_delim=' '
+    if (( $# >= 1 )); then
+        col_num="$1"
+    fi
+    if (( $# >= 2 )); then
+        col_delim="$2"
+    fi
+    awk -F"$col_delim" "{print \$${col_num}}" | paste -s -d"+" | bc < /dev/stdin
 }
 
