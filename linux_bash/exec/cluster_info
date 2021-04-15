@@ -6,7 +6,7 @@ me=false
 help=false
 
 node_info_pbsnodes_property=""
-awk_user_not_pgc='user != "husby" && user != "cporter" && user != "foga" && user != "klassen" && user != "noh1"'
+awk_user_not_pgc='user != "user_1" && user != "user_2" && user != "user_n"'
 awk_user_not_me='user != "'${USER}'"'
 
 script_args=("$@")
@@ -69,7 +69,7 @@ jobinfo_block_descr() {
 }
 
 
-time2sec() { 
+time2sec() {
     IFS=: read -r h m s <<<"${1%.*}"
     seconds=$((10#$s+10#$m*60+10#$h*3600))
     echo "$seconds"
@@ -174,7 +174,7 @@ awk_uniq_all() {
     col_nums="$3"
     jobinfo_mode="$4"
     # awk_cmd="!seen[${col_nums}]++"
-    awk_cmd='BEGIN { pat_num=0 } { user=$2; jobabbrev=$4; status=$10; if (status=="C") next; sub(/[0-9]+$/, "", jobabbrev); sub(/_[0-9]+_$/, "", jobabbrev); pat='"${col_nums}"'; pat=sprintf("%s%s", jobabbrev, pat); '"${awk_user_filter}"' if ("'"${jobinfo_mode}"'" == "qstat-by-user") pat=user; if (!count[pat]++) { pat_num++; line[pat_num]=$0; line_pat[pat_num]=pat; } } END { for (i=1; i<=pat_num; i++) printf "%-124s %7s\n", line[i], count[line_pat[i]] } '
+    awk_cmd='BEGIN { pat_num=0 } { current_line=$0; if (current_line=="") next; user=$2; jobabbrev=$4; status=$10; if (status=="C") next; sub(/[0-9]+$/, "", jobabbrev); sub(/_[0-9]+_$/, "", jobabbrev); pat='"${col_nums}"'; pat=sprintf("%s%s", jobabbrev, pat); '"${awk_user_filter}"' if ("'"${jobinfo_mode}"'" == "qstat-by-user") pat=user; if (!count[pat]++) { pat_num++; line[pat_num]=$0; line_pat[pat_num]=pat; } } END { for (i=1; i<=pat_num; i++) printf "%-124s %7s\n", line[i], count[line_pat[i]] } '
     echo "$rows_blob" | awk -F" " "$awk_cmd"
 }
 
@@ -183,7 +183,7 @@ awk_uniq_blocks() {
     delim="$2"
     col_nums="$3"
     jobinfo_mode="$4"
-    awk_cmd='BEGIN { last_pat=""; pat_num=0 } { user=$2; jobabbrev=$4; status=$10; if (status=="C") next; sub(/[0-9]+$/, "", jobabbrev); sub(/_[0-9]+_$/, "", jobabbrev); pat='"${col_nums}"'; pat=sprintf("%s%s", jobabbrev, pat); '"${awk_user_filter}"' if ("'"${jobinfo_mode}"'" == "qstat-by-user") pat=user; if (pat!=last_pat) { last_pat=pat; pat_num++; line[pat_num]=$0; count[pat_num]=1; } else { count[pat_num]++ } } END { for (i=1; i<=pat_num; i++) printf "%-124s %7s\n", line[i], count[i] } '
+    awk_cmd='BEGIN { last_pat=""; pat_num=0 } { current_line=$0; if (current_line=="") next; user=$2; jobabbrev=$4; status=$10; if (status=="C") next; sub(/[0-9]+$/, "", jobabbrev); sub(/_[0-9]+_$/, "", jobabbrev); pat='"${col_nums}"'; pat=sprintf("%s%s", jobabbrev, pat); '"${awk_user_filter}"' if ("'"${jobinfo_mode}"'" == "qstat-by-user") pat=user; if (pat!=last_pat) { last_pat=pat; pat_num++; line[pat_num]=$0; count[pat_num]=1; } else { count[pat_num]++ } } END { for (i=1; i<=pat_num; i++) printf "%-124s %7s\n", line[i], count[i] } '
     # mapfile -t uniq_first < <( echo "$rows_blob" | awk -F" " "$awk_cmd" )
     # mapfile -t uniq_last < <( echo "$rows_blob" | tac | awk -F" " "$awk_cmd" | tac )
     while IFS= read -r line; do uniq_first+=( "$line" ); done < <( echo "$rows_blob" | awk -F" " "$awk_cmd" )
@@ -223,15 +223,20 @@ EOF
     fi
 
     qstat_info=$(qstat -l -n1 | tail -n +6 | rev | sed -e 's|^[[:space:]]*||')
-    qstat_body=$(echo "$qstat_info" | cut -d" " -f2- | rev)
-    qstat_node=$(echo "$qstat_info" | cut -d" " -f1 | rev | cut -d"/" -f1)
-    qstat_body=$(awk 'FNR==NR { a[FNR""]=$0; next } { printf "%s %-10s\n", a[FNR""], $0; }' <(echo "$qstat_body") <(echo "$qstat_node") )
+    if [ -n "$qstat_info" ]; then
+        qstat_body=$(echo "$qstat_info" | cut -d" " -f2- | rev)
+        qstat_node=$(echo "$qstat_info" | cut -d" " -f1 | rev | cut -d"/" -f1)
+        qstat_body=$(awk 'FNR==NR { a[FNR""]=$0; next } { printf "%s %-10s\n", a[FNR""], $0; }' <(echo "$qstat_body") <(echo "$qstat_node") )
 
-    if [ "$blocks" == "true" ]; then
-        qstat_uniq=$(awk_uniq_blocks "$qstat_body" ' ' "$uniq_qstat_col_nums" "$jobinfo_mode")
+        if [ "$blocks" == "true" ]; then
+            qstat_uniq=$(awk_uniq_blocks "$qstat_body" ' ' "$uniq_qstat_col_nums" "$jobinfo_mode")
+        else
+            qstat_uniq=$(awk_uniq_all "$qstat_body" ' ' "$uniq_qstat_col_nums" "$jobinfo_mode")
+        fi
     else
-        qstat_uniq=$(awk_uniq_all "$qstat_body" ' ' "$uniq_qstat_col_nums" "$jobinfo_mode")
+        qstat_uniq=''
     fi
+
     echo "$qstat_header"
     echo "$qstat_uniq"
 }
@@ -257,14 +262,19 @@ EOF
     himemfo_arr=()
     swift_runid_arr=()
     runinfo_arr=()
-    while IFS= read -r line; do jobinfo_arr+=( "$line" ); done < <( echo "$jobinfo_body" )
-    while IFS= read -r line; do himemfo_arr+=( "$line" ); done < <( echo "$jobinfo_body" | cut -d"." -f1 | jobids_to_himemfo )
-    if [ "$all" == "false" ]; then
-        while IFS= read -r line; do swift_runid_arr+=( "$line" ); done < <( echo "$jobinfo_body" | cut -d"." -f1 | jobids_to_swift_runIDs )
-        while IFS= read -r line; do runinfo_arr+=( "$line" ); done < <( echo "$jobinfo_body" | cut -d"." -f1 | jobids_to_runinfo )
+    if [ -n "$jobinfo_body" ]; then
+        while IFS= read -r line; do jobinfo_arr+=( "$line" ); done < <( echo "$jobinfo_body" )
+        while IFS= read -r line; do himemfo_arr+=( "$line" ); done < <( echo "$jobinfo_body" | cut -d"." -f1 | jobids_to_himemfo )
+        if [ "$all" == "false" ]; then
+            while IFS= read -r line; do swift_runid_arr+=( "$line" ); done < <( echo "$jobinfo_body" | cut -d"." -f1 | jobids_to_swift_runIDs )
+            while IFS= read -r line; do runinfo_arr+=( "$line" ); done < <( echo "$jobinfo_body" | cut -d"." -f1 | jobids_to_runinfo )
+        fi
     fi
     echo "$qstat_header_bw"
-    for i in $(seq 0 $(( ${#jobinfo_arr[@]} - 1 ))); do
+    if (( ${#jobinfo_arr[@]} == 0 )); then
+        return
+    fi
+    for i in "${!jobinfo_arr[@]}"; do
         echo -n "${jobinfo_arr[i]}"
         if [ -n "${himemfo_arr[i]}" ]; then
             echo -n "  ${himemfo_arr[i]}"
@@ -325,7 +335,7 @@ print_node_info() {
         if [ -n "$node_status_jobs" ]; then
             node_qstat_jobs=$(qstat -n1 ${node_status_jobs} | tail -n +6)
 
-            awk_cmd='BEGIN { corereq=0; memreq=0; } { user=$2; ncores=$7; mem=$8; status=$10; if (status == "C") next; if (ncores !~ /^[0-9]+$/) ncores=1; corereq += ncores; nparts=split(mem, memparts, "gb"); if (nparts == 2) memreq += memparts[1]; else { nparts=split(mem, memparts, "mb"); if (nparts == 2) memreq += (memparts[1]/1000) }; '"${awk_user_filter}"' user_count[user]++; } END { printf "%s,%s,", corereq, memreq; for (user in user_count) { printf "%s(%s) ", user, user_count[user]; } printf "\n"; } '
+            awk_cmd='BEGIN { corereq=0; memreq=0; } { current_line=$0; if (current_line=="") next; user=$2; ncores=$7; mem=$8; status=$10; if (status == "C") next; if (ncores !~ /^[0-9]+$/) ncores=1; corereq += ncores; nparts=split(mem, memparts, "gb"); if (nparts == 2) memreq += memparts[1]; else { nparts=split(mem, memparts, "mb"); if (nparts == 2) memreq += (memparts[1]/1000) }; '"${awk_user_filter}"' user_count[user]++; } END { printf "%s,%s,", corereq, memreq; for (user in user_count) { printf "%s(%s) ", user, user_count[user]; } printf "\n"; } '
             awk_out=$(echo "$node_qstat_jobs" | awk -F" " "$awk_cmd")
 
             node_corereq=$(echo "$awk_out" | cut -d"," -f1)
@@ -384,14 +394,14 @@ print_node_info() {
 
 print_job_table() {
     echo
-    awk_cmd='BEGIN { status_arr_len=split("H,Q,R,E,C,T,W,S", status_arr, ","); for (i=1;i<=status_arr_len;i++) status_count[status_arr[i]]=0; total_count=0; } { user=$3; status=$5; '"${awk_user_filter}"' user_list[user]=0; us_count[user","status]++; status_count[status]++; total_count++; } END { nzs_arr_len=0; for (i=1;i<=status_arr_len;i++) { status=status_arr[i]; if (status_count[status]>0) nonzero_status_arr[++nzs_arr_len]=status; }; printf "%-10s", "USER NJOBS"; for (i=1;i<=nzs_arr_len;i++) { status=nonzero_status_arr[i]; printf "    %s   ", status; }; printf "\n"; printf "%-10s", "----------"; for (i=1;i<=nzs_arr_len;i++) { printf "%8s", "-------"; }; printf "\n"; for (user in user_list) { printf "%-10s", user; for (i=1;i<=nzs_arr_len;i++) { status=nonzero_status_arr[i]; count=us_count[user","status]; printf "%8s", count; } printf "\n"; }; printf "%-10s", "----------"; for (i=1;i<=nzs_arr_len;i++) { printf "%8s", "-------"; }; printf "\n"; printf "%-10s", "TOTAL"; for (i=1;i<=nzs_arr_len;i++) { status=nonzero_status_arr[i]; printf "%8s", status_count[status]; }; printf " -> %s total jobs\n", total_count; } '
+    awk_cmd='BEGIN { status_arr_len=split("H,Q,R,E,C,T,W,S", status_arr, ","); for (i=1;i<=status_arr_len;i++) status_count[status_arr[i]]=0; total_count=0; } { current_line=$0; if (current_line=="") next; user=$3; status=$5; '"${awk_user_filter}"' user_list[user]=0; us_count[user","status]++; status_count[status]++; total_count++; } END { nzs_arr_len=0; for (i=1;i<=status_arr_len;i++) { status=status_arr[i]; if (status_count[status]>0) nonzero_status_arr[++nzs_arr_len]=status; }; printf "%-16s", "USER NJOBS"; for (i=1;i<=nzs_arr_len;i++) { status=nonzero_status_arr[i]; printf "    %s   ", status; }; printf "\n"; printf "%-16s", "----------------"; for (i=1;i<=nzs_arr_len;i++) { printf "%8s", "-------"; }; printf "\n"; for (user in user_list) { printf "%-16s", user; for (i=1;i<=nzs_arr_len;i++) { status=nonzero_status_arr[i]; count=us_count[user","status]; printf "%8s", count; } printf "\n"; }; printf "%-16s", "----------------"; for (i=1;i<=nzs_arr_len;i++) { printf "%8s", "-------"; }; printf "\n"; printf "%-16s", "TOTAL"; for (i=1;i<=nzs_arr_len;i++) { status=nonzero_status_arr[i]; printf "%8s", status_count[status]; }; printf " -> %s total jobs\n", total_count; } '
     qstat -l | tail -n +3 | awk -F" " "$awk_cmd"
 }
 
 print_node_table() {
     echo
-    awk_cmd='BEGIN { status_arr_len=split("H,Q,R,E,C,T,W,S", status_arr, ","); for (i=1;i<=status_arr_len;i++) status_count[status_arr[i]]=0; total_count=0; } { user=$2; nodes=$6; status=$10; '"${awk_user_filter}"' user_list[user]=0; us_count[user","status]+=nodes; status_count[status]+=nodes; total_count+=nodes; } END { nzs_arr_len=0; for (i=1;i<=status_arr_len;i++) { status=status_arr[i]; if (status_count[status]>0) nonzero_status_arr[++nzs_arr_len]=status; }; printf "%-10s", "USER NODES"; for (i=1;i<=nzs_arr_len;i++) { status=nonzero_status_arr[i]; printf "    %s   ", status; }; printf "\n"; printf "%-10s", "----------"; for (i=1;i<=nzs_arr_len;i++) { printf "%8s", "-------"; }; printf "\n"; for (user in user_list) { printf "%-10s", user; for (i=1;i<=nzs_arr_len;i++) { status=nonzero_status_arr[i]; count=us_count[user","status]; printf "%8s", count; } printf "\n"; }; printf "%-10s", "----------"; for (i=1;i<=nzs_arr_len;i++) { printf "%8s", "-------"; }; printf "\n"; printf "%-10s", "TOTAL"; for (i=1;i<=nzs_arr_len;i++) { status=nonzero_status_arr[i]; printf "%8s", status_count[status]; }; printf " -> %s total nodes\n", total_count; } '
-    qstat -n1 | tail -n +3 | awk -F" " "$awk_cmd"
+    awk_cmd='BEGIN { status_arr_len=split("H,Q,R,E,C,T,W,S", status_arr, ","); for (i=1;i<=status_arr_len;i++) status_count[status_arr[i]]=0; total_count=0; } { current_line=$0; if (current_line=="") next; user=$2; nodes=$6; status=$10; '"${awk_user_filter}"' user_list[user]=0; us_count[user","status]+=nodes; status_count[status]+=nodes; total_count+=nodes; } END { nzs_arr_len=0; for (i=1;i<=status_arr_len;i++) { status=status_arr[i]; if (status_count[status]>0) nonzero_status_arr[++nzs_arr_len]=status; }; printf "%-16s", "USER NODES"; for (i=1;i<=nzs_arr_len;i++) { status=nonzero_status_arr[i]; printf "    %s   ", status; }; printf "\n"; printf "%-16s", "----------------"; for (i=1;i<=nzs_arr_len;i++) { printf "%8s", "-------"; }; printf "\n"; for (user in user_list) { printf "%-16s", user; for (i=1;i<=nzs_arr_len;i++) { status=nonzero_status_arr[i]; count=us_count[user","status]; printf "%8s", count; } printf "\n"; }; printf "%-16s", "----------------"; for (i=1;i<=nzs_arr_len;i++) { printf "%8s", "-------"; }; printf "\n"; printf "%-16s", "TOTAL"; for (i=1;i<=nzs_arr_len;i++) { status=nonzero_status_arr[i]; printf "%8s", status_count[status]; }; printf " -> %s total nodes\n", total_count; } '
+    qstat -n1 | tail -n +6 | awk -F" " "$awk_cmd"
 }
 
 
@@ -405,16 +415,16 @@ print_interactive_job_note() {
 
 print_setsm_runs() {
     echo
-    echo "USER         RES    SETSM REGION RUNNING                     SWIFT SITE"
-    echo "-----------  -----  ---------------------------------------  ----------"
-    awk_cmd='{ if ($11 == "bash" || $11 == "/bin/bash") { user=$1; site="setsm"$14$15$16; '"${awk_user_filter}"' printf "%-12s %-6s %-40s %s\n", user, $14, $13, site; } }'
-    ps aux | grep -E "auto_swift.sh|auto_setsm.sh" | awk -F" " "$awk_cmd" | sort -u
+    echo "USER              RES    SETSM REGION RUNNING                     SWIFT SITE"
+    echo "----------------  -----  ---------------------------------------  ----------"
+    awk_cmd='{ if ($11 == "bash" || $11 == "/bin/bash") { user=$1; site="setsm"$14$15$16; '"${awk_user_filter}"' printf "%-17s %-6s %-40s %s\n", user, $14, $13, site; } }'
+    ps aux | grep -E "auto_setsm.sh" | awk -F" " "$awk_cmd" | sort -u
 }
 print_s2s_runs() {
     echo
-    echo "USER         RES    S2S REGION RUNNING                       SWIFT SITE"
-    echo "-----------  -----  ---------------------------------------  ----------"
-    awk_cmd='{ if ($11 == "bash" || $11 == "/bin/bash") { user=$1; site="s2s"$15$16; '"${awk_user_filter}"' printf "%-12s %-6s %-40s %s\n", user, $14, $13, site; } }'
+    echo "USER              RES    S2S REGION RUNNING                       SWIFT SITE"
+    echo "----------------  -----  ---------------------------------------  ----------"
+    awk_cmd='{ if ($11 == "bash" || $11 == "/bin/bash") { user=$1; site="s2s"$15$16; '"${awk_user_filter}"' printf "%-17s %-6s %-40s %s\n", user, $14, $13, site; } }'
     ps aux | grep "auto_s2s.sh" | awk -F" " "$awk_cmd" | sort -u
 }
 
