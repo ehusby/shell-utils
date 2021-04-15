@@ -30,15 +30,16 @@ mv ~/.bashrc_standalone ~/.bashrc
 ### <a name="shell_config_opt2"></a>Option 2 (recommended): More easily updatable for work on multiple systems
 Copying the config files into your home directory, as done in [**Option 1**](#shell_config_opt1), will dissociate those files from your local `shell-utils` GitHub repo. This means that if you want to commit and track changes to these files, or update them by pulling changes from GitHub, you will need to manually perform steps like those in Option 1 every time, shuffling these files around on every system you work on. And if you've made changes to those files in your home directory on those systems, you would also need to manage those changes manually.
 
-Instead of copying the config files, we can _symlink_ these files into your home directory. The "symbolic link" files you create in your home directory will function similar to Windows Shortcuts, which "point" to the real files that continue to exist in your local `shell-utils` repo. Any changes you make to these symlink files will also be reflected in the files within the repo, and vice versa when you use `git` to update the files in the repo.
+Instead of copying the config files, we can _symlink_ these files into your home directory. The "symbolic link" files you create in your home directory will function similar to Windows Shortcuts, which "point" to the real files that continue to exist in your local copy of the shell-utils repo. Any changes you make to these symlink files will also be reflected in the files within the repo, and vice versa when you use `git` to update the files in the repo.
 
 Run [the `setup.sh` script](./setup.sh) with the following command to symlink all files/folders from [the shell-utils `config` folder](./config) into your home directory. Any existing *non-symlink* config files/folders will be backed up in your home directory by appending a suffix of "_system_default" to the file/foldername. Any existing *symlink* files/folders will be replaced, so this setup script is safely rerunnable. **If you later move the shell-utils repo, you will need to rerun this setup script to update the config file symlinks so they point to the new location!**
 ```
 bash <path-to>/shell-utils/linux_bash/setup.sh
 ```
-(Remember that the symlinked `.bashrc` files from this repo [will source the `~/.bashrc_system_default` file if it exists](#shell_config_bashrc_default).)
 > **IMPORTANT NOTE!**
-> <br>If you later move your local copy of the shell-utils repo,  rerun this setup script to update the config file symlinks so they point to the new location.
+> <br>If you later move your local copy of the shell-utils repo, rerun this setup script to update the config file symlinks so they point to the new location.
+
+(Remember that the symlinked `.bashrc` files from this repo [will source the `~/.bashrc_system_default` file if it exists](#shell_config_bashrc_default).)
 
 If you're only working on a single system and prefer to see all of the custom shell functions made available in your bashrc at a glance—while keeping the bashrc updatable—you can instead make [`.bashrc_standalone`](./config/.bashrc_standalone) your bashrc. To do that, just rename the symlink that was created in your home dir after running the [`setup.sh`](./setup.sh) script:
 ```
