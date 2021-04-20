@@ -68,7 +68,7 @@ while true; do
             outfile_mtime_sec=$(date +%s -r "$inactive_outfile")
             current_time_sec=$(date +%s)
             inactive_sec=$((current_time_sec - outfile_mtime_sec))
-            inactive_hms=$(sec2time "$inactive_sec")
+            inactive_hms=$(sec2hms "$inactive_sec")
 
             log "Deleting hung job with outfile last modified ${inactive_hms} ago (mmin_thresh=${mmin_thresh}):\n${qstat_row}" | tee -a "$hungjobs_digest"
             qdel "$jobnum"
