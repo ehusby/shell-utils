@@ -139,6 +139,9 @@ function findls() {
 function findlsh() {
     find_alias findlsh "$@"
 }
+function findst() {
+    find_alias findls "$1" -mindepth 0 -maxdepth 0
+}
 
 
 ## File operations
