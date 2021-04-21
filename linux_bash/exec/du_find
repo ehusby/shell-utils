@@ -1,0 +1,309 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_dir=$(dirname "$script_file")
+script_name=$(basename "$script_file")
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+source "$bash_functions_script"
+
+
+## Arguments
+# Units and order of magnitude from KB (in 1000's)
+unit_name=''
+unit_abrev_arr=( 'K' 'M' 'G' 'T' )
+unit_order_arr=(  0   1   2   3  )
+unit_si=false
+decimals=2
+round_choices_arr=( 'on' 'off' 'up' 'down' )
+round_mode='up'
+namepat_arr=()
+sum_all=false
+debug=false
+find_args_arr=()
+srcpath_arr=()
+
+## Custom globals
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+Usage: ${script_name} [OPTION]... [PATH]... ['find' OPTION]...
+
+  Summarize disk usage of each file/directory PATH, recursively
+for directories.
+  Comparable to 'du -sh [PATH]...', but by running 'find' under
+the hood this program supports inclusive filtering of filename
+patterns and other 'find' command options. Since this program
+must parse a lot of output from 'find', it runs significantly
+slower than 'du'.
+
+Options:
+    -{$(string_join '|' ${unit_abrev_arr[@]})}
+        Unit for disk usage metric.
+        If not provided, the smallest unit that reports a disk
+        usage value less than 1000 is automatically selected.
+ -d,--decimals=<int> (default=${decimals})
+        Number of decimal places in reported disk usage.
+ -r,--round={$(string_join '|' ${round_choices_arr[@]})} (default=${round_mode})
+        Rounding method used in reported disk usage.
+ -n,--name
+        Include files that match this pattern.
+        This option can be provided multiple times to include
+        multiple file patterns.
+ -s,--sum
+        Report only the summed disk usage of all PATHS.
+    --si
+        Use powers of 1000 instead of 1024 between units.
+-db,--debug
+        Print 'find' command(s) used to gather file sizes.
+EOM
+if (( $# < 1 )); then
+    echo_e "$script_usage"
+    exit_script_with_status 1
+fi
+
+
+## Parse arguments
+set +u
+parsing_find_args=false
+while (( "$#" )); do
+    arg="$1"
+
+    if [ "$parsing_find_args" == "true" ]; then
+        find_args_arr+=( "$arg" )
+
+    elif [ "$(string_startswith "$arg" '-')" == "false" ]; then
+        srcpath_arr+=( "$arg" )
+
+    else
+        arg_opt="$(string_lstrip "$arg" '-')"
+        arg_opt_nargs=''
+        if [ "$(string_contains "$arg_opt" '=')" == "true" ]; then
+            arg_val="${arg_opt#*=}"
+            arg_opt="${arg_opt%%=*}"
+            arg_opt_nargs_do_shift=false
+        else
+            arg_val="$2"
+            arg_opt_nargs_do_shift=true
+        fi
+        arg_val_can_start_with_dash=false
+
+        if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+            arg_opt_nargs=0
+            echo "$script_usage"
+            exit 0
+
+        elif [ "$arg_opt" == 'si' ]; then
+            arg_opt_nargs=0
+            unit_si=true
+
+        elif [ "$arg_opt" == 'd' ] || [ "$arg_opt" == 'decimals' ]; then
+            arg_opt_nargs=1
+            decimals="$arg_val"
+
+        elif [ "$arg_opt" == 'r' ] || [ "$arg_opt" == 'round' ]; then
+            arg_opt_nargs=1
+            round_mode="$arg_val"
+
+        elif [ "$arg_opt" == 'n' ] || [ "$arg_opt" == 'name' ]; then
+            arg_opt_nargs=1
+            namepat_arr+=( "$arg_val" )
+
+        elif [ "$arg_opt" == 's' ] || [ "$arg_opt" == 'sum' ]; then
+            arg_opt_nargs=0
+            sum_all=true
+
+        elif [ "$arg_opt" == 'db' ] || [ "$arg_opt" == 'debug' ]; then
+            arg_opt_nargs=0
+            debug=true
+
+        else
+            arg_opt_nargs=0
+
+            if [ "$(re_test '^d[0-9]+$' "$arg_opt")" == "true" ]; then
+                decimals="${arg_opt/d/}"
+
+            elif [ -z "$unit_name" ] && (( ${#arg_opt} == 1 )); then
+                unit_name="$arg_opt"
+
+            else
+                find_args_arr+=( "$arg" )
+                parsing_find_args=true
+            fi
+        fi
+
+        if [ -z "$arg_opt_nargs" ]; then
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ "$arg_opt_nargs_do_shift" == "true" ]; then
+            for i in $(seq 1 $arg_opt_nargs); do
+                shift
+                arg_val="$1"
+                if [ "$arg_val_can_start_with_dash" == "false" ] && [ "$(string_startswith "$arg_val" '-')" == "true" ]; then
+                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                    exit_script_with_status 1
+                fi
+            done
+        fi
+    fi
+
+    shift
+done
+set -u
+
+
+## Validate arguments
+
+if (( ${#srcpath_arr[@]} == 0 )); then
+    echo_e "At least one source path argument must be provided"
+    exit_script_with_status 1
+fi
+for srcpath in "${srcpath_arr[@]}"; do
+    if [ ! -e "$srcpath" ]; then
+        echo_e "Source path does not exist: ${srcpath}"
+        exit_script_with_status 1
+    fi
+done
+
+unit_abrev=''
+unit_order=''
+if [ -n "$unit_name" ]; then
+    unit_is_valid=false
+    if (( ${#unit_name} >= 1 )) && (( ${#unit_name} <= 3 )); then
+        unit_abrev=$(printf '%s' "${unit_name:0:1}" | awk '{ print toupper($0) }')
+        unit_lastchar=''
+        unit_middlechar=''
+        if (( ${#unit_name} > 1 )); then
+            unit_lastchar=$(printf '%s' "${unit_name: -1}" | awk '{ print toupper($0) }')
+            if (( ${#unit_name} == 3 )); then
+                unit_middlechar=$(printf '%s' "${unit_name:1:2}" | awk '{ print tolower($0) }')
+            fi
+        fi
+        if (( $(indexOf "$unit_abrev" "${unit_abrev_arr[@]}") > -1 )); then
+            if [ -z "$unit_lastchar" ] || [ "$unit_lastchar" == 'B' ]; then
+                if [ -z "$unit_middlechar" ] || [ "$unit_middlechar" == 'i' ]; then
+                    unit_is_valid=true
+                fi
+            fi
+        fi
+    fi
+
+    if [ "$unit_is_valid" == "false" ]; then
+        echo_e "Provided unit name '${unit_name}' not recognized"
+        exit_script_with_status 1
+    fi
+
+    i_unit=$(indexOf "$unit_abrev" "${unit_abrev_arr[@]}")
+    if (( i_unit == -1 )); then
+        echo_e "Cannot find unit abbreviation '${unit_abrev}' in "'$unit_abrev_arr'
+        exit_script_with_status 1
+    fi
+    unit_order=${unit_order_arr[$i_unit]}
+fi
+
+if [ "$(string_is_int "$decimals")" == "false" ]; then
+    echo_e "Decimals argument must be a positive integer"
+    exit_script_with_status 1
+fi
+
+if (( $(indexOf "$round_mode" "${round_choices_arr[@]}") == -1 )); then
+    echo_e "Rounding mode must be one of the following: ${round_choices_arr[*]}"
+    exit_script_with_status 1
+fi
+
+
+# Set multiplicative factor for unit order
+if [ "$unit_si" == "true" ]; then
+    unit_factor=1000
+else
+    unit_factor=1024
+fi
+
+# Build -name arguments to give to 'find' command
+find_name_args=''
+if (( ${#namepat_arr[@]} > 0 )); then
+    find_name_args="\("
+    for i in "${!namepat_arr[@]}"; do
+        if (( i == 0 )); then
+            find_name_args="${find_name_args} -name '${namepat_arr[i]}'"
+        else
+            find_name_args="${find_name_args} -o -name '${namepat_arr[i]}'"
+        fi
+    done
+    find_name_args="${find_name_args} \)"
+fi
+
+
+if [ "$sum_all" == "true" ]; then
+    srcpath_arr=( "${srcpath_arr[*]}" )
+    report_srcpath=false
+else
+    report_srcpath=true
+fi
+for srcpath in "${srcpath_arr[@]}"; do
+
+    ## Sum file sizes, returning disk usage in KB
+    find_cmd="find ${srcpath} -type f ${find_name_args} ${find_args_arr[*]+${find_args_arr[*]}} -print0 | xargs -r0 du -a | awk '{sum+=\$1} END {print sum}'"
+    if [ "$debug" == "true" ]; then
+        echo "$find_cmd"
+    fi
+    sum_kb=$(eval "$find_cmd")
+    sum_kb=$(printf '%f' "${sum_kb}")  # Sum could be returned in scientific notation, so use 'printf' to fix it
+    if [ "$unit_si" == "true" ]; then
+        sum_kb=$(printf "%.${decimals}f\n" "$(bc -l <<< "${sum_kb} * 1024 / 1000")")  # Convert KB sum to SI if required
+        sum_kb=$(round "$sum_kb" "$round_mode" "$decimals")
+    fi
+
+    if [ -n "$unit_name" ] && [ -n "$unit_order" ]; then
+        # Desired unit was provided, so only need to perform the single conversion
+        sum_unit=$(bc -l <<< "${sum_kb} / ${unit_factor}^${unit_order}")
+        sum_unit=$(round "$sum_unit" "$round_mode" "$decimals")
+        if [ "$unit_abrev" == 'K' ] && [ "$unit_si" == "false" ]; then
+            # Trim trailing zeros for non-SI sum in KB
+            sum_report="$(string_rstrip_decimal_zeros "$sum_unit")"
+        else
+            sum_report="$sum_unit"
+        fi
+    else
+        # Select the smallest unit that returns a sum of less than 1000 in that base and use it
+        for i in "${!unit_abrev_arr[@]}"; do
+            unit_order=${unit_order_arr[i]}
+            sum_unit=$(bc -l <<< "${sum_kb} / ${unit_factor}^${unit_order}")
+            sum_unit=$(round "$sum_unit" "$round_mode" "$decimals")
+            sum_integer_part=$(echo "$sum_unit" | cut -d'.' -f1)
+            if (( ${#sum_integer_part} < 4 )); then
+                break
+            fi
+        done
+
+        i_unit=$(indexOf "$unit_order" "${unit_order_arr[@]}")
+        if (( i_unit == -1 )); then
+            echo_e "Cannot find unit order '${unit_order}' in "'$unit_order_arr'
+            exit_script_with_status 1
+        fi
+        unit_abrev=${unit_abrev_arr[$i_unit]}
+
+        # Append unit abbreviation to reported sum since the unit was automatically selected
+        sum_report="${sum_unit}${unit_abrev}"
+    fi
+
+    # Report sum
+    if [ "$report_srcpath" == "true" ]; then
+        printf '%10s   %s\n' "$sum_report" "$srcpath"
+    else
+        echo "${sum_report}"
+    fi
+
+done
