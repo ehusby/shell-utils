@@ -75,7 +75,7 @@ while (( "$#" )); do
         for i in $(seq 1 $arg_opt_nargs); do
             shift
             arg_val="$1"
-            if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
+            if [ "$arg_val_can_start_with_dash" = false ] && [[ $arg_val == -* ]]; then
                 echo_e "Unexpected argument value: ${arg} ${arg_val}"
                 exit_script_with_status 1
             fi
@@ -110,7 +110,7 @@ for drive in "${drive_arr[@]}"; do
         cmd="sudo mkdir -m 777 ${drive_path}"
     fi
     echo -e "-> Initializing drive path with command:\n    ${cmd}"
-    if [ "$dryrun" == "false" ]; then
+    if [ "$dryrun" = false ]; then
         eval "$cmd"
     fi
 
@@ -121,7 +121,7 @@ for drive in "${drive_arr[@]}"; do
     else
         cmd="sudo bash -c 'echo ${drive_upper}: /mnt/${drive_lower} drvfs defaults 0 0 >> /etc/fstab'"
         echo -e "-> Adding drive setting to /etc/fstab with command:\n    ${cmd}"
-        if [ "$dryrun" == "false" ]; then
+        if [ "$dryrun" = false ]; then
             eval "$cmd"
         fi
     fi
@@ -130,7 +130,7 @@ echo
 
 cmd="sudo mount -a"
 echo -e "Mounting all drives with command:\n    ${cmd}"
-if [ "$dryrun" == "false" ]; then
+if [ "$dryrun" = false ]; then
     eval "$cmd"
 fi
 

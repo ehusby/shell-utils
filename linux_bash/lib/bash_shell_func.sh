@@ -105,7 +105,7 @@ function find_alias() {
             parsing_opt_args=true
             arg="\\${arg}"
         fi
-        if [ "$parsing_opt_args" == "true" ]; then
+        if [ "$parsing_opt_args" = true ]; then
             if [[ $arg == *"*"* ]] || [[ $arg == *" "* ]]; then
                 arg="'${arg}'"
             fi
@@ -125,7 +125,7 @@ function find_alias() {
     fi
 
     cmd="find ${pos_args[*]} -mindepth ${mindepth} -maxdepth ${maxdepth} ${opt_args[*]} ${find_func_suffix}"
-    if [ "$debug" == "true" ]; then
+    if [ "$debug" = true ]; then
         echo "$cmd"
     fi
     eval "$cmd"
@@ -295,7 +295,7 @@ EOM
             for i in $(seq 1 $arg_opt_nargs); do
                 shift
                 arg_val="$1"
-                if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
+                if [ "$arg_val_can_start_with_dash" = false ] && [[ $arg_val == -* ]]; then
                     echo_e "Unexpected argument value: ${arg} ${arg_val}"
                     return
                 fi
@@ -350,7 +350,7 @@ function git_pull_in() {
         fi
     done
 
-    if [ "$do_stashing" == "true" ]; then
+    if [ "$do_stashing" = true ]; then
         git_cmd_arr=( 'stash' 'pull' "'stash apply'" )
     else
         git_cmd_arr=( 'pull' )
@@ -429,7 +429,7 @@ function layz() {
         cmd_arr_out+=( "$arg_out" )
     done
     cmd_out="${cmd_arr_out[*]}"
-    if [ "$debug" == "true" ]; then
+    if [ "$debug" = true ]; then
         echo "$cmd_out"
     else
         $cmd_out

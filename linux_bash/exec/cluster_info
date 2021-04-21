@@ -29,7 +29,7 @@ for arg in "${script_args[@]}"; do
         status=1
     fi
 done
-if (( status != 0 )) || [ "$help" == "true" ]; then
+if (( status != 0 )) || [ "$help" = true ]; then
     echo "Arguments can include any of [<none>|runs|jobs|nodes|nodelist|qstat|qstat-by-batch|qstat-by-node|qstat-by-user|blocks|all|me]"
     exit $status
 fi
@@ -37,9 +37,9 @@ if (( ${#info_mode_args[@]} == 0 )); then
     info_mode_args+=( "<none>" )
 fi
 
-if [ "$me" == "true" ]; then
+if [ "$me" = true ]; then
     awk_user_filter="if (${awk_user_not_me}) next;"
-elif [ "$all" == "false" ]; then
+elif [ "$all" = false ]; then
     awk_user_filter="if (${awk_user_not_pgc}) next;"
 else
     awk_user_filter=''
@@ -60,7 +60,7 @@ jobinfo_list_descr() {
 }
 jobinfo_block_descr() {
     blocks="$1"
-    if [ "$blocks" == "true" ]; then
+    if [ "$blocks" = true ]; then
         job_count_type="Block"
     else
         job_count_type="Group"
@@ -228,7 +228,7 @@ EOF
         qstat_node=$(echo "$qstat_info" | cut -d" " -f1 | rev | cut -d"/" -f1)
         qstat_body=$(awk 'FNR==NR { a[FNR""]=$0; next } { printf "%s %-10s\n", a[FNR""], $0; }' <(echo "$qstat_body") <(echo "$qstat_node") )
 
-        if [ "$blocks" == "true" ]; then
+        if [ "$blocks" = true ]; then
             qstat_uniq=$(awk_uniq_blocks "$qstat_body" ' ' "$uniq_qstat_col_nums" "$jobinfo_mode")
         else
             qstat_uniq=$(awk_uniq_all "$qstat_body" ' ' "$uniq_qstat_col_nums" "$jobinfo_mode")
@@ -265,7 +265,7 @@ EOF
     if [ -n "$jobinfo_body" ]; then
         while IFS= read -r line; do jobinfo_arr+=( "$line" ); done < <( echo "$jobinfo_body" )
         while IFS= read -r line; do himemfo_arr+=( "$line" ); done < <( echo "$jobinfo_body" | cut -d"." -f1 | jobids_to_himemfo )
-        if [ "$all" == "false" ]; then
+        if [ "$all" = false ]; then
             while IFS= read -r line; do swift_runid_arr+=( "$line" ); done < <( echo "$jobinfo_body" | cut -d"." -f1 | jobids_to_swift_runIDs )
             while IFS= read -r line; do runinfo_arr+=( "$line" ); done < <( echo "$jobinfo_body" | cut -d"." -f1 | jobids_to_runinfo )
         fi
@@ -279,7 +279,7 @@ EOF
         if [ -n "${himemfo_arr[i]}" ]; then
             echo -n "  ${himemfo_arr[i]}"
         fi
-        if [ "$all" == "false" ] && [ -n "${runinfo_arr[i]}" ]; then
+        if [ "$all" = false ] && [ -n "${runinfo_arr[i]}" ]; then
             echo -n " ${swift_runid_arr[i]}"
             echo -n " ${runinfo_arr[i]}"
         fi
@@ -435,7 +435,7 @@ print_s2s_runs() {
 for arg in "${info_mode_args[@]}"; do
     if [ "$arg" == "qstat" ] || [ "$arg" == "qstat-by-batch" ] || [ "$arg" == "qstat-by-node" ] || [ "$arg" == "qstat-by-user" ] || [ "$arg" == "<none>" ]; then
         print_job_info "$arg" "$blocks"
-        if [ "$all" == "true" ]; then
+        if [ "$all" = true ]; then
             print_job_total
         fi
     fi

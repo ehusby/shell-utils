@@ -78,7 +78,7 @@ while (( "$#" )); do
         for i in $(seq 1 $arg_opt_nargs); do
             shift
             arg_val="$1"
-            if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
+            if [ "$arg_val_can_start_with_dash" = false ] && [[ $arg_val == -* ]]; then
                 echo_e "Unexpected argument value: ${arg} ${arg_val}"
                 exit_script_with_status 1
             fi
@@ -106,7 +106,7 @@ fi
 
 src_dir=$(dirname "$src")
 cmd="mv ${mv_opt_arg_arr[*]+${mv_opt_arg_arr[*]}} ${src} ${src_dir}/${new_name}"
-if [ "$dryrun" == "true" ]; then
+if [ "$dryrun" = true ]; then
     echo "$cmd"
 else
     eval "$cmd"

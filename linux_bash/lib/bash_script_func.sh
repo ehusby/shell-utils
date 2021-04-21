@@ -28,11 +28,14 @@ function string_lstrip() { echo "$1" | sed "s/^\(${2}\)\+//"; }
 function string_rstrip() { echo "$1" | sed "s/\(${2}\)\+\$//"; }
 
 function string_strip() {
-    local result="$1"
+    local string_in="$1"
     local strip_substr="$2"
-    result=$(string_lstrip "$result" "$strip_substr")
-    result=$(string_rstrip "$result" "$strip_substr")
-    echo "$result"
+    local string_stripped=''
+
+    string_stripped=$(string_lstrip "$string_in" "$strip_substr")
+    string_stripped=$(string_rstrip "$string_stripped" "$strip_substr")
+
+    echo "$string_stripped"
 }
 
 function string_rstrip_decimal_zeros { echo "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
@@ -47,14 +50,15 @@ function string_join() { local IFS="$1"; shift; echo "$*"; }
 function re_test() {
     local re_test="$1"
     local test_str="$2"
+    local bool_result=''
 
     if [[ $test_str =~ $re_test ]]; then
-        result=true
+        bool_result=true
     else
-        result=false
+        bool_result=false
     fi
 
-    echo "$result"
+    echo $bool_result
 }
 
 function string_is_int() { re_test '^[0-9]+$' "$1"; }

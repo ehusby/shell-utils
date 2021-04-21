@@ -140,7 +140,7 @@ while (( "$#" )); do
         for i in $(seq 1 $arg_opt_nargs); do
             shift
             arg_val="$1"
-            if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
+            if [ "$arg_val_can_start_with_dash" = false ] && [[ $arg_val == -* ]]; then
                 echo_e "Unexpected argument value: ${arg} ${arg_val}"
                 exit_script_with_status 1
             fi
@@ -175,7 +175,7 @@ else
 fi
 
 if [ -n "$outfile_single" ]; then
-    if [ "$no_resample" == "true" ]; then
+    if [ "$no_resample" = true ]; then
         echo_e "-o and --no-resample arguments are incompatible"
         exit_script_with_status 1
     fi
@@ -185,11 +185,11 @@ if [ -n "$outfile_single" ]; then
     fi
 fi
 
-if [ "$do_thumb" == "true" ]; then
+if [ "$do_thumb" = true ]; then
     if [ -n "$target_srs" ]; then
         echo_e "-t_srs and --thumb arguments are mutually exclusive"
         exit_script_with_status 1
-    elif [ "$do_hillshade" == "true" ]; then
+    elif [ "$do_hillshade" = true ]; then
         echo_e "--thumb and --hillshade arguments are mutually exclusive"
         exit_script_with_status 1
     fi
@@ -200,7 +200,7 @@ if [ -n "$hillshade_single" ] && [ ! -d "$hillshade_single" ] && (( ${#srcfile_a
     exit_script_with_status 1
 fi
 
-if [ "$no_resample" == "true" ] && [ "$do_hillshade" == "false" ]; then
+if [ "$no_resample" = true ] && [ "$do_hillshade" = false ]; then
     echo_e "--no-resample argument can only be provided with --hillshade argument"
     exit_script_with_status 1
 fi
@@ -230,13 +230,13 @@ for srcfile in "${srcfile_arr[@]}"; do
 
     created_downsampled_raster=false
 
-    if [ "$do_hillshade" == "true" ]; then
+    if [ "$do_hillshade" = true ]; then
 
         # Set default output hillshade raster filename
         if [ -n "$hillshade_single" ] && [ ! -d "$hillshade_single" ]; then
             hillshade="$hillshade_single"
         else
-            if [ "$no_resample" == "true" ]; then
+            if [ "$no_resample" = true ]; then
                 hillshade=${srcfile/.${srcfile_ext}/_shade.${srcfile_ext}}
             else
                 hillshade=${srcfile/.${srcfile_ext}/_${res_meters}m_shade.${srcfile_ext}}
@@ -250,7 +250,7 @@ for srcfile in "${srcfile_arr[@]}"; do
         fi
 
         # Handle existing output hillshade raster
-        if [ "$keep_downsampled" == "false" ] && [ -e "$hillshade" ] && [ "$overwrite" == "false" ]; then
+        if [ "$keep_downsampled" = false ] && [ -e "$hillshade" ] && [ "$overwrite" = false ]; then
             echo "Skipping existing hillshade raster: ${hillshade}"
             continue
         fi
@@ -258,7 +258,7 @@ for srcfile in "${srcfile_arr[@]}"; do
     fi
 
 
-    if [ "$no_resample" == "true" ]; then
+    if [ "$no_resample" = true ]; then
         outfile="$srcfile"
     else
 
@@ -267,10 +267,10 @@ for srcfile in "${srcfile_arr[@]}"; do
             outfile="$outfile_single"
         else
             outfile="${srcfile/.${srcfile_ext}/}"
-            if [ "$(string_endswith "$outfile" "${res_meters}m")" == "false" ]; then
+            if [ "$(string_endswith "$outfile" "${res_meters}m")" = false ]; then
                 outfile="${outfile}_${res_meters}m"
             fi
-            if [ "$do_thumb" == "true" ]; then
+            if [ "$do_thumb" = true ]; then
                 outfile="${outfile}_thumb"
             fi
             outfile="${outfile}.${srcfile_ext}"
@@ -284,9 +284,9 @@ for srcfile in "${srcfile_arr[@]}"; do
 
         # Handle existing output downsampled raster
         if [ -e "$outfile" ]; then
-            if [ "$overwrite" == "true" ]; then
+            if [ "$overwrite" = true ]; then
                 echo "Existing downsampled raster will be overwritten"
-            elif [ "$do_hillshade" == "false" ]; then
+            elif [ "$do_hillshade" = false ]; then
                 echo "Skipping existing downsampled raster: ${outfile}"
                 continue
             else
@@ -294,8 +294,8 @@ for srcfile in "${srcfile_arr[@]}"; do
             fi
         fi
 
-        if [ ! -e "$outfile" ] || [ "$overwrite" == "true" ]; then
-            if [ "$do_thumb" == "true" ]; then
+        if [ ! -e "$outfile" ] || [ "$overwrite" = true ]; then
+            if [ "$do_thumb" = true ]; then
                 ## Get image min/max stats
                 imgaux_file="${srcfile}.aux.xml"
                 echo "Getting image min/max stats from source raster: ${srcfile} -> ${imgaux_file}"
@@ -323,7 +323,7 @@ for srcfile in "${srcfile_arr[@]}"; do
             if [ -n "$target_srs" ]; then
                 cmd="${cmd} -t_srs '${target_srs}'"
             fi
-            if [ "$do_thumb" == "true" ]; then
+            if [ "$do_thumb" = true ]; then
                 cmd="${cmd} -ot Byte -scale ${imgaux_min} ${imgaux_max} 0 255"
             fi
             cmd="${cmd} -co TILED=YES -co BIGTIFF=IF_SAFER -co COMPRESS=LZW"
@@ -333,11 +333,11 @@ for srcfile in "${srcfile_arr[@]}"; do
     fi
 
 
-    if [ "$do_hillshade" == "true" ]; then
+    if [ "$do_hillshade" = true ]; then
 
         # Handle existing output hillshade raster
         if [ -e "$hillshade" ]; then
-            if [ "$overwrite" == "true" ]; then
+            if [ "$overwrite" = true ]; then
                 echo "Existing hillshade raster will be overwritten"
             else
                 echo "Skipping existing hillshade raster: ${hillshade}"
@@ -345,7 +345,7 @@ for srcfile in "${srcfile_arr[@]}"; do
             fi
         fi
 
-        if [ ! -e "$hillshade" ] || [ "$overwrite" == "true" ]; then
+        if [ ! -e "$hillshade" ] || [ "$overwrite" = true ]; then
             ## Create hillshade raster
             echo "Creating hillshade raster: ${outfile} -> ${hillshade}"
             cmd="${BWPY_PREFIX} gdaldem hillshade "$outfile" "$hillshade" -z 3 -compute_edges -of GTiff -co TILED=YES -co BIGTIFF=IF_SAFER -co COMPRESS=LZW"
@@ -355,11 +355,11 @@ for srcfile in "${srcfile_arr[@]}"; do
 
 
         ## Remove downsampled raster if not needed
-        if [ "$outfile" == "$srcfile" ] || [ "$no_resample" == "true" ]; then
+        if [ "$outfile" == "$srcfile" ] || [ "$no_resample" = true ]; then
             :
-        elif [ -n "$outfile_single" ] || [ "$keep_downsampled" == "true" ]; then
+        elif [ -n "$outfile_single" ] || [ "$keep_downsampled" = true ]; then
             :
-        elif [ "$created_downsampled_raster" == "true" ]; then
+        elif [ "$created_downsampled_raster" = true ]; then
             echo "Removing temporary output downsampled raster: ${outfile}"
             rm "$outfile"
         fi

@@ -97,7 +97,7 @@ while (( "$#" )); do
         for i in $(seq 1 $arg_opt_nargs); do
             shift
             arg_val="$1"
-            if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
+            if [ "$arg_val_can_start_with_dash" = false ] && [[ $arg_val == -* ]]; then
                 echo_e "Unexpected argument value: ${arg} ${arg_val}"
                 exit_script_with_status 1
             fi
@@ -168,16 +168,16 @@ nodelist=$(pbsnodes -l up | gawk '{print $1}' | sort)
 
 for host in $nodelist ; do
 
-    if [ "$use_ssh" == "true" ]; then
+    if [ "$use_ssh" = true ]; then
 
         cmd="ssh ${host} -f 'find /local -mindepth 1"
 
-        if [ "$remove_all" == "false" ]; then
+        if [ "$remove_all" = false ]; then
             cmd="${cmd} -user ${USER}"
         fi
         cmd="${cmd} -ls"
 
-        if [ "$ssh_dryrun" == "false" ]; then
+        if [ "$ssh_dryrun" = false ]; then
             cmd="${cmd} -delete"
         fi
         cmd="${cmd} >> ~/${script_name}_${log_date}_removed_files.txt'"
@@ -188,7 +188,7 @@ for host in $nodelist ; do
         fi
 
         echo "$cmd"
-        if [ "$dryrun" == "false" ]; then
+        if [ "$dryrun" = false ]; then
             eval "$cmd"
         fi
 
@@ -196,7 +196,7 @@ for host in $nodelist ; do
         ncpus=$(pbsnodes -a ${host} | grep np | gawk '{print $3}')
         echo "Host: ${host} -- ncpus: ${ncpus}"
 
-        if [ "$dryrun" == "true" ]; then
+        if [ "$dryrun" = true ]; then
             echo 'echo $qsubscript'" | qsub -l 'nodes=${host},ncpus=${ncpus}'"
         else
             echo "$qsubscript" | qsub -l "nodes=${host},ncpus=${ncpus}"
