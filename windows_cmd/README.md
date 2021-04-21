@@ -46,7 +46,7 @@ There are four "starter commands" (shortcut scripts) you can use to fire up an O
 - [osgeo](./exec/osgeo.bat)
   <br>Identical to `osgeo3`.
   
-#### Getting a normal Windows shortcut for these starter commands
+#### <a name="osgeo_py3_shortcut"></a>Getting a normal Windows shortcut for these starter commands
 The first time you run a starter command such as `osgeo`, `osgeo2`, or `osgeo3`, a real Windows shortcut is automatically generated in the [`shell-utils/windows_cmd/shortcuts`](./shortcuts) folder in this repo. Once you've run `osgeo3` and it generated a shortcut at `shell-utils/windows_cmd/shortcuts/start_osgeo_py3.lnk`, I recommend you copy this shortcut into the folder containing OSGeo4W's Start Menu shortcuts at `C:\ProgramData\Microsoft\Windows\Start Menu\Programs\OSGeo4W`, and rename this shortcut "OSGeo4W Shell - Python3".
 
 ### Anaconda
@@ -80,7 +80,7 @@ After adding a script folder to the PATH environment variable, you can test that
 
 Normally, to run a Python script in a shell you invoke a command like `python <long-path-to-script-file> [script arguments]`. But if you have multiple versions of Python installed on your computer, how does it know which one to use when you called `python`? This is determined by the configuration of the particular shell you're using (typically through the shell's own copy of the `PATH` variable). You can check the location of the currently-callable Python program in a Windows shell by running `where python`. (We will go over [how to change the system-wide default Python program](#set_system_default_python) in the next section.)
 
-When you want to call a Python script that is on the `PATH`, such as `my_tool.py` from the above example, **the following command won't work:**
+When you want to call a Python script that is on the `PATH` from a different folder, such as `my_tool.py` from the above example, **the following command won't work:**
 ```
 python my_tool.py
 ```
@@ -88,17 +88,28 @@ This is because the `PATH` variable typically only helps the shell locate the *p
 
 In order to call a Python script that is on the `PATH`, you have two options. The first option is to try running the script directly with the command `my_tool.py`. When you run a Python script directly in this manner, the system default Python program will be used. If this fails, see the next section on [how to configure the system default Python program](#set_system_default_python).
 
-The more careful and correct way to call a Python script that is on the `PATH` is to use the [`pyexec` wrapper script](./exec/pyexec.bat) from this repo. When you run `pyexec my_tool.py`, this wrapper script will search the `PATH` variable for the full path to your `my_tool.py` script and then automatically call `python <full-path-to>\my_tool.py`. It will also forward any arguments you provide in your command following `my_tool.py`. So when you want to call your script by name, run the following command in your shell:
+The more careful and correct way to call a Python script that is on the `PATH` is to use the [`pyexec`](./exec/pyexec.bat) wrapper script from this repo. When you run `pyexec my_tool.py`, this wrapper script will search the `PATH` variable for the full path to your `my_tool.py` script and then automatically call `python <full-path-to>\my_tool.py`. It will also forward any arguments you provide in your command following `my_tool.py`. So when you want to call your script by name, run the following command in your shell:
 ```
 pyexec my_tool.py [script arguments]
 ```
 The reason why running `pyexec my_tool.py` is safer than simply running `my_tool.py` is that the Python environment that exists in your shell (OSGeo4W, Anaconda, Bash, etc.) can and will be different from the environment of the system default Python program. Often they will differ for important reasons, and the `my_tool.py` script may even be unable to run with the system default Python. By running with [`pyexec`](./exec/pyexec.bat), you can be confident that it's the Python version currently available in your shell (callable by the `python` command) that is used when you run `pyexec my_tool.py`.
 
 ## <a name="set_system_default_python"></a>Set the system-wide default Python program
-When you try to execute a Python script directly by either double-clicking on it in File Explorer or running `.\my_script.py` in a shell (without the `python` prefix), Windows will try to use the system default Python program to run your script. This is most concisely configured through the Windows Registry Editor (aka "regedit") program. The registry key to you need to add/edit is:
+When you try to execute a `.py` Python script directly by either double-clicking on it in File Explorer or running `.\my_script.py` in a shell (without the `python` prefix), Windows will try to use the system default Python program to run your script. This is most concisely configured through the *Windows Registry Editor* **(aka "regedit")** program. The registry key to you need to add/edit is:
 ```
 HKEY_CLASSES_ROOT\Python.File\shell\open\command
 ```
 To make the OSGeo4W (64-bit, all users) Python 3 install the system default Python program, this registry key should be of Type=`REG_SZ` with Data=`"C:\OSGeo4W64\apps\Python37\python.exe" "%1" %*`.
 
-If you'd rather not configure this yourself, in Registry Editor you can `File` -> `Import...` one of the pre-made registry keys included in this repo from [`shell-utils/windows_cmd/registry`](./registry).
+**If you'd rather not configure this yourself,** in Registry Editor you can `File` -> `Import...` one of the pre-made registry keys included in this repo from [`shell-utils/windows_cmd/registry`](./registry) named `open_py-files_with_*.reg`. **Or equivalently, you can double-click on one of these `.reg` files to install the registry key directly from File Explorer.**
+
+After you've installed the new registry key, try double-click opening the [`check_python_location.py`](https://github.com/ehusby/CLIP/blob/master/check_python_location.py) Python script in the in [the `CLIP` repo](https://github.com/ehusby/CLIP). These are handy scripts you can double-click to quickly modify the contents of your clipboard. If the `.py` file association is set correctly, a terminal window should open showing the location of the `python.exe` executable you set with the registry key. If instead you see a terminal window quickly appear and then disappear, a different program opens, or *the Python executable location is not what you set in the registry key*, then continue on to next steps.
+
+- Sometimes you need to restart Windows Explorer for the change to take effect. Open up the Task Manager program (keyboard shortcut `CTRL+SHIFT+ESC`, helpful to remember if your computer ever freezes). In the "Processes" tab under "Apps", right-click on "Windows Explorer -> Restart". Note that all open File Explorer windows you have will be closed.
+
+- If `check_python_location.py` is still not reporting the proper Python executable location, this is likely due to some extra registry keys from a program previously associated with the `.py` file extension (such as PyCharm). To remove the unwanted registry keys, **right-click on the [the `reset_py-file_association.bat` file](./registry/reset_py-file_association.bat) in `shell-utils/windows_cmd/registry` in File Explorer and select "Run as administrator"**. The script may report "ERROR: The system was unable to find the specified registry key or value." for some of the registry delete commands, but that is normal.
+  - Now that the `.py` file associations have been reset, **you will need to setup/import the registry key at `HKEY_CLASSES_ROOT\Python.File\shell\open\command` again**. You might want to use one of the pre-made `open_py-files_with_*.reg` registry keys in [`shell-utils/windows_cmd/registry`](./registry).
+
+Try running one of the other `.py` Python scripts in the root folder of the `CLIP` repo, such as [`ITEMS__LINE__to__SPACE.py`](https://github.com/ehusby/CLIP/blob/master/ITEMS__LINE__to__SPACE.py). It should complain that you need to install the `pyperclip` Python package. For OSGeo4W users, you can install this package by opening [the "OSGeo4W - Python 3" shell shortcut](#osgeo_py3_shortcut) and running the command `pip install pyperclip` to install it.
+
+I like to have the CLIP folder quickly accessible in File Explorer through the "Quick access" panel. Right-click on the CLIP folder and select "Pin to Quick access" to do that. By default, the Quick access panel includes recently-used files and folders. If you don't care for that, you can right-click on "Quick access -> Options" and uncheck the "Show recently used files in Quick access" and "Show frequently used folders in Quick access" options.
