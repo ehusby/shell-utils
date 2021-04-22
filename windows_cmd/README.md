@@ -12,9 +12,9 @@ When you need to run a script via command line, you may be accustomed to opening
 While the Address bar is typically used to change to a different location on your computer, you can also use it to execute commands (powered by Windows Command Prompt). *Useful tip: Even without using the scripts in this repo, you can always open a Command Prompt window directly to the current File Explorer location by typing `cmd` in the Address bar and pressing the `[ENTER]` key.* When we take a custom script and make it executable in this way, we say that the script becomes "callable" in that shell. In order to make the shortcut scripts in this repo *callable by name* from any location on your computer, we need to add [the folder that contains the shortcut scripts](./exec) to a Windows Environment Variable named `PATH`. When a folder is listed in the `PATH` environment variable, the scripts or program files it contains (excluding subfolders) become callable by name through most Windows shells.
 
 ### <a name="path_config_1"></a>Add a folder to the PATH environment variable
-Access the Windows Environment Variable settings through either "Control Panel" or "Command Prompt" from the Start Menu.
-- Through Control Panel, navigate:<br>
-`Control Panel` -> `System and Security` -> `System` -> `Advanced system settings` (on left side) -> `Advanced` tab -> `Environment Variables...` (at bottom)
+Access the Windows Environment Variable settings through either "Settings" or "Command Prompt" from the Start Menu.
+- Through Settings, navigate:<br>
+`Settings` -> `System` -> `About` (on left side, bottom) -> `Advanced system settings` (under "Related Settings", at bottom or right side) -> `Advanced` tab -> `Environment Variables...` (at bottom)
 
 - Or in Command Prompt, run this command:<br>
 `rundll32 sysdm.cpl,EditEnvironmentVariables`
