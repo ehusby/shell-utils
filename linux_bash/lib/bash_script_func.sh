@@ -251,26 +251,21 @@ function round() {
 }
 
 function sec2hms() {
-    local total_sec
+    local total_sec="$1"
     local hms_hr hms_min hms_sec
-    if [[ -p /dev/stdin ]]; then
-        IFS= read -r total_sec
-    else
-        total_sec="$1"
-    fi
+
     hms_hr="$(( total_sec / 3600 ))"
     hms_min="$(( (total_sec % 3600) / 60 ))"
     hms_sec="$(( total_sec % 60 ))"
+
     printf "%02d:%02d:%02d\n" "$hms_hr" "$hms_min" "$hms_sec"
 }
 function hms2sec() {
     local hms_hr hms_min hms_sec
     local total_sec
-    if [[ -p /dev/stdin ]]; then
-        IFS=: read -r hms_hr hms_min hms_sec
-    else
-        IFS=: read -r hms_hr hms_min hms_sec <<< "${1%.*}"
-    fi
+
+    IFS=: read -r hms_hr hms_min hms_sec <<< "${1%.*}"
     total_sec="$(( 10#$hms_hr*3600 + 10#$hms_min*60 + 10#$hms_sec ))"
+
     echo "$total_sec"
 }
