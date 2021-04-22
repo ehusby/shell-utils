@@ -193,20 +193,6 @@ function touch_all() {
     echo "Done!"
 }
 
-function fix_perms() {
-    echo "Will give full RWX perms to USER & GROUP, and remove RWX perms from OTHER"
-    if (( $# == 0 )); then
-        echo "Usage: fix_perms path1 path2 ... pathN"
-        return
-    fi
-    while (( $# > 0 )); do
-        echo "Fixing perms in: ${1}"
-        chmod -R u=rwX,g=rwX,o-rwx "$1"
-        shift
-    done
-    echo "Done!"
-}
-
 
 ## Git
 
