@@ -73,33 +73,33 @@ while (( "$#" )); do
         arg_opt_nargs=''
         arg_val_can_start_with_dash=false
 
-        if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+        if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
             arg_opt_nargs=0
             echo "$script_usage"
             exit 0
 
-        elif [ "$arg_opt" == 't_srs' ]; then
+        elif [ "$arg_opt" = 't_srs' ]; then
             arg_opt_nargs=1
             target_srs="$2"
 
-        elif [ "$arg_opt" == 'tr' ]; then
+        elif [ "$arg_opt" = 'tr' ]; then
             arg_opt_nargs=1
             res_meters="$2"
 
-        elif [ "$arg_opt" == 'r' ]; then
+        elif [ "$arg_opt" = 'r' ]; then
             arg_opt_nargs=1
             resampling="$2"
 
-        elif [ "$arg_opt" == 'o' ]; then
+        elif [ "$arg_opt" = 'o' ]; then
             arg_opt_nargs=1
             outfile_single="$2"
             keep_downsampled=true
 
-        elif [ "$arg_opt" == 'thumb' ]; then
+        elif [ "$arg_opt" = 'thumb' ]; then
             arg_opt_nargs=0
             do_thumb=true
 
-        elif [ "$arg_opt" == 'hillshade' ]; then
+        elif [ "$arg_opt" = 'hillshade' ]; then
             do_hillshade=true
             if [ -z "$2" ] || [[ $2 == -* ]]; then
                 arg_opt_nargs=0
@@ -108,15 +108,15 @@ while (( "$#" )); do
                 hillshade_single="$2"
             fi
 
-        elif [ "$arg_opt" == 'no-resample' ]; then
+        elif [ "$arg_opt" = 'no-resample' ]; then
             arg_opt_nargs=0
             no_resample=true
 
-        elif [ "$arg_opt" == 'keep-downsampled' ]; then
+        elif [ "$arg_opt" = 'keep-downsampled' ]; then
             arg_opt_nargs=0
             keep_downsampled=true
 
-        elif [ "$arg_opt" == 'overwrite' ]; then
+        elif [ "$arg_opt" = 'overwrite' ]; then
             arg_opt_nargs=0
             overwrite=true
 
@@ -160,11 +160,11 @@ if ! [[ $res_meters =~ $re_int ]] ; then
 fi
 
 # Translate synonymous resampling options
-if [ "$resampling" == 'nearest' ]; then
+if [ "$resampling" = 'nearest' ]; then
     resampling='near'
-elif [ "$resampling" == 'linear' ]; then
+elif [ "$resampling" = 'linear' ]; then
     resampling='bilinear'
-elif [ "$resampling" == 'bicubic' ]; then
+elif [ "$resampling" = 'bicubic' ]; then
     resampling='cubic'
 fi
 
@@ -355,7 +355,7 @@ for srcfile in "${srcfile_arr[@]}"; do
 
 
         ## Remove downsampled raster if not needed
-        if [ "$outfile" == "$srcfile" ] || [ "$no_resample" = true ]; then
+        if [ "$outfile" = "$srcfile" ] || [ "$no_resample" = true ]; then
             :
         elif [ -n "$outfile_single" ] || [ "$keep_downsampled" = true ]; then
             :

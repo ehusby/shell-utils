@@ -98,32 +98,32 @@ while (( "$#" )); do
         fi
         arg_val_can_start_with_dash=false
 
-        if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+        if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
             arg_opt_nargs=0
             echo "$script_usage"
             exit 0
 
-        elif [ "$arg_opt" == 'si' ]; then
+        elif [ "$arg_opt" = 'si' ]; then
             arg_opt_nargs=0
             unit_si=true
 
-        elif [ "$arg_opt" == 'd' ] || [ "$arg_opt" == 'decimals' ]; then
+        elif [ "$arg_opt" = 'd' ] || [ "$arg_opt" = 'decimals' ]; then
             arg_opt_nargs=1
             decimals="$arg_val"
 
-        elif [ "$arg_opt" == 'r' ] || [ "$arg_opt" == 'round' ]; then
+        elif [ "$arg_opt" = 'r' ] || [ "$arg_opt" = 'round' ]; then
             arg_opt_nargs=1
             round_mode="$arg_val"
 
-        elif [ "$arg_opt" == 'n' ] || [ "$arg_opt" == 'name' ]; then
+        elif [ "$arg_opt" = 'n' ] || [ "$arg_opt" = 'name' ]; then
             arg_opt_nargs=1
             namepat_arr+=( "$arg_val" )
 
-        elif [ "$arg_opt" == 's' ] || [ "$arg_opt" == 'sum' ]; then
+        elif [ "$arg_opt" = 's' ] || [ "$arg_opt" = 'sum' ]; then
             arg_opt_nargs=0
             sum_all=true
 
-        elif [ "$arg_opt" == 'db' ] || [ "$arg_opt" == 'debug' ]; then
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
             arg_opt_nargs=0
             debug=true
 
@@ -192,8 +192,8 @@ if [ -n "$unit_name" ]; then
             fi
         fi
         if (( $(indexOf "$unit_abrev" "${unit_abrev_arr[@]}") > -1 )); then
-            if [ -z "$unit_lastchar" ] || [ "$unit_lastchar" == 'B' ]; then
-                if [ -z "$unit_middlechar" ] || [ "$unit_middlechar" == 'i' ]; then
+            if [ -z "$unit_lastchar" ] || [ "$unit_lastchar" = 'B' ]; then
+                if [ -z "$unit_middlechar" ] || [ "$unit_middlechar" = 'i' ]; then
                     unit_is_valid=true
                 fi
             fi
@@ -270,7 +270,7 @@ for srcpath in "${srcpath_arr[@]}"; do
         # Desired unit was provided, so only need to perform the single conversion
         sum_unit=$(bc -l <<< "${sum_kb} / ${unit_factor}^${unit_order}")
         sum_unit=$(round "$sum_unit" "$round_mode" "$decimals")
-        if [ "$unit_abrev" == 'K' ] && [ "$unit_si" = false ]; then
+        if [ "$unit_abrev" = 'K' ] && [ "$unit_si" = false ]; then
             # Trim trailing zeros for non-SI sum in KB
             sum_report="$(string_rstrip_decimal_zeros "$sum_unit")"
         else

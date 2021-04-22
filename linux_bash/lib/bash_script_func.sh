@@ -230,20 +230,20 @@ function round() {
         mode='off'
     fi
 
-    if [ "$mode" == 'off' ]; then
+    if [ "$mode" = 'off' ]; then
         number=$(echo "scale=${decimals}; ${number} / 1" | bc)
-    elif [ "$mode" == 'on' ]; then
+    elif [ "$mode" = 'on' ]; then
         :
-    elif [ "$mode" == 'up' ]; then
+    elif [ "$mode" = 'up' ]; then
         number=$(bc -l <<< "${number} + 5*10^(-(${decimals}+1))")
-    elif [ "$mode" == 'down' ]; then
+    elif [ "$mode" = 'down' ]; then
         number=$(bc -l <<< "${number} - 5*10^(-(${decimals}+1))")
     fi
 
     number=$(printf "%.${decimals}f" "$number")
 
     number_trimmed=$(echo "$number" | sed '/\./ s/\.\{0,1\}0\{1,\}$//')
-    if [ "$number_trimmed" == "-0" ]; then
+    if [ "$number_trimmed" = "-0" ]; then
         number="${number:1}"
     fi
 

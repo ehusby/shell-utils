@@ -62,20 +62,20 @@ fi
 email_output_desc=''
 
 time_started=$(date)
-if [ "$cmd" == "(none)" ]; then
+if [ "$cmd" = "(none)" ]; then
     cmd_output="(none)"
 else
     set +u
-    if [ "$email_output_opt" == '-q' ]; then
+    if [ "$email_output_opt" = '-q' ]; then
         eval "$cmd"
         cmd_output='(suppressed by -q option)'
-    elif [ "$email_output_opt" == '-e' ]; then
+    elif [ "$email_output_opt" = '-e' ]; then
         email_output_desc=" (stderr only)"
         { cmd_output=$(eval "$cmd" 2>&1 1>&3-) ;} 3>&1
         echo "$cmd_output"
     else
         exec 5>&1
-        if [ "$email_output_opt" == '-o' ]; then
+        if [ "$email_output_opt" = '-o' ]; then
             email_output_desc=" (stdout only)"
             cmd_output=$(eval "$cmd" | tee >(cat - >&5))
         else

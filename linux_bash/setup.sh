@@ -46,7 +46,7 @@ if [ -L "${HOME}/.bashrc" ]; then
 fi
 
 echo -e "\nDone!"
-if [ "$symlink_errors" == "true" ]; then
+if [ "$symlink_errors" = true ]; then
     echo -e "\n!! Errors symlinking one or more config files !!"
 fi
 echo -e "\nCheck the results of 'ls -la ~/' or 'find ~/ -maxdepth 1 -name \".*\" -ls' to verify symlinks"

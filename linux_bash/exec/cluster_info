@@ -13,17 +13,17 @@ script_args=("$@")
 info_mode_args=()
 status=0
 for arg in "${script_args[@]}"; do
-    if [ "$arg" == "runs" ] || [ "$arg" == "jobs" ] || [ "$arg" == "nodes" ] || [ "$arg" == "nodelist" ]; then
+    if [ "$arg" = "runs" ] || [ "$arg" = "jobs" ] || [ "$arg" = "nodes" ] || [ "$arg" = "nodelist" ]; then
         info_mode_args+=( "$arg" )
-    elif [ "$arg" == "qstat" ] || [ "$arg" == "qstat-by-batch" ] || [ "$arg" == "qstat-by-node" ] || [ "$arg" == "qstat-by-user" ]; then
+    elif [ "$arg" = "qstat" ] || [ "$arg" = "qstat-by-batch" ] || [ "$arg" = "qstat-by-node" ] || [ "$arg" = "qstat-by-user" ]; then
         info_mode_args+=( "$arg" )
-    elif [ "$arg" == "blocks" ]; then
+    elif [ "$arg" = "blocks" ]; then
         blocks=true
-    elif [ "$arg" == "all" ]; then
+    elif [ "$arg" = "all" ]; then
         all=true
-    elif [ "$arg" == "me" ]; then
+    elif [ "$arg" = "me" ]; then
         me=true
-    elif [ "$arg" == "help" ] || [ "$arg" == "-h" ] || [ "$arg" == "-help" ] || [ "$arg" == "--help" ]; then
+    elif [ "$arg" = "help" ] || [ "$arg" = "-h" ] || [ "$arg" = "-help" ] || [ "$arg" = "--help" ]; then
         help=true
     else
         status=1
@@ -47,11 +47,11 @@ fi
 
 jobinfo_list_descr() {
     jobinfo_mode="$1"
-    if [ "$jobinfo_mode" == "qstat-by-batch" ]; then
+    if [ "$jobinfo_mode" = "qstat-by-batch" ]; then
         job_list_type="BATCH"
-    elif [ "$jobinfo_mode" == "qstat-by-node" ]; then
+    elif [ "$jobinfo_mode" = "qstat-by-node" ]; then
         job_list_type="NODE"
-    elif [ "$jobinfo_mode" == "qstat-by-user" ]; then
+    elif [ "$jobinfo_mode" = "qstat-by-user" ]; then
         job_list_type="USER"
     else
         job_list_type="STATUS"
@@ -212,11 +212,11 @@ Job ID                  Username    Queue    Jobname          SessID  NDS   TSK 
 ----------------------- ----------- -------- ---------------- ------ ----- ------ ------ --------- - ---------   ----------  -------
 EOF
 )
-    if [ "$jobinfo_mode" == "qstat-by-batch" ]; then
+    if [ "$jobinfo_mode" = "qstat-by-batch" ]; then
         uniq_qstat_col_nums='$2$3'
-    elif [ "$jobinfo_mode" == "qstat-by-node" ]; then
+    elif [ "$jobinfo_mode" = "qstat-by-node" ]; then
         uniq_qstat_col_nums='$2$3$12'
-    elif [ "$jobinfo_mode" == "qstat-by-user" ]; then
+    elif [ "$jobinfo_mode" = "qstat-by-user" ]; then
         uniq_qstat_col_nums='$2'
     else
         uniq_qstat_col_nums='$2$3$10'
@@ -303,7 +303,7 @@ EOF
 print_node_info() {
     node_arr=()
     reserve_jobs=()
-    if [ "$node_info_pbsnodes_property" == ":xehimem" ]; then
+    if [ "$node_info_pbsnodes_property" = ":xehimem" ]; then
         while IFS= read -r line; do node_arr+=( "$line" ); done < <( pbsnodes all ${node_info_pbsnodes_property} -l | grep -v "offline" | cut -d" " -f1 | sort -u )
     else
         while IFS= read -r line; do node_arr+=( "$line" ); done < <( pbsnodes all ${node_info_pbsnodes_property} -l | cut -d" " -f1 | sort -u )
@@ -321,10 +321,10 @@ print_node_info() {
         node_status_jobs=$(echo "$node_status" | grep -Po "jobs=.*?(,|$)" | cut -d"=" -f2 | cut -d"," -f1)
         node_status_jobs=$(jobids_filter_node_property ${node_status_jobs})
 
-        if [ "$node_info_pbsnodes_property" == ":xehimem" ] && [ -z "$node_status_jobs" ]; then continue; fi
+        if [ "$node_info_pbsnodes_property" = ":xehimem" ] && [ -z "$node_status_jobs" ]; then continue; fi
 
         node_coreuse=$(echo "$node_jobs" | awk -F"/" '{print NF-1}')
-        if [ "$node_coreuse" == "-1" ]; then
+        if [ "$node_coreuse" = "-1" ]; then
             node_coreuse=0
             node_njobs=0
         else
@@ -347,9 +347,9 @@ print_node_info() {
             user_njobs=""
         fi
 
-        if [ "$node_state" == "offline" ]; then node_state="N/A"; fi
-        if [ "$node_state" == "job-exclusive" ]; then node_state="busy!"; fi
-        if [ "$node_state" == "free" ]; then
+        if [ "$node_state" = "offline" ]; then node_state="N/A"; fi
+        if [ "$node_state" = "job-exclusive" ]; then node_state="busy!"; fi
+        if [ "$node_state" = "free" ]; then
             if ((node_coreuse == 0)); then
                 node_state="idle"
             else
@@ -433,28 +433,28 @@ print_s2s_runs() {
 
 # "[<none>|runs|jobs|nodes|nodelist|qstat|qstat-by-batch|qstat-by-node|qstat-by-user|blocks|all|me]"
 for arg in "${info_mode_args[@]}"; do
-    if [ "$arg" == "qstat" ] || [ "$arg" == "qstat-by-batch" ] || [ "$arg" == "qstat-by-node" ] || [ "$arg" == "qstat-by-user" ] || [ "$arg" == "<none>" ]; then
+    if [ "$arg" = "qstat" ] || [ "$arg" = "qstat-by-batch" ] || [ "$arg" = "qstat-by-node" ] || [ "$arg" = "qstat-by-user" ] || [ "$arg" = "<none>" ]; then
         print_job_info "$arg" "$blocks"
         if [ "$all" = true ]; then
             print_job_total
         fi
     fi
-    if [ "$arg" == "nodelist" ] || [ "$arg" == "<none>" ]; then
-#    if [ "$arg" == "nodelist" ]; then
+    if [ "$arg" = "nodelist" ] || [ "$arg" = "<none>" ]; then
+#    if [ "$arg" = "nodelist" ]; then
         print_node_info
     fi
-#    if [ "$arg" == "runs" ] || [ "$arg" == "<none>" ]; then
+#    if [ "$arg" = "runs" ] || [ "$arg" = "<none>" ]; then
 #        print_setsm_runs
 #        print_s2s_runs
 #    fi
-    if [ "$arg" == "jobs" ] || [ "$arg" == "<none>" ]; then
+    if [ "$arg" = "jobs" ] || [ "$arg" = "<none>" ]; then
         print_job_table
     fi
-    if [ "$arg" == "nodes" ]; then
-#    if [ "$arg" == "nodes" ] || [ "$arg" == "<none>" ]; then
+    if [ "$arg" = "nodes" ]; then
+#    if [ "$arg" = "nodes" ] || [ "$arg" = "<none>" ]; then
         print_node_table
     fi
-    if [ "$arg" == "<none>" ]; then
+    if [ "$arg" = "<none>" ]; then
         print_interactive_job_note
     fi
     echo

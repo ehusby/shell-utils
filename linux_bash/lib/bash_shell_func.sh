@@ -91,13 +91,13 @@ function find_alias() {
         if [[ $arg == -* ]]; then
             parsing_opt_args=true
             arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
-            if [ "$arg_opt" == 'debug' ]; then
+            if [ "$arg_opt" = 'debug' ]; then
                 debug=true
                 shift; continue
-            elif [ "$arg_opt" == 'mindepth' ]; then
+            elif [ "$arg_opt" = 'mindepth' ]; then
                 shift; mindepth="$1"
                 shift; continue
-            elif [ "$arg_opt" == 'maxdepth' ]; then
+            elif [ "$arg_opt" = 'maxdepth' ]; then
                 shift; maxdepth="$1"
                 shift; continue
             fi
@@ -116,11 +116,11 @@ function find_alias() {
         shift
     done
 
-    if [ "$find_func_name" == 'findl' ]; then
+    if [ "$find_func_name" = 'findl' ]; then
         find_func_suffix=''
-    elif [ "$find_func_name" == 'findls' ]; then
+    elif [ "$find_func_name" = 'findls' ]; then
         find_func_suffix="-ls | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
-    elif [ "$find_func_name" == 'findlsh' ]; then
+    elif [ "$find_func_name" = 'findlsh' ]; then
         find_func_suffix=" -type f -exec ls -lh {} \; | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
     fi
 
@@ -272,11 +272,11 @@ EOM
             arg_opt_nargs=''
             arg_val_can_start_with_dash=false
 
-            if [ "$arg_opt" == 'p' ] || [ "$arg_opt" == 'pw' ]; then
+            if [ "$arg_opt" = 'p' ] || [ "$arg_opt" = 'pw' ]; then
                 arg_opt_nargs=1
                 ssh_passphrase="$2"
 
-            elif [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+            elif [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
                 arg_opt_nargs=0
                 echo "$script_usage"
                 return
@@ -339,7 +339,7 @@ function git_pull_in() {
         if [[ $arg == -* ]]; then
             arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
 
-            if [ "$arg_opt" == 'stash' ]; then
+            if [ "$arg_opt" = 'stash' ]; then
                 do_stashing=true
                 arg=''
             fi
@@ -409,7 +409,7 @@ function layz() {
     debug=false
     if [[ $1 == -* ]]; then
         arg_opt=$(echo "$1" | sed -r 's|\-+(.*)|\1|')
-        if [ "$arg_opt" == 'dryrun' ] || [ "$arg_opt" == 'debug' ]; then
+        if [ "$arg_opt" = 'dryrun' ] || [ "$arg_opt" = 'debug' ]; then
             debug=true
             shift
         fi

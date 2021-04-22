@@ -63,24 +63,24 @@ while (( "$#" )); do
         arg_opt_nargs=''
         arg_val_can_start_with_dash=false
 
-        if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+        if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
             arg_opt_nargs=0
             echo "$script_usage"
             exit 0
 
-        elif [ "$arg_opt" == 'ssh-pw' ]; then
+        elif [ "$arg_opt" = 'ssh-pw' ]; then
             arg_opt_nargs=1
             ssh_passphrase="$2"
 
-        elif [ "$arg_opt" == 'all' ]; then
+        elif [ "$arg_opt" = 'all' ]; then
             arg_opt_nargs=0
             remove_all=true
 
-        elif [ "$arg_opt" == 'ssh-dryrun' ]; then
+        elif [ "$arg_opt" = 'ssh-dryrun' ]; then
             arg_opt_nargs=0
             ssh_dryrun=true
 
-        elif [ "$arg_opt" == 'dryrun' ]; then
+        elif [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
             dryrun=true
 
@@ -115,7 +115,7 @@ if (( $(indexOf "$cleanup_mode" "${cleanup_mode_choices_arr[@]}") == -1 )); then
     echo_e "Rounding mode must be one of the following: ${cleanup_mode_choices_arr[*]}"
     exit_script_with_status 1
 fi
-if [ "$cleanup_mode" == 'ssh' ]; then
+if [ "$cleanup_mode" = 'ssh' ]; then
     use_ssh=true
 fi
 

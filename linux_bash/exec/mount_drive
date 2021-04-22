@@ -53,12 +53,12 @@ while (( "$#" )); do
         arg_opt_nargs=''
         arg_val_can_start_with_dash=false
 
-        if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+        if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
             arg_opt_nargs=0
             echo "$script_usage"
             exit 0
 
-        elif [ "$arg_opt" == 'dryrun' ]; then
+        elif [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
             dryrun=true
 
