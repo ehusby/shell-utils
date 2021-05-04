@@ -6,7 +6,7 @@
 
 USAGE="Usage: $0 dir1 dir2 ... dirN"
 
-if [ "$#" == "0" ]; then
+if [ "$#" = "0" ]; then
 	echo "$USAGE"
 	exit 1
 fi

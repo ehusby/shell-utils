@@ -2,7 +2,7 @@
 Helpful tools for working in the Linux terminal (primarily Bash), and shortcuts for running scripts in Windows command line environments.
 
 ## Get Git
-If you don't already have a GitHub account, [sign up for one](https://github.com/join) (it's free). You can thank me later.
+If you don't already have a GitHub account, [sign up for one](https://github.com/join) (it's free).
 
 When you want to update a code repository you've downloaded ("cloned" is the Git term) to your local machine, best practice is to utilize the `git` program through `git clone` and `git pull` commands. GitHub can leverage an SSH key that authorizes these interactions between the "remote" online repository and your local machine. This SSH key is unique to the local machine, and will need to be tied to your GitHub account.
 
