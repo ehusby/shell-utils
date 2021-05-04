@@ -79,16 +79,16 @@ parsing_find_args=false
 while (( "$#" )); do
     arg="$1"
 
-    if [ "$parsing_find_args" == "true" ]; then
+    if [ "$parsing_find_args" = true ]; then
         find_args_arr+=( "$arg" )
 
-    elif [ "$(string_startswith "$arg" '-')" == "false" ]; then
+    elif [ "$(string_startswith "$arg" '-')" = false ]; then
         srcpath_arr+=( "$arg" )
 
     else
         arg_opt="$(string_lstrip "$arg" '-')"
         arg_opt_nargs=''
-        if [ "$(string_contains "$arg_opt" '=')" == "true" ]; then
+        if [ "$(string_contains "$arg_opt" '=')" = true ]; then
             arg_val="${arg_opt#*=}"
             arg_opt="${arg_opt%%=*}"
             arg_opt_nargs_do_shift=false
@@ -98,39 +98,39 @@ while (( "$#" )); do
         fi
         arg_val_can_start_with_dash=false
 
-        if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+        if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
             arg_opt_nargs=0
             echo "$script_usage"
             exit 0
 
-        elif [ "$arg_opt" == 'si' ]; then
+        elif [ "$arg_opt" = 'si' ]; then
             arg_opt_nargs=0
             unit_si=true
 
-        elif [ "$arg_opt" == 'd' ] || [ "$arg_opt" == 'decimals' ]; then
+        elif [ "$arg_opt" = 'd' ] || [ "$arg_opt" = 'decimals' ]; then
             arg_opt_nargs=1
             decimals="$arg_val"
 
-        elif [ "$arg_opt" == 'r' ] || [ "$arg_opt" == 'round' ]; then
+        elif [ "$arg_opt" = 'r' ] || [ "$arg_opt" = 'round' ]; then
             arg_opt_nargs=1
             round_mode="$arg_val"
 
-        elif [ "$arg_opt" == 'n' ] || [ "$arg_opt" == 'name' ]; then
+        elif [ "$arg_opt" = 'n' ] || [ "$arg_opt" = 'name' ]; then
             arg_opt_nargs=1
             namepat_arr+=( "$arg_val" )
 
-        elif [ "$arg_opt" == 's' ] || [ "$arg_opt" == 'sum' ]; then
+        elif [ "$arg_opt" = 's' ] || [ "$arg_opt" = 'sum' ]; then
             arg_opt_nargs=0
             sum_all=true
 
-        elif [ "$arg_opt" == 'db' ] || [ "$arg_opt" == 'debug' ]; then
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
             arg_opt_nargs=0
             debug=true
 
         else
             arg_opt_nargs=0
 
-            if [ "$(re_test '^d[0-9]+$' "$arg_opt")" == "true" ]; then
+            if [ "$(re_test '^d[0-9]+$' "$arg_opt")" = true ]; then
                 decimals="${arg_opt/d/}"
 
             elif [ -z "$unit_name" ] && (( ${#arg_opt} == 1 )); then
@@ -147,11 +147,11 @@ while (( "$#" )); do
             exit_script_with_status 1
         fi
 
-        if [ "$arg_opt_nargs_do_shift" == "true" ]; then
+        if [ "$arg_opt_nargs_do_shift" = true ]; then
             for i in $(seq 1 $arg_opt_nargs); do
                 shift
                 arg_val="$1"
-                if [ "$arg_val_can_start_with_dash" == "false" ] && [ "$(string_startswith "$arg_val" '-')" == "true" ]; then
+                if [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
                     echo_e "Unexpected argument value: ${arg} ${arg_val}"
                     exit_script_with_status 1
                 fi
@@ -192,15 +192,15 @@ if [ -n "$unit_name" ]; then
             fi
         fi
         if (( $(indexOf "$unit_abrev" "${unit_abrev_arr[@]}") > -1 )); then
-            if [ -z "$unit_lastchar" ] || [ "$unit_lastchar" == 'B' ]; then
-                if [ -z "$unit_middlechar" ] || [ "$unit_middlechar" == 'i' ]; then
+            if [ -z "$unit_lastchar" ] || [ "$unit_lastchar" = 'B' ]; then
+                if [ -z "$unit_middlechar" ] || [ "$unit_middlechar" = 'i' ]; then
                     unit_is_valid=true
                 fi
             fi
         fi
     fi
 
-    if [ "$unit_is_valid" == "false" ]; then
+    if [ "$unit_is_valid" = false ]; then
         echo_e "Provided unit name '${unit_name}' not recognized"
         exit_script_with_status 1
     fi
@@ -213,7 +213,7 @@ if [ -n "$unit_name" ]; then
     unit_order=${unit_order_arr[$i_unit]}
 fi
 
-if [ "$(string_is_int "$decimals")" == "false" ]; then
+if [ "$(string_is_int "$decimals")" = false ]; then
     echo_e "Decimals argument must be a positive integer"
     exit_script_with_status 1
 fi
@@ -225,7 +225,7 @@ fi
 
 
 # Set multiplicative factor for unit order
-if [ "$unit_si" == "true" ]; then
+if [ "$unit_si" = true ]; then
     unit_factor=1000
 else
     unit_factor=1024
@@ -246,7 +246,7 @@ if (( ${#namepat_arr[@]} > 0 )); then
 fi
 
 
-if [ "$sum_all" == "true" ]; then
+if [ "$sum_all" = true ]; then
     srcpath_arr=( "${srcpath_arr[*]}" )
     report_srcpath=false
 else
@@ -256,12 +256,12 @@ for srcpath in "${srcpath_arr[@]}"; do
 
     ## Sum file sizes, returning disk usage in KB
     find_cmd="find ${srcpath} -type f ${find_name_args} ${find_args_arr[*]+${find_args_arr[*]}} -print0 | xargs -r0 du -a | awk '{sum+=\$1} END {print sum}'"
-    if [ "$debug" == "true" ]; then
+    if [ "$debug" = true ]; then
         echo "$find_cmd"
     fi
     sum_kb=$(eval "$find_cmd")
     sum_kb=$(printf '%f' "${sum_kb}")  # Sum could be returned in scientific notation, so use 'printf' to fix it
-    if [ "$unit_si" == "true" ]; then
+    if [ "$unit_si" = true ]; then
         sum_kb=$(printf "%.${decimals}f\n" "$(bc -l <<< "${sum_kb} * 1024 / 1000")")  # Convert KB sum to SI if required
         sum_kb=$(round "$sum_kb" "$round_mode" "$decimals")
     fi
@@ -270,7 +270,7 @@ for srcpath in "${srcpath_arr[@]}"; do
         # Desired unit was provided, so only need to perform the single conversion
         sum_unit=$(bc -l <<< "${sum_kb} / ${unit_factor}^${unit_order}")
         sum_unit=$(round "$sum_unit" "$round_mode" "$decimals")
-        if [ "$unit_abrev" == 'K' ] && [ "$unit_si" == "false" ]; then
+        if [ "$unit_abrev" = 'K' ] && [ "$unit_si" = false ]; then
             # Trim trailing zeros for non-SI sum in KB
             sum_report="$(string_rstrip_decimal_zeros "$sum_unit")"
         else
@@ -300,7 +300,7 @@ for srcpath in "${srcpath_arr[@]}"; do
     fi
 
     # Report sum
-    if [ "$report_srcpath" == "true" ]; then
+    if [ "$report_srcpath" = true ]; then
         printf '%10s   %s\n' "$sum_report" "$srcpath"
     else
         echo "${sum_report}"
