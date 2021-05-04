@@ -6,6 +6,8 @@ source "$(dirname $(readlink -f "${BASH_SOURCE[0]}"))/bash_base_func.sh"
 
 ## Basic printing
 
+function ech-o() { printf "%s\n" "$*"; }
+
 function echo_e() { echo "$@" >&2; }
 
 function echo_oe() { echo "$@" | tee >(cat >&2); }
@@ -19,13 +21,13 @@ function log_oe() { log "$@" | tee >(cat >&2); }
 
 ## String manipulation
 
-function string_to_uppercase() { echo "$@" | tr '[:lower:]' '[:upper:]'; }
+function string_to_uppercase() { ech-o "$@" | tr '[:lower:]' '[:upper:]'; }
 
-function string_to_lowercase() { echo "$@" | tr '[:upper:]' '[:lower:]'; }
+function string_to_lowercase() { ech-o "$@" | tr '[:upper:]' '[:lower:]'; }
 
-function string_lstrip() { echo "$1" | sed "s/^\(${2}\)\+//"; }
+function string_lstrip() { ech-o "$1" | sed "s|^\(${2}\)\+||"; }
 
-function string_rstrip() { echo "$1" | sed "s/\(${2}\)\+\$//"; }
+function string_rstrip() { ech-o "$1" | sed "s|\(${2}\)\+\$||"; }
 
 function string_strip() {
     local string_in="$1"
@@ -35,14 +37,14 @@ function string_strip() {
     string_stripped=$(string_lstrip "$string_in" "$strip_substr")
     string_stripped=$(string_rstrip "$string_stripped" "$strip_substr")
 
-    echo "$string_stripped"
+    ech-o "$string_stripped"
 }
 
-function string_rstrip_decimal_zeros { echo "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
+function string_rstrip_decimal_zeros { ech-o "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
 
-function collapse_repeated_substring() { echo "$1" | sed "s/\(${2}\)\+/\1/"; }
+function collapse_repeated_substring() { ech-o "$1" | sed "s|\(${2}\)\+|\1|g"; }
 
-function string_join() { local IFS="$1"; shift; echo "$*"; }
+function string_join() { local IFS="$1"; shift; ech-o "$*"; }
 
 
 ## String testing
