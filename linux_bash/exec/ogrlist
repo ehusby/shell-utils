@@ -1,0 +1,166 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_dir=$(dirname "$script_file")
+script_name=$(basename "$script_file")
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+source "$bash_functions_script"
+
+
+## Arguments
+dbase_path=''
+layer_name=''
+field_name=''
+dryrun=false
+
+## Custom globals
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+Usage: ${script_name} [DBASE] [OPTION]...
+
+List information from a Shapefile or FileGDB database,
+leveraging the GDAL/OGR 'ogrinfo' command.
+
+If no options are provided, layer names are listed for
+FileGDB DBASE, or field names are listed for Shapefile DBASE.
+If layer name option is provided, field names in that layer
+are listed.
+If layer and field name options are provided, the values of
+all records for that field in that layer are listed.
+
+Options:
+ -l,--layer
+        Name of feature class layer in DBASE.
+        (Most Shapefiles only have one layer, and the script
+         will assume the layer name is the same as the
+         Shapefile name if this option is not provided.)
+ -f,--field
+        Name of field in feature class (indicated by --layer
+        option) from which values are extracted.
+-dr,--dryrun
+        Print 'ogrinfo' command used to extract information.
+EOM
+if (( $# < 1 )); then
+    echo_e -e "$script_usage"
+    exit_script_with_status 1
+fi
+
+
+## Parse arguments
+set +u
+while (( "$#" )); do
+    arg="$1"
+
+    if [ "$(string_startswith "$arg" '-')" = false ]; then
+        if [ -z "$dbase_path" ]; then
+            dbase_path="$arg"
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+    else
+        arg_opt="$(string_lstrip "$arg" '-')"
+        arg_opt_nargs=''
+        if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+            arg_val="${arg_opt#*=}"
+            arg_opt="${arg_opt%%=*}"
+            arg_opt_nargs_do_shift=false
+        else
+            arg_val="$2"
+            arg_opt_nargs_do_shift=true
+        fi
+        arg_val_can_start_with_dash=false
+
+        if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
+            arg_opt_nargs=0
+            echo "$script_usage"
+            exit 0
+
+        elif [ "$arg_opt" = 'l' ] || [ "$arg_opt" = 'layer' ]; then
+            arg_opt_nargs=1
+            layer_name="$arg_val"
+
+        elif [ "$arg_opt" = 'f' ] || [ "$arg_opt" = 'field' ]; then
+            arg_opt_nargs=1
+            field_name="$arg_val"
+
+        elif [ "$arg_opt" = 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ -z "$arg_opt_nargs" ]; then
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ "$arg_opt_nargs_do_shift" = true ]; then
+            for i in $(seq 1 $arg_opt_nargs); do
+                shift
+                arg_val="$1"
+                if [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                    exit_script_with_status 1
+                fi
+            done
+        fi
+    fi
+
+    shift
+done
+set -u
+
+
+## Validate arguments
+
+if [ -z "$dbase_path" ]; then
+    echo_e "DBASE argument must be provided"
+    exit_script_with_status 1
+fi
+if [ ! -e "$dbase_path" ]; then
+    echo_e "DBASE file/folder does not exist: ${dbase_path}"
+    exit_script_with_status 1
+fi
+
+
+## Adjust arguments
+
+if [ -z "$layer_name" ] && [ "$(string_endswith "$dbase_path" '.shp')" = true ]; then
+    # Assume layer name is the same as the filename (works for most shapefiles)
+    layer_name=$(basename "$dbase_path")
+    layer_name="${layer_name%.*}"
+fi
+
+
+## Main program
+
+if [ -z "$layer_name" ]; then
+    cmd="ogrinfo -so -al '${dbase_path}' | grep '^Layer name:'"
+elif [ -z "$field_name" ]; then
+    cmd="ogrinfo -so -al '${dbase_path}' | sed -n '/^Layer name: ${layer_name}/,\${p;/^[[:space:]]*\$/q}' | sed -e '1,/Data axis to CRS axis mapping/d'"
+else
+    cmd="ogrinfo -dialect sqlite -sql 'SELECT ${field_name} FROM ${layer_name}' '${dbase_path}' | grep -E '= .*' | sed -r 's|.*? = (.*)|\1|'"
+fi
+
+if [ "$dryrun" = true ]; then
+    echo "$cmd"
+else
+    eval "$cmd"
+fi
