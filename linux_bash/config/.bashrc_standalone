@@ -150,15 +150,13 @@ dirname_all() {
 find_alias() {
     local find_func_name="$1"; shift
 
-    local pos_args opt_args debug
+    local pos_args opt_args debug mindepth maxdepth find_func_suffix
     pos_args=()
     opt_args=()
-
     debug=false
-    local mindepth maxdepth
     mindepth=1
     maxdepth=1
-    local find_func_suffix
+    find_func_suffix=''
 
     local parsing_opt_args arg arg_opt
     parsing_opt_args=false
@@ -215,6 +213,9 @@ findls() {
 findlsh() {
     find_alias findlsh "$@"
 }
+findst() {
+    find_alias findls "$1" -mindepth 0 -maxdepth 0
+}
 
 
 ## File operations
@@ -266,20 +267,6 @@ touch_all() {
     echo "Done!"
 }
 
-fix_perms() {
-    echo "Will give full RWX perms to USER & GROUP, and remove RWX perms from OTHER"
-    if (( $# == 0 )); then
-        echo "Usage: fix_perms path1 path2 ... pathN"
-        return
-    fi
-    while (( $# > 0 )); do
-        echo "Fixing perms in: ${1}"
-        chmod -R u=rwX,g=rwX,o-rwx "$1"
-        shift
-    done
-    echo "Done!"
-}
-
 
 ## Git
 
@@ -297,9 +284,9 @@ git_stash_apply_no_merge() {
 }
 
 git_make_exec() {
-    chmod -x $*
-    git -c core.fileMode=false update-index --chmod=+x $*
-    chmod +x $*
+    chmod -x "$@"
+    git -c core.fileMode=false update-index --chmod=+x "$@"
+    chmod +x "$@"
 }
 
 git_cmd_in() {
@@ -399,7 +386,7 @@ EOM
 }
 
 git_branch_in() {
-    git_cmd_in branch branch $*
+    git_cmd_in branch branch "$@"
 }
 git_pull_in() {
     local func_args_in=("$@")
@@ -509,3 +496,46 @@ layz() {
     fi
 }
 
+tokentx() {
+    local tx="$1"
+    local token_arr=()
+    local token_tx_arr=()
+    local token_delim='\n'
+    local token
+    while IFS= read -r token; do
+        token_arr+=( "$token" )
+    done
+    if (( ${#token_arr[@]} == 1 )); then
+        token_delim=' '
+        IFS="$token_delim" read -r -a token_arr <<< "${token_arr[0]}"
+    fi
+    local token_tx
+    for token in "${token_arr[@]}"; do
+        token_tx=${tx//'%'/${token}}
+        token_tx_arr+=( "$token_tx" )
+    done
+    printf "%s${token_delim}" "${token_tx_arr[@]}"
+}
+
+echoeval() {
+    local echo_args
+    if [[ -p /dev/stdin ]]; then
+        IFS= read -r echo_args
+    else
+        echo_args="$*"
+    fi
+    cmd="echo ${echo_args}"
+    eval "$cmd"
+}
+
+sum_col() {
+    local col_num=1
+    local col_delim=' '
+    if (( $# >= 1 )); then
+        col_num="$1"
+    fi
+    if (( $# >= 2 )); then
+        col_delim="$2"
+    fi
+    awk -F"$col_delim" "{print \$${col_num}}" | paste -s -d"+" | bc
+}
