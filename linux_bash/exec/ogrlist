@@ -129,10 +129,13 @@ while (( "$#" )); do
         fi
 
         if [ "$arg_opt_nargs_do_shift" = true ]; then
-            for i in $(seq 1 $arg_opt_nargs); do
+            for arg_num in $(seq 1 $arg_opt_nargs); do
                 shift
                 arg_val="$1"
-                if [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                if [ -z "$arg_val" ]; then
+                    echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                    exit_script_with_status 1
+                elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
                     echo_e "Unexpected argument value: ${arg} ${arg_val}"
                     exit_script_with_status 1
                 fi
