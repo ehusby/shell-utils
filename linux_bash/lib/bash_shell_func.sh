@@ -1,21 +1,21 @@
 #!/bin/bash
 
 ## Source base functions
-source "$(dirname $(readlink -f "${BASH_SOURCE[0]}"))/bash_base_func.sh"
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/bash_base_func.sh"
 
 
 ## String manipulation
 
-function line2space() { tr '\n' ' ' < /dev/stdin; }
-function space2line() { tr ' ' '\n' < /dev/stdin; }
+line2space() { tr '\n' ' ' < /dev/stdin; }
+space2line() { tr ' ' '\n' < /dev/stdin; }
 
-function strrep() { sed -r "s|${1}|${2}|g" < /dev/stdin; }
-function strcat() { sed -r "s|(.*)|\1${1}|" < /dev/stdin; }
+strrep() { sed -r "s|${1}|${2}|g" < /dev/stdin; }
+strcat() { sed -r "s|(.*)|\1${1}|" < /dev/stdin; }
 
 
 ## Path representation
 
-function fullpath() {
+fullpath() {
     local dirent dirent_arr
     if [[ -p /dev/stdin ]]; then
         dirent_arr=()
@@ -33,7 +33,7 @@ function fullpath() {
         readlink -f "$dirent"
     done
 }
-function basename_all() {
+basename_all() {
     local dirent dirent_arr
     if [[ -p /dev/stdin ]]; then
         dirent_arr=()
@@ -51,7 +51,7 @@ function basename_all() {
         basename "$dirent"
     done
 }
-function dirname_all() {
+dirname_all() {
     local dirent dirent_arr
     if [[ -p /dev/stdin ]]; then
         dirent_arr=()
@@ -73,7 +73,7 @@ function dirname_all() {
 #alias findl='find -mindepth 1 -maxdepth 1'
 #alias findls='find -mindepth 1 -maxdepth 1 -ls | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
 #alias findlsh='find -mindepth 1 -maxdepth 1 -type f -exec ls -lh {} \; | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
-function find_alias() {
+find_alias() {
     local find_func_name="$1"; shift
 
     local pos_args opt_args debug mindepth maxdepth find_func_suffix
@@ -130,23 +130,23 @@ function find_alias() {
     fi
     eval "$cmd"
 }
-function findl() {
+findl() {
     find_alias findl "$@"
 }
-function findls() {
+findls() {
     find_alias findls "$@"
 }
-function findlsh() {
+findlsh() {
     find_alias findlsh "$@"
 }
-function findst() {
+findst() {
     find_alias findls "$1" -mindepth 0 -maxdepth 0
 }
 
 
 ## File operations
 
-function absymlink_defunct() {
+absymlink_defunct() {
     local arg_arr arg
     arg_arr=()
     while (( "$#" )); do
@@ -163,23 +163,23 @@ function absymlink_defunct() {
 
 ## File interrogation
 
-function count_by_date() {
-    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$0]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort < /dev/stdin
+count_by_date() {
+    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$0]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort
 }
-function count_by_month() {
-    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$1]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort < /dev/stdin
+count_by_month() {
+    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$1]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort
 }
-function count_by_date_with_ex() {
-    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+.*$' | awk '{date=sprintf("%s %2s", $1, $2); date_count_dict[date]++; date_ex_dict[date]=$0} END {for (date in date_count_dict) printf "%s : %5s : %s\n", date, date_count_dict[date], date_ex_dict[date]}' | sort < /dev/stdin
+count_by_date_with_ex() {
+    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+.*$' | awk '{date=sprintf("%s %2s", $1, $2); date_count_dict[date]++; date_ex_dict[date]=$0} END {for (date in date_count_dict) printf "%s : %5s : %s\n", date, date_count_dict[date], date_ex_dict[date]}' | sort
 }
-function count_by_month_with_ex() {
-    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+.*$' | awk '{date=$1; date_count_dict[date]++; date_ex_dict[date]=$0} END {for (date in date_count_dict) printf "%s : %5s : %s\n", date, date_count_dict[date], date_ex_dict[date]}' | sort < /dev/stdin
+count_by_month_with_ex() {
+    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+.*$' | awk '{date=$1; date_count_dict[date]++; date_ex_dict[date]=$0} END {for (date in date_count_dict) printf "%s : %5s : %s\n", date, date_count_dict[date], date_ex_dict[date]}' | sort
 }
 
 
 ## File modification
 
-function touch_all() {
+touch_all() {
     echo "Will recursively search through argument directories and touch all files within"
     if (( $# == 0 )); then
         echo "Usage: touch_all path1 path2 ... pathN"
@@ -196,26 +196,26 @@ function touch_all() {
 
 ## Git
 
-function git_drop_all_changes() {
+git_drop_all_changes() {
     git checkout -- .
 }
 
-function git_reset_keep_changes() {
+git_reset_keep_changes() {
     git reset HEAD^
 }
 
-function git_stash_apply_no_merge() {
+git_stash_apply_no_merge() {
     git read-tree stash^{tree}
     git checkout-index -af
 }
 
-function git_make_exec() {
-    chmod -x $*
-    git -c core.fileMode=false update-index --chmod=+x $*
-    chmod +x $*
+git_make_exec() {
+    chmod -x "$@"
+    git -c core.fileMode=false update-index --chmod=+x "$@"
+    chmod +x "$@"
 }
 
-function git_cmd_in() {
+git_cmd_in() {
 
     ## Arguments
     local start_dir; start_dir="$(pwd)"
@@ -311,10 +311,10 @@ EOM
     echo "Done!"
 }
 
-function git_branch_in() {
-    git_cmd_in branch branch $*
+git_branch_in() {
+    git_cmd_in branch branch "$@"
 }
-function git_pull_in() {
+git_pull_in() {
     local func_args_in=("$@")
     local func_args_out=()
 
@@ -345,7 +345,7 @@ function git_pull_in() {
     eval git_cmd_in pull ${git_cmd_arr[*]} ${func_args_out[*]}
 }
 
-function git_clone_replace() {
+git_clone_replace() {
     local repo_url repo_url_bname repo_name
     local cmd status
 
@@ -387,7 +387,7 @@ function git_clone_replace() {
 
 ## Other
 
-function layz() {
+layz() {
     local cmd_arr_in cmd_arr_out
     local arg_idx rep_idx
     local arg_out arg_rep
@@ -422,7 +422,7 @@ function layz() {
     fi
 }
 
-function tokentx() {
+tokentx() {
     local tx="$1"
     local token_arr=()
     local token_tx_arr=()
@@ -443,7 +443,7 @@ function tokentx() {
     printf "%s${token_delim}" "${token_tx_arr[@]}"
 }
 
-function echoeval() {
+echoeval() {
     local echo_args
     if [[ -p /dev/stdin ]]; then
         IFS= read -r echo_args
@@ -454,7 +454,7 @@ function echoeval() {
     eval "$cmd"
 }
 
-function sum_col() {
+sum_col() {
     local col_num=1
     local col_delim=' '
     if (( $# >= 1 )); then
@@ -463,6 +463,5 @@ function sum_col() {
     if (( $# >= 2 )); then
         col_delim="$2"
     fi
-    awk -F"$col_delim" "{print \$${col_num}}" | paste -s -d"+" | bc < /dev/stdin
+    awk -F"$col_delim" "{print \$${col_num}}" | paste -s -d"+" | bc
 }
-

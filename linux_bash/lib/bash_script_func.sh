@@ -1,35 +1,35 @@
 #!/bin/bash
 
 ## Source base functions
-source "$(dirname $(readlink -f "${BASH_SOURCE[0]}"))/bash_base_func.sh"
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/bash_base_func.sh"
 
 
 ## Basic printing
 
-function ech-o() { printf "%s\n" "$*"; }
+ech-o() { printf "%s\n" "$*"; }
 
-function echo_e() { echo "$@" >&2; }
+echo_e() { echo "$@" >&2; }
 
-function echo_oe() { echo "$@" | tee >(cat >&2); }
+echo_oe() { echo "$@" | tee >(cat >&2); }
 
-function log() { echo -e "$(date) -- $*"; }
+log() { echo -e "$(date) -- $*"; }
 
-function log_e() { log "$@" >&2; }
+log_e() { log "$@" >&2; }
 
-function log_oe() { log "$@" | tee >(cat >&2); }
+log_oe() { log "$@" | tee >(cat >&2); }
 
 
 ## String manipulation
 
-function string_to_uppercase() { ech-o "$@" | tr '[:lower:]' '[:upper:]'; }
+string_to_uppercase() { ech-o "$@" | tr '[:lower:]' '[:upper:]'; }
 
-function string_to_lowercase() { ech-o "$@" | tr '[:upper:]' '[:lower:]'; }
+string_to_lowercase() { ech-o "$@" | tr '[:upper:]' '[:lower:]'; }
 
-function string_lstrip() { ech-o "$1" | sed "s|^\(${2}\)\+||"; }
+string_lstrip() { ech-o "$1" | sed "s|^\(${2}\)\+||"; }
 
-function string_rstrip() { ech-o "$1" | sed "s|\(${2}\)\+\$||"; }
+string_rstrip() { ech-o "$1" | sed "s|\(${2}\)\+\$||"; }
 
-function string_strip() {
+string_strip() {
     local string_in="$1"
     local strip_substr="$2"
     local string_stripped=''
@@ -40,16 +40,16 @@ function string_strip() {
     ech-o "$string_stripped"
 }
 
-function string_rstrip_decimal_zeros { ech-o "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
+string_rstrip_decimal_zeros() { ech-o "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
 
-function collapse_repeated_substring() { ech-o "$1" | sed "s|\(${2}\)\+|\1|g"; }
+collapse_repeated_substring() { ech-o "$1" | sed "s|\(${2}\)\+|\1|g"; }
 
-function string_join() { local IFS="$1"; shift; ech-o "$*"; }
+string_join() { local IFS="$1"; shift; ech-o "$*"; }
 
 
 ## String testing
 
-function re_test() {
+re_test() {
     local re_test="$1"
     local test_str="$2"
     local bool_result=''
@@ -63,36 +63,36 @@ function re_test() {
     echo $bool_result
 }
 
-function string_is_int() { re_test '^[0-9]+$' "$1"; }
+string_is_int() { re_test '^[0-9]+$' "$1"; }
 
-function string_is_datenum() { re_test '^[1-2][0-9]{3}(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])$' "$1"; }
+string_is_datenum() { re_test '^[1-2][0-9]{3}(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])$' "$1"; }
 
-function string_is_pairname() { re_test '^[A-Z0-9]{4}_[0-9]{8}_[0-9A-F]{16}_[0-9A-F]{16}$' "$1"; }
+string_is_pairname() { re_test '^[A-Z0-9]{4}_[0-9]{8}_[0-9A-F]{16}_[0-9A-F]{16}$' "$1"; }
 
-function string_startswith() { re_test "^${2}" "$1"; }
+string_startswith() { re_test "^${2}" "$1"; }
 
-function string_endswith() { re_test "${2}\$" "$1"; }
+string_endswith() { re_test "${2}\$" "$1"; }
 
-function string_contains() { re_test "${2}" "$1"; }
+string_contains() { re_test "${2}" "$1"; }
 
 
 ## Run command and catch stdout/stderr
 
-function run_and_show_all() { ("$@") }
+run_and_show_all() { ("$@") }
 
-function run_and_hide_out() { ("$@" 1>/dev/null); }
+run_and_hide_out() { ("$@" 1>/dev/null); }
 
-function run_and_hide_err() { ("$@" 2>/dev/null); }
+run_and_hide_err() { ("$@" 2>/dev/null); }
 
-function run_and_hide_all() { ("$@" 1>/dev/null 2>/dev/null); }
+run_and_hide_all() { ("$@" 1>/dev/null 2>/dev/null); }
 
-function run_and_send_err_to_out() { ("$@" 2>&1); }
+run_and_send_err_to_out() { ("$@" 2>&1); }
 
-function run_and_send_out_to_err() { ("$@" 1>&2); }
+run_and_send_out_to_err() { ("$@" 1>&2); }
 
-function run_and_swap_out_err() { ("$@" 3>&2 2>&1 1>&3); }
+run_and_swap_out_err() { ("$@" 3>&2 2>&1 1>&3); }
 
-function run_and_catch_out_err() {
+run_and_catch_out_err() {
     local __return_out="$1"; shift
     local __return_err="$1"; shift
     local cmd="$*"
@@ -126,7 +126,7 @@ function run_and_catch_out_err() {
     return $status
 }
 
-function run_and_catch_out_custom() {
+run_and_catch_out_custom() {
     local command_redirect_fun="$1"; shift
     local __return_out="$1"; shift
     local cmd="$*"
@@ -144,7 +144,7 @@ function run_and_catch_out_custom() {
     return $status
 }
 
-function run_and_catch_out() {
+run_and_catch_out() {
     local command_redirect_fun='run_and_show_all'
     local __return_out="$1"; shift
     local status=0
@@ -155,7 +155,7 @@ function run_and_catch_out() {
     return $status
 }
 
-function run_and_catch_swapped_err() {
+run_and_catch_swapped_err() {
     local command_redirect_fun='run_and_swap_out_err'
     local __return_out="$1"; shift
     local status=0
@@ -166,7 +166,7 @@ function run_and_catch_swapped_err() {
     return $status
 }
 
-function run_and_catch_mix() {
+run_and_catch_mix() {
     local command_redirect_fun='run_and_send_err_to_out'
     local __return_out="$1"; shift
     local status=0
@@ -180,7 +180,7 @@ function run_and_catch_mix() {
 
 ## Script control
 
-function exit_script_with_status() {
+exit_script_with_status() {
     local status="$1"
     local script_file="$CURRENT_PARENT_BASH_SCRIPT_FILE"
 
@@ -193,7 +193,7 @@ function exit_script_with_status() {
 ## Get user input
 
 #while true; do read -p "Continue? (y/n): " confirm && [[ $confirm == [yY] || $confirm == [nN] ]] && break ; done ; [[ $confirm == [nN] ]] && exit 1
-function prompt_y_or_n() {
+prompt_y_or_n() {
     local prompt="$1"
     local confirm=''
 
@@ -214,7 +214,7 @@ function prompt_y_or_n() {
 
 ## Other
 
-function parse_xml_value() {
+parse_xml_value() {
     local xml_tag="$1"
     local xml_onelinestring=''
     while read -r xml_onelinestring; do
@@ -222,7 +222,7 @@ function parse_xml_value() {
     done
 }
 
-function round() {
+round() {
     local number="$1"
     local mode="$2"
     local decimals="$3"
@@ -252,7 +252,7 @@ function round() {
     echo "$number"
 }
 
-function sec2hms() {
+sec2hms() {
     local total_sec="$1"
     local hms_hr hms_min hms_sec
 
@@ -262,7 +262,7 @@ function sec2hms() {
 
     printf "%02d:%02d:%02d\n" "$hms_hr" "$hms_min" "$hms_sec"
 }
-function hms2sec() {
+hms2sec() {
     local hms_hr hms_min hms_sec
     local total_sec
 
