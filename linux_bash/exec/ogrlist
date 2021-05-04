@@ -21,6 +21,7 @@ source "$bash_functions_script"
 dbase_path=''
 layer_name=''
 field_name=''
+delimiter=','
 dryrun=false
 
 ## Custom globals
@@ -47,8 +48,13 @@ Options:
          will assume the layer name is the same as the
          Shapefile name if this option is not provided.)
  -f,--field
-        Name of field in feature class (indicated by --layer
-        option) from which values are extracted.
+        Name of field(s) in feature class (indicated by --layer
+        option) from which values are listed.
+        Values from multiple fields can be listed by providing
+        a comma-separated string of field names.
+ -d,--delim (default='${delimiter}')
+        Delimiting character (or string) separating returned
+        values when multiple fields are listed.
 -dr,--dryrun
         Print 'ogrinfo' command used to extract information.
 EOM
@@ -97,13 +103,24 @@ while (( "$#" )); do
             arg_opt_nargs=1
             field_name="$arg_val"
 
+        elif [ "$arg_opt" = 'd' ] || [ "$arg_opt" = 'delim' ]; then
+            arg_opt_nargs=1
+            delimiter="$arg_val"
+
         elif [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
             dryrun=true
 
         else
-            echo_e "Unexpected argument: ${arg}"
-            exit_script_with_status 1
+            arg_opt_nargs=0
+
+            if [ "$(re_test '^d.$' "$arg_opt")" == "true" ]; then
+                delimiter="${arg_opt/d/}"
+
+            else
+                echo_e "Unexpected argument: ${arg}"
+                exit_script_with_status 1
+            fi
         fi
 
         if [ -z "$arg_opt_nargs" ]; then
@@ -156,7 +173,8 @@ if [ -z "$layer_name" ]; then
 elif [ -z "$field_name" ]; then
     cmd="ogrinfo -so -al '${dbase_path}' | sed -n '/^Layer name: ${layer_name}/,\${p;/^[[:space:]]*\$/q}' | sed -e '1,/Data axis to CRS axis mapping/d'"
 else
-    cmd="ogrinfo -dialect sqlite -sql 'SELECT ${field_name} FROM ${layer_name}' '${dbase_path}' | grep -E '= .*' | sed -r 's|.*? = (.*)|\1|'"
+    awk_cmd='BEGIN { csv="" } { val=$0; if (val=="") { if (csv!="") print csv; csv=""; } else if (csv=="") { csv=val; } else { csv=sprintf("%s'"${delimiter}"'%s", csv, val); } } END { if (csv!="") print csv; }'
+    cmd="ogrinfo -dialect sqlite -sql 'SELECT ${field_name} FROM ${layer_name}' '${dbase_path}' | sed -e '1,/OGRFeature(SELECT):0/d' | grep -E '(^$| = )' | cut -d'=' -f2- | cut -d' ' -f2- | awk '${awk_cmd}'"
 fi
 
 if [ "$dryrun" = true ]; then
