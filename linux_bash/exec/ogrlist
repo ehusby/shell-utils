@@ -23,7 +23,7 @@ layer_name=''
 field_name=''
 delimiter=','
 print_header=false
-dryrun=false
+debug=false
 
 ## Custom globals
 
@@ -60,7 +60,7 @@ Options:
         Print header line listing delimited field name(s)
         before printing list of field values.
         Useful when redirecting output to a CSV file.
--dr,--dryrun
+-db,--debug
         Print 'ogrinfo' command used to extract information.
 EOM
 if (( $# < 1 )); then
@@ -116,9 +116,9 @@ while (( "$#" )); do
             arg_opt_nargs=0
             print_header=true
 
-        elif [ "$arg_opt" = 'dryrun' ]; then
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
             arg_opt_nargs=0
-            dryrun=true
+            debug=true
 
         else
             arg_opt_nargs=0
@@ -192,7 +192,7 @@ else
     fi
 fi
 
-if [ "$dryrun" = true ]; then
+if [ "$debug" = true ]; then
     echo "$cmd"
 else
     eval "$cmd"
