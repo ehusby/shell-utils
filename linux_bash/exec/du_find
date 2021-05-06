@@ -216,8 +216,8 @@ if [ -n "$unit_name" ]; then
     unit_order=${unit_order_arr[$i_unit]}
 fi
 
-if [ "$(string_is_int "$decimals")" = false ]; then
-    echo_e "Decimals argument must be a positive integer"
+if [ "$(string_is_posint_or_zero "$decimals")" = false ]; then
+    echo_e "Decimals argument must be a positive/zero integer"
     exit_script_with_status 1
 fi
 

@@ -32,7 +32,6 @@ overwrite=false
 srcfile_arr=()
 
 ## Custom globals
-re_int='^[0-9]+$'
 if [ -z "$(env | grep '^BWPY_PREFIX=')" ]; then
     BWPY_PREFIX=''
 fi
@@ -167,7 +166,7 @@ set -u
 
 ## Validate arguments
 
-if ! [[ $res_meters =~ $re_int ]] ; then
+if [ "$(string_is_posint "$res_meters")" = false ]; then
     echo_e "Resolution argument must be a positive integer"
     exit_script_with_status 1
 fi
