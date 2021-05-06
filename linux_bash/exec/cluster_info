@@ -408,7 +408,7 @@ print_node_table() {
 print_interactive_job_note() {
     echo
     echo "Submit an interactive job:"
-    echo "    qsub -I -l nodes=<NODE_NAME>,ncpus=<nCORES>,mem=<nGB>gb,walltime=<HOURS>:00:00"
+    echo "    qsub -I -l nodes=<NODE_NAME>:ppn=<nCORES>,mem=<nGB>gb,walltime=<HOURS>:00:00"
     echo "   (can give 'nodes=1' for any node, recommend nCORES >= 2, 'mem' argument optional)"
 }
 
