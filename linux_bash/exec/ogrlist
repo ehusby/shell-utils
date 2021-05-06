@@ -183,7 +183,7 @@ fi
 if [ -z "$layer_name" ]; then
     cmd="ogrinfo -so -al '${dbase_path}' | grep '^Layer name:'"
 elif [ -z "$field_name" ]; then
-    cmd="ogrinfo -so -al '${dbase_path}' | sed -n '/^Layer name: ${layer_name}/,\${p;/^[[:space:]]*\$/q}' | sed -e '1,/Data axis to CRS axis mapping/d'"
+    cmd="ogrinfo -so -al '${dbase_path}' | sed -n '/^Layer name: ${layer_name}/,\${p;/^[[:space:]]*\$/q}' | grep -E '^[^[:space:]]+\: [^[:space:]]+ \([0-9]+\.?[0-9]*\)$'"
 else
     awk_cmd='BEGIN { csv="" } { val=$0; if (val=="") { if (csv!="") print csv; csv=""; } else if (csv=="") { csv=val; } else { csv=sprintf("%s'"${delimiter}"'%s", csv, val); } } END { if (csv!="") print csv; }'
     cmd="ogrinfo -dialect sqlite -sql 'SELECT ${field_name} FROM ${layer_name}' '${dbase_path}' | sed -e '1,/OGRFeature(SELECT):0/d' | grep -E '(^$| = )' | cut -d'=' -f2- | cut -d' ' -f2- | awk '${awk_cmd}'"
