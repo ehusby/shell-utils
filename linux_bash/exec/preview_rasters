@@ -45,7 +45,7 @@ read -r -d '' script_usage << EOM
 Usage: ${script_name}
   [-t_srs {target projection, same as gdalwarp option}]
   [-tr {resolution (meters): <int>} (default=${res_meters})]
-  [-r {resampling method: common options ($(string_join '|' ${resampling_choices_common_arr[@]}))} (default=${resampling})]
+  [-r {resampling method: common options ($(string_join '|' "${resampling_choices_common_arr[@]}"))} (default=${resampling})]
   [-o {downsampled raster file/dir path for single/multiple source file(s) (default is to add "_{resolution}m" suffix to source files)}
   [--thumb]: scale source IMAGE min/max values to 0-255 and output downsampled raster in Byte format (incompatible with -t_srs and --hillshade options)
   [--hillshade [output hillshade file/dir path for single/multiple source file(s) (default is to add "_{resolution}m_shade" suffix to source files))}]
@@ -65,12 +65,20 @@ set +u
 while (( "$#" )); do
     arg="$1"
 
-    if ! [[ $arg == -* ]]; then
+    if [ "$(string_startswith "$arg" '-')" = false ]; then
         srcfile_arr+=( "$arg" )
 
     else
-        arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+        arg_opt="$(string_lstrip "$arg" '-')"
         arg_opt_nargs=''
+        if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+            arg_val="${arg_opt#*=}"
+            arg_opt="${arg_opt%%=*}"
+            arg_opt_nargs_do_shift=false
+        else
+            arg_val="$2"
+            arg_opt_nargs_do_shift=true
+        fi
         arg_val_can_start_with_dash=false
 
         if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
@@ -80,19 +88,19 @@ while (( "$#" )); do
 
         elif [ "$arg_opt" = 't_srs' ]; then
             arg_opt_nargs=1
-            target_srs="$2"
+            target_srs="$arg_val"
 
         elif [ "$arg_opt" = 'tr' ]; then
             arg_opt_nargs=1
-            res_meters="$2"
+            res_meters="$arg_val"
 
         elif [ "$arg_opt" = 'r' ]; then
             arg_opt_nargs=1
-            resampling="$2"
+            resampling="$arg_val"
 
         elif [ "$arg_opt" = 'o' ]; then
             arg_opt_nargs=1
-            outfile_single="$2"
+            outfile_single="$arg_val"
             keep_downsampled=true
 
         elif [ "$arg_opt" = 'thumb' ]; then
@@ -101,11 +109,11 @@ while (( "$#" )); do
 
         elif [ "$arg_opt" = 'hillshade' ]; then
             do_hillshade=true
-            if [ -z "$2" ] || [[ $2 == -* ]]; then
-                arg_opt_nargs=0
-            else
+            if [ -n "$arg_val" ] && [ "$(string_startswith "$arg_val" '-')" = false ]; then
                 arg_opt_nargs=1
-                hillshade_single="$2"
+                hillshade_single="$arg_val"
+            else
+                arg_opt_nargs=0
             fi
 
         elif [ "$arg_opt" = 'no-resample' ]; then
@@ -123,7 +131,7 @@ while (( "$#" )); do
         else
             arg_opt_nargs=0
 
-            if [[ $arg_opt == tr* ]]; then
+            if [ "$(re_test '^tr[0-9]+$' "$arg_opt")" = true ]; then
                 res_meters="${arg_opt/tr/}"
 
             else
@@ -137,14 +145,19 @@ while (( "$#" )); do
             exit_script_with_status 1
         fi
 
-        for i in $(seq 1 $arg_opt_nargs); do
-            shift
-            arg_val="$1"
-            if [ "$arg_val_can_start_with_dash" = false ] && [[ $arg_val == -* ]]; then
-                echo_e "Unexpected argument value: ${arg} ${arg_val}"
-                exit_script_with_status 1
-            fi
-        done
+        if [ "$arg_opt_nargs_do_shift" = true ]; then
+            for arg_num in $(seq 1 $arg_opt_nargs); do
+                shift
+                arg_val="$1"
+                if [ -z "$arg_val" ]; then
+                    echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                    exit_script_with_status 1
+                elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                    exit_script_with_status 1
+                fi
+            done
+        fi
     fi
 
     shift
