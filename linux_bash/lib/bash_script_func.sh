@@ -60,6 +60,12 @@ re_test() {
     fi
 }
 
+string_startswith() { re_test "^${2}" "$1"; }
+
+string_endswith() { re_test "${2}\$" "$1"; }
+
+string_contains() { re_test "${2}" "$1"; }
+
 string_is_int() { re_test '^-?[0-9]+$' "$1"; }
 
 string_is_posint_or_zero() { re_test '^[0-9]+$' "$1"; }
@@ -107,12 +113,6 @@ string_is_negnum() {
 string_is_datenum() { re_test '^[1-2][0-9]{3}(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])$' "$1"; }
 
 string_is_pairname() { re_test '^[A-Z0-9]{4}_[0-9]{8}_[0-9A-F]{16}_[0-9A-F]{16}$' "$1"; }
-
-string_startswith() { re_test "^${2}" "$1"; }
-
-string_endswith() { re_test "${2}\$" "$1"; }
-
-string_contains() { re_test "${2}" "$1"; }
 
 
 ## Run command and catch stdout/stderr
