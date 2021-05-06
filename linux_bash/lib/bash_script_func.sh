@@ -52,28 +52,67 @@ string_join() { local IFS="$1"; shift; ech-o "$*"; }
 re_test() {
     local re_test="$1"
     local test_str="$2"
-    local bool_result=''
 
     if [[ $test_str =~ $re_test ]]; then
-        bool_result=true
+        echo true
     else
-        bool_result=false
+        echo false
     fi
-
-    echo $bool_result
 }
-
-string_is_int() { re_test '^[0-9]+$' "$1"; }
-
-string_is_datenum() { re_test '^[1-2][0-9]{3}(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])$' "$1"; }
-
-string_is_pairname() { re_test '^[A-Z0-9]{4}_[0-9]{8}_[0-9A-F]{16}_[0-9A-F]{16}$' "$1"; }
 
 string_startswith() { re_test "^${2}" "$1"; }
 
 string_endswith() { re_test "${2}\$" "$1"; }
 
 string_contains() { re_test "${2}" "$1"; }
+
+string_is_int() { re_test '^-?[0-9]+$' "$1"; }
+
+string_is_posint_or_zero() { re_test '^[0-9]+$' "$1"; }
+
+string_is_negint_or_zero() { re_test '^-[0-9]+$' "$1"; }
+
+string_is_posint() {
+    if [ "$(string_is_posint_or_zero "$1")" = true ] && [ "$(re_test '^0+$' "$1")" = false ]; then
+        echo true
+    else
+        echo false
+    fi
+}
+
+string_is_negint() {
+    if [ "$(string_is_negint_or_zero "$1")" = true ] && [ "$(re_test '^-0+$' "$1")" = false ]; then
+        echo true
+    else
+        echo false
+    fi
+}
+
+string_is_num() { re_test '^-?[0-9]+\.?[0-9]*$' "$1"; }
+
+string_is_posnum_or_zero() { re_test '^[0-9]+\.?[0-9]*$' "$1"; }
+
+string_is_negnum_or_zero() { re_test '^-[0-9]+\.?[0-9]*$' "$1"; }
+
+string_is_posnum() {
+    if [ "$(string_is_posnum_or_zero "$1")" = true ] && [ "$(re_test '^0+\.?0*$' "$1")" = false ]; then
+        echo true
+    else
+        echo false
+    fi
+}
+
+string_is_negnum() {
+    if [ "$(string_is_negnum_or_zero "$1")" = true ] && [ "$(re_test '^-0+\.?0*$' "$1")" = false ]; then
+        echo true
+    else
+        echo false
+    fi
+}
+
+string_is_datenum() { re_test '^[1-2][0-9]{3}(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])$' "$1"; }
+
+string_is_pairname() { re_test '^[A-Z0-9]{4}_[0-9]{8}_[0-9A-F]{16}_[0-9A-F]{16}$' "$1"; }
 
 
 ## Run command and catch stdout/stderr

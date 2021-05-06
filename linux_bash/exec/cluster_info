@@ -415,14 +415,14 @@ print_interactive_job_note() {
 
 print_setsm_runs() {
     echo
-    echo "USER              RES    SETSM REGION RUNNING                     SWIFT SITE"
+    echo "USER              RES    SETSM REGION RUNNING $(printf '%-18s' "(on ${HOSTNAME})")  SWIFT SITE"
     echo "----------------  -----  ---------------------------------------  ----------"
     awk_cmd='{ if ($11 == "bash" || $11 == "/bin/bash") { user=$1; site="setsm"$14$15$16; '"${awk_user_filter}"' printf "%-17s %-6s %-40s %s\n", user, $14, $13, site; } }'
     ps aux | grep -E "auto_setsm.sh" | awk -F" " "$awk_cmd" | sort -u
 }
 print_s2s_runs() {
     echo
-    echo "USER              RES    S2S REGION RUNNING                       SWIFT SITE"
+    echo "USER              RES    S2S REGION RUNNING $(printf '%-20s' "(on ${HOSTNAME})")  SWIFT SITE"
     echo "----------------  -----  ---------------------------------------  ----------"
     awk_cmd='{ if ($11 == "bash" || $11 == "/bin/bash") { user=$1; site="s2s"$15$16; '"${awk_user_filter}"' printf "%-17s %-6s %-40s %s\n", user, $14, $13, site; } }'
     ps aux | grep "auto_s2s.sh" | awk -F" " "$awk_cmd" | sort -u
