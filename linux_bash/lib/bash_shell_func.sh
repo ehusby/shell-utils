@@ -6,11 +6,20 @@ source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/bash_script_func.sh"
 
 ## String manipulation
 
-line2space() { tr '\n' ' ' < /dev/stdin; }
-space2line() { tr ' ' '\n' < /dev/stdin; }
+line2space() {
+    local str result
+    if [[ -p /dev/stdin ]]; then
+        str=$(cat)
+    else
+        str="$1"
+    fi
+    result=$(string_strip "$str" | tr '\n' ' ')
+    echo "$result"
+}
+space2line() { tr ' ' '\n'; }
 
-strrep() { sed -r "s|${1}|${2}|g" < /dev/stdin; }
-strcat() { sed -r "s|(.*)|\1${1}|" < /dev/stdin; }
+strrep() { sed -r "s|${1}|${2}|g"; }
+strcat() { sed -r "s|(.*)|\1${1}|"; }
 
 
 ## Path representation

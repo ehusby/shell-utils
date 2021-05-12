@@ -3,7 +3,7 @@
 
 ## Basic printing
 
-ech-o() { printf "%s\n" "$*"; }
+print_string() { printf "%s" "$*"; }
 
 echo_e() { echo "$@" >&2; }
 
@@ -18,30 +18,36 @@ log_oe() { log "$@" | tee >(cat >&2); }
 
 ## String manipulation
 
-string_to_uppercase() { ech-o "$@" | tr '[:lower:]' '[:upper:]'; }
+string_to_uppercase() { print_string "$@" | tr '[:lower:]' '[:upper:]'; }
 
-string_to_lowercase() { ech-o "$@" | tr '[:upper:]' '[:lower:]'; }
+string_to_lowercase() { print_string "$@" | tr '[:upper:]' '[:lower:]'; }
 
-string_lstrip() { ech-o "$1" | sed "s|^\(${2}\)\+||"; }
+string_lstrip() { print_string "$1" | sed "s|^\(${2}\)\+||"; }
 
-string_rstrip() { ech-o "$1" | sed "s|\(${2}\)\+\$||"; }
+string_rstrip() { print_string "$1" | sed "s|\(${2}\)\+\$||"; }
 
 string_strip() {
     local string_in="$1"
-    local strip_substr="$2"
+    local strip_substr=''
     local string_stripped=''
+
+    if (( $# >= 2 )); then
+        strip_substr="$2"
+    else
+        strip_substr='[[:space:]]'
+    fi
 
     string_stripped=$(string_lstrip "$string_in" "$strip_substr")
     string_stripped=$(string_rstrip "$string_stripped" "$strip_substr")
 
-    ech-o "$string_stripped"
+    print_string "$string_stripped"
 }
 
-string_rstrip_decimal_zeros() { ech-o "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
+string_rstrip_decimal_zeros() { print_string "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
 
-collapse_repeated_substring() { ech-o "$1" | sed "s|\(${2}\)\+|\1|g"; }
+collapse_repeated_substring() { print_string "$1" | sed "s|\(${2}\)\+|\1|g"; }
 
-string_join() { local IFS="$1"; shift; ech-o "$*"; }
+string_join() { local IFS="$1"; shift; print_string "$*"; }
 
 
 ## String testing
