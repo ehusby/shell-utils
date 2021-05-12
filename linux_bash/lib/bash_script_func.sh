@@ -1,8 +1,5 @@
 #!/bin/bash
 
-## Source base functions
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/bash_base_func.sh"
-
 
 ## Basic printing
 
@@ -252,6 +249,36 @@ prompt_y_or_n() {
 
 
 ## Other
+
+#indexOf() { local el="$1"; shift; local arr=("$@"); local index=-1; local i; for i in "${!arr[@]}"; do [ "${arr[$i]}" = "$el" ] && { index=$i; break; } done; echo $index; }
+indexOf() {
+    local el="$1"     # Save first argument in a variable
+    shift             # Shift all arguments to the left (original $1 gets lost)
+    local arr=("$@")  # Rebuild the array with rest of arguments
+    local index=-1
+
+    local i
+    for i in "${!arr[@]}"; do
+        if [ "${arr[$i]}" = "$el" ]; then
+            index=$i
+            break
+        fi
+    done
+
+    echo "$index"
+}
+
+itemOneOf() {
+    local el="$1"
+    shift
+    local arr=("$@")
+
+    if (( $(indexOf "$el" ${arr[@]+"${arr[@]}"}) == -1 )); then
+        echo false
+    else
+        echo true
+    fi
+}
 
 parse_xml_value() {
     local xml_tag="$1"

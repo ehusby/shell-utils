@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ## Source base functions
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/bash_base_func.sh"
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/bash_script_func.sh"
 
 
 ## String manipulation
