@@ -85,13 +85,13 @@ dirname_all() {
 find_alias() {
     local find_func_name="$1"; shift
 
-    local pos_args opt_args debug mindepth maxdepth find_func_suffix
+    local pos_args opt_args debug depth_arg_provided stock_depth_args find_cmd_suffix
     pos_args=()
     opt_args=()
     debug=false
-    mindepth=1
-    maxdepth=1
-    find_func_suffix=''
+    depth_arg_provided=false
+    stock_depth_args=''
+    find_cmd_suffix=''
 
     local parsing_opt_args arg arg_opt
     parsing_opt_args=false
@@ -104,11 +104,9 @@ find_alias() {
                 debug=true
                 shift; continue
             elif [ "$arg_opt" = 'mindepth' ]; then
-                shift; mindepth="$1"
-                shift; continue
+                depth_arg_provided=true
             elif [ "$arg_opt" = 'maxdepth' ]; then
-                shift; maxdepth="$1"
-                shift; continue
+                depth_arg_provided=true
             fi
         elif [[ $arg == [\(\)\;] ]]; then
             parsing_opt_args=true
@@ -125,19 +123,25 @@ find_alias() {
         shift
     done
 
-    if [ "$find_func_name" = 'findl' ]; then
-        find_func_suffix=''
-    elif [ "$find_func_name" = 'findls' ]; then
-        find_func_suffix="-ls | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
-    elif [ "$find_func_name" = 'findlsh' ]; then
-        find_func_suffix=" -type f -exec ls -lh {} \; | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+    local stock_depth_funcs=( 'findl' 'findls' 'findlsh' )
+    if [ "$(itemOneOf "$find_func_name" "${stock_depth_funcs[@]}")" = true ] && [ "$depth_arg_provided" = false ]; then
+        stock_depth_args='-mindepth 1 -maxdepth 1'
     fi
 
-    cmd="find ${pos_args[*]} -mindepth ${mindepth} -maxdepth ${maxdepth} ${opt_args[*]} ${find_func_suffix}"
+    if [ "$find_func_name" = 'findl' ]; then
+        find_cmd_suffix=''
+    elif [ "$find_func_name" = 'findls' ]; then
+        find_cmd_suffix="-ls | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+    elif [ "$find_func_name" = 'findlsh' ]; then
+        find_cmd_suffix=" -type f -exec ls -lh {} \; | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+    fi
+
+    cmd="find ${pos_args[*]} ${stock_depth_args} ${opt_args[*]} ${find_cmd_suffix}"
     if [ "$debug" = true ]; then
         echo "$cmd"
+    else
+        eval "$cmd"
     fi
-    eval "$cmd"
 }
 findl() {
     find_alias findl "$@"
@@ -150,6 +154,25 @@ findlsh() {
 }
 findst() {
     find_alias findls "$1" -mindepth 0 -maxdepth 0
+}
+find_missing_suffix() {
+    local search_dir base_suffix check_suffix_arr
+    search_dir="$1"; shift
+    base_suffix="$1"; shift
+    check_suffix_arr=()
+
+    local arg
+    while (( "$#" )); do
+        arg="$1"
+        if ! [[ $arg == -* ]]; then
+            check_suffix_arr+=( "$arg" )
+        else
+            break
+        fi
+        shift
+    done
+
+    find_alias find_missing_suffix "$search_dir" -name "*${base_suffix}" "$@" -exec bash -c 'base_dirent={}; for suffix in '"${check_suffix_arr[*]}"'; do check_dirent="${base_dirent/'"${base_suffix}"'/${suffix}}"; if [ ! -e "$check_dirent" ]; then echo "$base_dirent"; break; fi; done;' \;
 }
 
 
