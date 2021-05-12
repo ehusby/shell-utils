@@ -1,12 +1,9 @@
 #!/bin/bash
 
-## Source base functions
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/bash_base_func.sh"
-
 
 ## Basic printing
 
-ech-o() { printf "%s\n" "$*"; }
+print_string() { printf "%s" "$*"; }
 
 echo_e() { echo "$@" >&2; }
 
@@ -21,30 +18,36 @@ log_oe() { log "$@" | tee >(cat >&2); }
 
 ## String manipulation
 
-string_to_uppercase() { ech-o "$@" | tr '[:lower:]' '[:upper:]'; }
+string_to_uppercase() { print_string "$@" | tr '[:lower:]' '[:upper:]'; }
 
-string_to_lowercase() { ech-o "$@" | tr '[:upper:]' '[:lower:]'; }
+string_to_lowercase() { print_string "$@" | tr '[:upper:]' '[:lower:]'; }
 
-string_lstrip() { ech-o "$1" | sed "s|^\(${2}\)\+||"; }
+string_lstrip() { print_string "$1" | sed "s|^\(${2}\)\+||"; }
 
-string_rstrip() { ech-o "$1" | sed "s|\(${2}\)\+\$||"; }
+string_rstrip() { print_string "$1" | sed "s|\(${2}\)\+\$||"; }
 
 string_strip() {
     local string_in="$1"
-    local strip_substr="$2"
+    local strip_substr=''
     local string_stripped=''
+
+    if (( $# >= 2 )); then
+        strip_substr="$2"
+    else
+        strip_substr='[[:space:]]'
+    fi
 
     string_stripped=$(string_lstrip "$string_in" "$strip_substr")
     string_stripped=$(string_rstrip "$string_stripped" "$strip_substr")
 
-    ech-o "$string_stripped"
+    print_string "$string_stripped"
 }
 
-string_rstrip_decimal_zeros() { ech-o "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
+string_rstrip_decimal_zeros() { print_string "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
 
-collapse_repeated_substring() { ech-o "$1" | sed "s|\(${2}\)\+|\1|g"; }
+collapse_repeated_substring() { print_string "$1" | sed "s|\(${2}\)\+|\1|g"; }
 
-string_join() { local IFS="$1"; shift; ech-o "$*"; }
+string_join() { local IFS="$1"; shift; print_string "$*"; }
 
 
 ## String testing
@@ -253,6 +256,36 @@ prompt_y_or_n() {
 
 ## Other
 
+#indexOf() { local el="$1"; shift; local arr=("$@"); local index=-1; local i; for i in "${!arr[@]}"; do [ "${arr[$i]}" = "$el" ] && { index=$i; break; } done; echo $index; }
+indexOf() {
+    local el="$1"     # Save first argument in a variable
+    shift             # Shift all arguments to the left (original $1 gets lost)
+    local arr=("$@")  # Rebuild the array with rest of arguments
+    local index=-1
+
+    local i
+    for i in "${!arr[@]}"; do
+        if [ "${arr[$i]}" = "$el" ]; then
+            index=$i
+            break
+        fi
+    done
+
+    echo "$index"
+}
+
+itemOneOf() {
+    local el="$1"
+    shift
+    local arr=("$@")
+
+    if (( $(indexOf "$el" ${arr[@]+"${arr[@]}"}) == -1 )); then
+        echo false
+    else
+        echo true
+    fi
+}
+
 parse_xml_value() {
     local xml_tag="$1"
     local xml_onelinestring=''
@@ -309,4 +342,26 @@ hms2sec() {
     total_sec="$(( 10#$hms_hr*3600 + 10#$hms_min*60 + 10#$hms_sec ))"
 
     echo "$total_sec"
+}
+
+chmod_octal_digit_to_rwx() {
+    local octal_digit="$1"
+
+    local octal_r_arr=( 4 5 6 7 )
+    local octal_w_arr=( 2 3 6 7 )
+    local octal_x_arr=( 1 3 5 7 )
+
+    local result=''
+
+    if [ "$(itemOneOf "$octal_digit" "${octal_r_arr[@]}")" = true ]; then
+        result="${result}r"
+    fi
+    if [ "$(itemOneOf "$octal_digit" "${octal_w_arr[@]}")" = true ]; then
+        result="${result}w"
+    fi
+    if [ "$(itemOneOf "$octal_digit" "${octal_x_arr[@]}")" = true ]; then
+        result="${result}x"
+    fi
+
+    echo "$result"
 }

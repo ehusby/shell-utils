@@ -37,24 +37,24 @@ srcpath_arr=()
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage: ${script_name} [OPTION]... [PATH]... ['find' OPTION]...
+Usage: ${script_name} [OPTION]... PATH... ['find' OPTION]...
 
   Summarize disk usage of each file/directory PATH, recursively
 for directories.
-  Comparable to 'du -sh [PATH]...', but by running 'find' under
+  Comparable to 'du -sh PATH...', but by running 'find' under
 the hood this program supports inclusive filtering of filename
 patterns and other 'find' command options. Since this program
 must parse a lot of output from 'find', it runs significantly
 slower than 'du'.
 
 Options:
-    -{$(string_join '|' ${unit_abrev_arr[@]})}
+    -{$(string_join '|' "${unit_abrev_arr[@]}")}
         Unit for disk usage metric.
         If not provided, the smallest unit that reports a disk
         usage value less than 1000 is automatically selected.
  -d,--decimals=<int> (default=${decimals})
         Number of decimal places in reported disk usage.
- -r,--round={$(string_join '|' ${round_choices_arr[@]})} (default=${round_mode})
+ -r,--round={$(string_join '|' "${round_choices_arr[@]}")} (default=${round_mode})
         Rounding method used in reported disk usage.
  -n,--name
         Include files that match this pattern.
@@ -65,7 +65,8 @@ Options:
     --si
         Use powers of 1000 instead of 1024 between units.
 -db,--debug
-        Print 'find' command(s) used to gather file sizes.
+        Print 'find' command(s) used to gather file sizes,
+        without executing.
 EOM
 if (( $# < 1 )); then
     echo_e "$script_usage"
@@ -75,12 +76,30 @@ fi
 
 ## Parse arguments
 set +u
-parsing_find_args=false
+parsing_fwd_args=false
 while (( "$#" )); do
     arg="$1"
 
-    if [ "$parsing_find_args" = true ]; then
-        find_args_arr+=( "$arg" )
+    if [ "$parsing_fwd_args" = true ]; then
+        # Accept critical script optional arguments
+        # specified at end of command.
+        is_fwd_arg=true
+        if [ "$(string_startswith "$arg" '-')" = true ]; then
+            arg_opt="$(string_lstrip "$arg" '-')"
+            is_fwd_arg=false
+            if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
+                arg_opt_nargs=0
+                echo "$script_usage"
+                exit 0
+            elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+                debug=true
+            else
+                is_fwd_arg=true
+            fi
+        fi
+        if [ "$is_fwd_arg" = true ]; then
+            find_args_arr+=( "$arg" )
+        fi
 
     elif [ "$(string_startswith "$arg" '-')" = false ]; then
         srcpath_arr+=( "$arg" )
@@ -137,8 +156,13 @@ while (( "$#" )); do
                 unit_name="$arg_opt"
 
             else
-                find_args_arr+=( "$arg" )
-                parsing_find_args=true
+                if (( ${#srcpath_arr} >= 1 )); then
+                    find_args_arr+=( "$arg" )
+                    parsing_fwd_args=true
+                else
+                    echo_e "Unexpected argument: ${arg}"
+                    exit_script_with_status 1
+                fi
             fi
         fi
 
@@ -185,16 +209,16 @@ unit_order=''
 if [ -n "$unit_name" ]; then
     unit_is_valid=false
     if (( ${#unit_name} >= 1 )) && (( ${#unit_name} <= 3 )); then
-        unit_abrev=$(printf '%s' "${unit_name:0:1}" | awk '{ print toupper($0) }')
+        unit_abrev=$(string_to_uppercase "${unit_name:0:1}")
         unit_lastchar=''
         unit_middlechar=''
         if (( ${#unit_name} > 1 )); then
-            unit_lastchar=$(printf '%s' "${unit_name: -1}" | awk '{ print toupper($0) }')
+            unit_lastchar=$(string_to_uppercase "${unit_name: -1}")
             if (( ${#unit_name} == 3 )); then
-                unit_middlechar=$(printf '%s' "${unit_name:1:2}" | awk '{ print tolower($0) }')
+                unit_middlechar=$(string_to_lowercase "${unit_name:1:2}")
             fi
         fi
-        if (( $(indexOf "$unit_abrev" "${unit_abrev_arr[@]}") > -1 )); then
+        if [ "$(itemOneOf "$unit_abrev" "${unit_abrev_arr[@]}")" = true ]; then
             if [ -z "$unit_lastchar" ] || [ "$unit_lastchar" = 'B' ]; then
                 if [ -z "$unit_middlechar" ] || [ "$unit_middlechar" = 'i' ]; then
                     unit_is_valid=true
@@ -221,7 +245,7 @@ if [ "$(string_is_posint_or_zero "$decimals")" = false ]; then
     exit_script_with_status 1
 fi
 
-if (( $(indexOf "$round_mode" "${round_choices_arr[@]}") == -1 )); then
+if [ "$(itemOneOf "$round_mode" "${round_choices_arr[@]}")" = false ]; then
     echo_e "Rounding mode must be one of the following: ${round_choices_arr[*]}"
     exit_script_with_status 1
 fi
@@ -247,6 +271,8 @@ if (( ${#namepat_arr[@]} > 0 )); then
     done
     find_name_args="${find_name_args} \)"
 fi
+find_args="${find_args_arr[*]+${find_args_arr[*]}} ${find_name_args}"
+find_args=$(string_strip "$find_args" ' ')
 
 
 if [ "$sum_all" = true ]; then
@@ -258,7 +284,7 @@ fi
 for srcpath in "${srcpath_arr[@]}"; do
 
     ## Sum file sizes, returning disk usage in KB
-    find_cmd="find ${srcpath} -type f ${find_name_args} ${find_args_arr[*]+${find_args_arr[*]}} -print0 | xargs -r0 du -a | awk '{sum+=\$1} END {print sum}'"
+    find_cmd="find \"${srcpath}\" -type f ${find_args} -print0 | xargs -r0 du -a | awk '{sum+=\$1} END {print sum}'"
     if [ "$debug" = true ]; then
         echo "$find_cmd"
         continue
