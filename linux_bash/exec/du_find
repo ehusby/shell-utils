@@ -185,16 +185,16 @@ unit_order=''
 if [ -n "$unit_name" ]; then
     unit_is_valid=false
     if (( ${#unit_name} >= 1 )) && (( ${#unit_name} <= 3 )); then
-        unit_abrev=$(printf '%s' "${unit_name:0:1}" | awk '{ print toupper($0) }')
+        unit_abrev=$(string_to_uppercase "${unit_name:0:1}")
         unit_lastchar=''
         unit_middlechar=''
         if (( ${#unit_name} > 1 )); then
-            unit_lastchar=$(printf '%s' "${unit_name: -1}" | awk '{ print toupper($0) }')
+            unit_lastchar=$(string_to_uppercase "${unit_name: -1}")
             if (( ${#unit_name} == 3 )); then
-                unit_middlechar=$(printf '%s' "${unit_name:1:2}" | awk '{ print tolower($0) }')
+                unit_middlechar=$(string_to_lowercase "${unit_name:1:2}")
             fi
         fi
-        if (( $(indexOf "$unit_abrev" "${unit_abrev_arr[@]}") > -1 )); then
+        if [ "$(itemOneOf "$unit_abrev" "${unit_abrev_arr[@]}")" = true ]; then
             if [ -z "$unit_lastchar" ] || [ "$unit_lastchar" = 'B' ]; then
                 if [ -z "$unit_middlechar" ] || [ "$unit_middlechar" = 'i' ]; then
                     unit_is_valid=true
@@ -221,7 +221,7 @@ if [ "$(string_is_posint_or_zero "$decimals")" = false ]; then
     exit_script_with_status 1
 fi
 
-if (( $(indexOf "$round_mode" "${round_choices_arr[@]}") == -1 )); then
+if [ "$(itemOneOf "$round_mode" "${round_choices_arr[@]}")" = false ]; then
     echo_e "Rounding mode must be one of the following: ${round_choices_arr[*]}"
     exit_script_with_status 1
 fi
