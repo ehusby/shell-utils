@@ -343,3 +343,25 @@ hms2sec() {
 
     echo "$total_sec"
 }
+
+chmod_octal_digit_to_rwx() {
+    local octal_digit="$1"
+
+    local octal_r_arr=( 4 5 6 7 )
+    local octal_w_arr=( 2 3 6 7 )
+    local octal_x_arr=( 1 3 5 7 )
+
+    local result=''
+
+    if [ "$(itemOneOf "$octal_digit" "${octal_r_arr[@]}")" = true ]; then
+        result="${result}r"
+    fi
+    if [ "$(itemOneOf "$octal_digit" "${octal_w_arr[@]}")" = true ]; then
+        result="${result}w"
+    fi
+    if [ "$(itemOneOf "$octal_digit" "${octal_x_arr[@]}")" = true ]; then
+        result="${result}x"
+    fi
+
+    echo "$result"
+}
