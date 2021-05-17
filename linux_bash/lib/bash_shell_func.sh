@@ -497,3 +497,16 @@ sum_col() {
     fi
     awk -F"$col_delim" "{print \$${col_num}}" | paste -s -d"+" | bc
 }
+
+get_stats() {
+    # Adapted from https://stackoverflow.com/a/9790056/8896374
+    local perl_cmd
+    perl_cmd=''\
+'use List::Util qw(max min sum);'\
+'@num_list=(); while(<>){ $sqsum+=$_*$_; push(@num_list,$_); };'\
+'$nitems=@num_list; $sum=sum(@num_list); $avg=$sum/$nitems; $max=max(@num_list)+0; $min=min(@num_list)+0;'\
+'$std=sqrt($sqsum/$nitems-($sum/$nitems)*($sum/$nitems));'\
+'$mid=int $nitems/2; @srtd=sort @num_list; if($nitems%2){ $med=$srtd[$mid]+0; }else{ $med=($srtd[$mid-1]+$srtd[$mid])/2; };'\
+'print "cnt: ${nitems}\nsum: ${sum}\nmin: ${min}\nmax: ${max}\nmed: ${med}\navg: ${avg}\nstd: ${std}\n";'
+    perl -e "$perl_cmd"
+}
