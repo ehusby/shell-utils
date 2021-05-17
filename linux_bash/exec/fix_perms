@@ -238,6 +238,8 @@ fi
 echo "Converted permission setting: ${octal_perms} -> ${chmod_perms_setting}"
 
 
+## Main program
+
 for srcpath in "${srcpath_arr[@]}"; do
     if [ -n "$find_args" ]; then
         cmd="find \"${srcpath}\" ${find_args} -exec chmod ${chmod_perms_setting} {} \;"
