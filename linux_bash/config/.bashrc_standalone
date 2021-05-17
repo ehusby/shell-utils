@@ -75,16 +75,25 @@ export PATH="${PATH}:${SHELL_UTILS_PATH}/linux_bash/exec"  # Easily call shell-u
 
 
 ## Source base functions
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/bash_base_func.sh"
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/bash_script_func.sh"
 
 
 ## String manipulation
 
-line2space() { tr '\n' ' ' < /dev/stdin; }
-space2line() { tr ' ' '\n' < /dev/stdin; }
+line2space() {
+    local str result
+    if [[ -p /dev/stdin ]]; then
+        str=$(cat)
+    else
+        str="$1"
+    fi
+    result=$(string_strip "$str" | tr '\n' ' ')
+    echo "$result"
+}
+space2line() { tr ' ' '\n'; }
 
-strrep() { sed -r "s|${1}|${2}|g" < /dev/stdin; }
-strcat() { sed -r "s|(.*)|\1${1}|" < /dev/stdin; }
+strrep() { sed -r "s|${1}|${2}|g"; }
+strcat() { sed -r "s|(.*)|\1${1}|"; }
 
 
 ## Path representation
@@ -144,79 +153,6 @@ dirname_all() {
     done
 }
 
-#alias findl='find -mindepth 1 -maxdepth 1'
-#alias findls='find -mindepth 1 -maxdepth 1 -ls | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
-#alias findlsh='find -mindepth 1 -maxdepth 1 -type f -exec ls -lh {} \; | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
-find_alias() {
-    local find_func_name="$1"; shift
-
-    local pos_args opt_args debug mindepth maxdepth find_func_suffix
-    pos_args=()
-    opt_args=()
-    debug=false
-    mindepth=1
-    maxdepth=1
-    find_func_suffix=''
-
-    local parsing_opt_args arg arg_opt
-    parsing_opt_args=false
-    while (( "$#" )); do
-        arg="$1"
-        if [[ $arg == -* ]]; then
-            parsing_opt_args=true
-            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
-            if [ "$arg_opt" = 'debug' ]; then
-                debug=true
-                shift; continue
-            elif [ "$arg_opt" = 'mindepth' ]; then
-                shift; mindepth="$1"
-                shift; continue
-            elif [ "$arg_opt" = 'maxdepth' ]; then
-                shift; maxdepth="$1"
-                shift; continue
-            fi
-        elif [[ $arg == [\(\)\;] ]]; then
-            parsing_opt_args=true
-            arg="\\${arg}"
-        fi
-        if [ "$parsing_opt_args" = true ]; then
-            if [[ $arg == *"*"* ]] || [[ $arg == *" "* ]]; then
-                arg="'${arg}'"
-            fi
-            opt_args+=( "$arg" )
-        else
-            pos_args+=( "$arg" )
-        fi
-        shift
-    done
-
-    if [ "$find_func_name" = 'findl' ]; then
-        find_func_suffix=''
-    elif [ "$find_func_name" = 'findls' ]; then
-        find_func_suffix="-ls | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
-    elif [ "$find_func_name" = 'findlsh' ]; then
-        find_func_suffix=" -type f -exec ls -lh {} \; | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
-    fi
-
-    cmd="find ${pos_args[*]} -mindepth ${mindepth} -maxdepth ${maxdepth} ${opt_args[*]} ${find_func_suffix}"
-    if [ "$debug" = true ]; then
-        echo "$cmd"
-    fi
-    eval "$cmd"
-}
-findl() {
-    find_alias findl "$@"
-}
-findls() {
-    find_alias findls "$@"
-}
-findlsh() {
-    find_alias findlsh "$@"
-}
-findst() {
-    find_alias findls "$1" -mindepth 0 -maxdepth 0
-}
-
 
 ## File operations
 
@@ -234,8 +170,22 @@ absymlink_defunct() {
     ln -s "${arg_arr[@]}"
 }
 
+touch_all() {
+    echo "Will recursively search through argument directories and touch all files within"
+    if (( $# == 0 )); then
+        echo "Usage: touch_all path1 path2 ... pathN"
+        return
+    fi
+    while (( $# > 0 )); do
+        echo "Touching files in: ${1}"
+        find "$1" -type f -exec touch {} \;
+        shift
+    done
+    echo "Done!"
+}
 
-## File interrogation
+
+## Gather information
 
 count_by_date() {
     grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$0]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort
@@ -250,21 +200,198 @@ count_by_month_with_ex() {
     grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+.*$' | awk '{date=$1; date_count_dict[date]++; date_ex_dict[date]=$0} END {for (date in date_count_dict) printf "%s : %5s : %s\n", date, date_count_dict[date], date_ex_dict[date]}' | sort
 }
 
-
-## File modification
-
-touch_all() {
-    echo "Will recursively search through argument directories and touch all files within"
-    if (( $# == 0 )); then
-        echo "Usage: touch_all path1 path2 ... pathN"
-        return
+sum_col() {
+    local col_num=1
+    local col_delim=' '
+    if (( $# >= 1 )); then
+        col_num="$1"
     fi
-    while (( $# > 0 )); do
-        echo "Touching files in: ${1}"
-        find "$1" -type f -exec touch {} \;
+    if (( $# >= 2 )); then
+        col_delim="$2"
+    fi
+    awk -F"$col_delim" "{print \$${col_num}}" | paste -s -d"+" | bc
+}
+
+get_stats() {
+    # Adapted from https://stackoverflow.com/a/9790056/8896374
+    local perl_cmd
+    perl_cmd=''\
+'use List::Util qw(max min sum);'\
+'@num_list=(); while(<>){ $sqsum+=$_*$_; push(@num_list,$_); };'\
+'$nitems=@num_list; $sum=sum(@num_list); $avg=$sum/$nitems; $max=max(@num_list)+0; $min=min(@num_list)+0;'\
+'$std=sqrt($sqsum/$nitems-($sum/$nitems)*($sum/$nitems));'\
+'$mid=int $nitems/2; @srtd=sort @num_list; if($nitems%2){ $med=$srtd[$mid]+0; }else{ $med=($srtd[$mid-1]+$srtd[$mid])/2; };'\
+'print "cnt: ${nitems}\nsum: ${sum}\nmin: ${min}\nmax: ${max}\nmed: ${med}\navg: ${avg}\nstd: ${std}\n";'
+    perl -e "$perl_cmd"
+}
+
+
+# Find operations
+
+#alias findl='find -mindepth 1 -maxdepth 1'
+#alias findls='find -mindepth 1 -maxdepth 1 -ls | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
+#alias findlsh='find -mindepth 1 -maxdepth 1 -type f -exec ls -lh {} \; | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
+find_alias() {
+    local find_func_name="$1"; shift
+
+    local pos_args opt_args debug depth_arg_provided stock_depth_args find_cmd_suffix
+    pos_args=()
+    opt_args=()
+    debug=false
+    depth_arg_provided=false
+    stock_depth_args=''
+    find_cmd_suffix=''
+
+    local parsing_opt_args arg arg_opt
+    parsing_opt_args=false
+    while (( "$#" )); do
+        arg="$1"
+        if [[ $arg == -* ]]; then
+            parsing_opt_args=true
+            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+            if [ "$arg_opt" = 'debug' ]; then
+                debug=true
+                shift; continue
+            elif [ "$arg_opt" = 'mindepth' ]; then
+                depth_arg_provided=true
+            elif [ "$arg_opt" = 'maxdepth' ]; then
+                depth_arg_provided=true
+            fi
+        elif [[ $arg == [\(\)\;] ]]; then
+            parsing_opt_args=true
+            arg="\\${arg}"
+        fi
+        if [ "$parsing_opt_args" = true ]; then
+            if [[ $arg == *"*"* ]] || [[ $arg == *" "* ]]; then
+                arg="'${arg}'"
+            fi
+            opt_args+=( "$arg" )
+        else
+            pos_args+=( "$arg" )
+        fi
         shift
     done
-    echo "Done!"
+
+    local stock_depth_funcs=( 'findl' 'findls' 'findlsh' )
+    if [ "$(itemOneOf "$find_func_name" "${stock_depth_funcs[@]}")" = true ] && [ "$depth_arg_provided" = false ]; then
+        stock_depth_args='-mindepth 1 -maxdepth 1'
+    fi
+
+    if [ "$find_func_name" = 'findl' ]; then
+        find_cmd_suffix=''
+    elif [ "$find_func_name" = 'findls' ]; then
+        find_cmd_suffix="-ls | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+    elif [ "$find_func_name" = 'findlsh' ]; then
+        find_cmd_suffix=" -type f -exec ls -lh {} \; | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+    fi
+
+    cmd="find ${pos_args[*]} ${stock_depth_args} ${opt_args[*]} ${find_cmd_suffix}"
+    if [ "$debug" = true ]; then
+        echo "$cmd"
+    else
+        eval "$cmd"
+    fi
+}
+findl() {
+    find_alias findl "$@"
+}
+findls() {
+    find_alias findls "$@"
+}
+findlsh() {
+    find_alias findlsh "$@"
+}
+findst() {
+    find_alias findls "$1" -mindepth 0 -maxdepth 0
+}
+find_missing_suffix() {
+    local search_dir base_suffix check_suffix_arr
+    search_dir="$1"; shift
+    base_suffix="$1"; shift
+    check_suffix_arr=()
+
+    local arg
+    while (( "$#" )); do
+        arg="$1"
+        if ! [[ $arg == -* ]]; then
+            check_suffix_arr+=( "$arg" )
+        else
+            break
+        fi
+        shift
+    done
+
+    find_alias find_missing_suffix "$search_dir" -name "*${base_suffix}" "$@" -exec bash -c 'base_dirent={}; for suffix in '"${check_suffix_arr[*]}"'; do check_dirent="${base_dirent/'"${base_suffix}"'/${suffix}}"; if [ ! -e "$check_dirent" ]; then echo "$base_dirent"; break; fi; done;' \;
+}
+
+
+## Command-line argument manipulation
+
+layz() {
+    local cmd_arr_in cmd_arr_out
+    local arg_idx rep_idx
+    local arg_out arg_rep
+    local cmd_out debug arg_opt
+    debug=false
+    if [[ $1 == -* ]]; then
+        arg_opt=$(echo "$1" | sed -r 's|\-+(.*)|\1|')
+        if [ "$arg_opt" = 'dryrun' ] || [ "$arg_opt" = 'debug' ]; then
+            debug=true
+            shift
+        fi
+    fi
+    cmd_arr_in=("$@")
+    cmd_arr_out=()
+    for arg_idx in "${!cmd_arr_in[@]}"; do
+        arg_out="${cmd_arr_in[$arg_idx]}"
+        for rep_idx in "${!cmd_arr_in[@]}"; do
+            if (( rep_idx < arg_idx )); then
+                arg_rep="${cmd_arr_out[$rep_idx]}"
+            else
+                arg_rep="${cmd_arr_in[$rep_idx]}"
+            fi
+            arg_out=$(echo "$arg_out" | sed -r "s|%${rep_idx}([^0-9]\|$)|${arg_rep}\1|g")
+        done
+        cmd_arr_out+=( "$arg_out" )
+    done
+    cmd_out="${cmd_arr_out[*]}"
+    if [ "$debug" = true ]; then
+        echo "$cmd_out"
+    else
+        $cmd_out
+    fi
+}
+
+tokentx() {
+    local tx="$1"
+    local token_arr=()
+    local token_tx_arr=()
+    local token_delim='\n'
+    local token
+    while IFS= read -r token; do
+        token_arr+=( "$token" )
+    done
+    if (( ${#token_arr[@]} == 1 )); then
+        token_delim=' '
+        IFS="$token_delim" read -r -a token_arr <<< "${token_arr[0]}"
+    fi
+    local token_tx
+    for token in "${token_arr[@]}"; do
+        token_tx=${tx//'%'/${token}}
+        token_tx_arr+=( "$token_tx" )
+    done
+    printf "%s${token_delim}" "${token_tx_arr[@]}"
+}
+
+echoeval() {
+    local echo_args
+    if [[ -p /dev/stdin ]]; then
+        IFS= read -r echo_args
+    else
+        echo_args="$*"
+    fi
+    cmd="echo ${echo_args}"
+    eval "$cmd"
 }
 
 
@@ -456,86 +583,4 @@ git_clone_replace() {
     fi
 
     echo -e "\nDone!"
-}
-
-
-## Other
-
-layz() {
-    local cmd_arr_in cmd_arr_out
-    local arg_idx rep_idx
-    local arg_out arg_rep
-    local cmd_out debug arg_opt
-    debug=false
-    if [[ $1 == -* ]]; then
-        arg_opt=$(echo "$1" | sed -r 's|\-+(.*)|\1|')
-        if [ "$arg_opt" = 'dryrun' ] || [ "$arg_opt" = 'debug' ]; then
-            debug=true
-            shift
-        fi
-    fi
-    cmd_arr_in=("$@")
-    cmd_arr_out=()
-    for arg_idx in "${!cmd_arr_in[@]}"; do
-        arg_out="${cmd_arr_in[$arg_idx]}"
-        for rep_idx in "${!cmd_arr_in[@]}"; do
-            if (( rep_idx < arg_idx )); then
-                arg_rep="${cmd_arr_out[$rep_idx]}"
-            else
-                arg_rep="${cmd_arr_in[$rep_idx]}"
-            fi
-            arg_out=$(echo "$arg_out" | sed -r "s|%${rep_idx}([^0-9]\|$)|${arg_rep}\1|g")
-        done
-        cmd_arr_out+=( "$arg_out" )
-    done
-    cmd_out="${cmd_arr_out[*]}"
-    if [ "$debug" = true ]; then
-        echo "$cmd_out"
-    else
-        $cmd_out
-    fi
-}
-
-tokentx() {
-    local tx="$1"
-    local token_arr=()
-    local token_tx_arr=()
-    local token_delim='\n'
-    local token
-    while IFS= read -r token; do
-        token_arr+=( "$token" )
-    done
-    if (( ${#token_arr[@]} == 1 )); then
-        token_delim=' '
-        IFS="$token_delim" read -r -a token_arr <<< "${token_arr[0]}"
-    fi
-    local token_tx
-    for token in "${token_arr[@]}"; do
-        token_tx=${tx//'%'/${token}}
-        token_tx_arr+=( "$token_tx" )
-    done
-    printf "%s${token_delim}" "${token_tx_arr[@]}"
-}
-
-echoeval() {
-    local echo_args
-    if [[ -p /dev/stdin ]]; then
-        IFS= read -r echo_args
-    else
-        echo_args="$*"
-    fi
-    cmd="echo ${echo_args}"
-    eval "$cmd"
-}
-
-sum_col() {
-    local col_num=1
-    local col_delim=' '
-    if (( $# >= 1 )); then
-        col_num="$1"
-    fi
-    if (( $# >= 2 )); then
-        col_delim="$2"
-    fi
-    awk -F"$col_delim" "{print \$${col_num}}" | paste -s -d"+" | bc
 }

@@ -275,6 +275,8 @@ find_args="${find_args_arr[*]+${find_args_arr[*]}} ${find_name_args}"
 find_args=$(string_strip "$find_args" ' ')
 
 
+## Main program
+
 if [ "$sum_all" = true ]; then
     srcpath_arr=( "${srcpath_arr[*]}" )
     report_srcpath=false

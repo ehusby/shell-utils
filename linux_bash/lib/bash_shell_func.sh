@@ -79,6 +79,81 @@ dirname_all() {
     done
 }
 
+
+## File operations
+
+absymlink_defunct() {
+    local arg_arr arg
+    arg_arr=()
+    while (( "$#" )); do
+        arg="$1"
+        if ! [[ $arg == -* ]]; then
+            arg=$(readlink -f "$arg")
+        fi
+        arg_arr+=( "$arg" )
+        shift
+    done
+    ln -s "${arg_arr[@]}"
+}
+
+touch_all() {
+    echo "Will recursively search through argument directories and touch all files within"
+    if (( $# == 0 )); then
+        echo "Usage: touch_all path1 path2 ... pathN"
+        return
+    fi
+    while (( $# > 0 )); do
+        echo "Touching files in: ${1}"
+        find "$1" -type f -exec touch {} \;
+        shift
+    done
+    echo "Done!"
+}
+
+
+## Gather information
+
+count_by_date() {
+    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$0]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort
+}
+count_by_month() {
+    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$1]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort
+}
+count_by_date_with_ex() {
+    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+.*$' | awk '{date=sprintf("%s %2s", $1, $2); date_count_dict[date]++; date_ex_dict[date]=$0} END {for (date in date_count_dict) printf "%s : %5s : %s\n", date, date_count_dict[date], date_ex_dict[date]}' | sort
+}
+count_by_month_with_ex() {
+    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+.*$' | awk '{date=$1; date_count_dict[date]++; date_ex_dict[date]=$0} END {for (date in date_count_dict) printf "%s : %5s : %s\n", date, date_count_dict[date], date_ex_dict[date]}' | sort
+}
+
+sum_col() {
+    local col_num=1
+    local col_delim=' '
+    if (( $# >= 1 )); then
+        col_num="$1"
+    fi
+    if (( $# >= 2 )); then
+        col_delim="$2"
+    fi
+    awk -F"$col_delim" "{print \$${col_num}}" | paste -s -d"+" | bc
+}
+
+get_stats() {
+    # Adapted from https://stackoverflow.com/a/9790056/8896374
+    local perl_cmd
+    perl_cmd=''\
+'use List::Util qw(max min sum);'\
+'@num_list=(); while(<>){ $sqsum+=$_*$_; push(@num_list,$_); };'\
+'$nitems=@num_list; $sum=sum(@num_list); $avg=$sum/$nitems; $max=max(@num_list)+0; $min=min(@num_list)+0;'\
+'$std=sqrt($sqsum/$nitems-($sum/$nitems)*($sum/$nitems));'\
+'$mid=int $nitems/2; @srtd=sort @num_list; if($nitems%2){ $med=$srtd[$mid]+0; }else{ $med=($srtd[$mid-1]+$srtd[$mid])/2; };'\
+'print "cnt: ${nitems}\nsum: ${sum}\nmin: ${min}\nmax: ${max}\nmed: ${med}\navg: ${avg}\nstd: ${std}\n";'
+    perl -e "$perl_cmd"
+}
+
+
+# Find operations
+
 #alias findl='find -mindepth 1 -maxdepth 1'
 #alias findls='find -mindepth 1 -maxdepth 1 -ls | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
 #alias findlsh='find -mindepth 1 -maxdepth 1 -type f -exec ls -lh {} \; | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
@@ -176,53 +251,73 @@ find_missing_suffix() {
 }
 
 
-## File operations
+## Command-line argument manipulation
 
-absymlink_defunct() {
-    local arg_arr arg
-    arg_arr=()
-    while (( "$#" )); do
-        arg="$1"
-        if ! [[ $arg == -* ]]; then
-            arg=$(readlink -f "$arg")
+layz() {
+    local cmd_arr_in cmd_arr_out
+    local arg_idx rep_idx
+    local arg_out arg_rep
+    local cmd_out debug arg_opt
+    debug=false
+    if [[ $1 == -* ]]; then
+        arg_opt=$(echo "$1" | sed -r 's|\-+(.*)|\1|')
+        if [ "$arg_opt" = 'dryrun' ] || [ "$arg_opt" = 'debug' ]; then
+            debug=true
+            shift
         fi
-        arg_arr+=( "$arg" )
-        shift
-    done
-    ln -s "${arg_arr[@]}"
-}
-
-
-## File interrogation
-
-count_by_date() {
-    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$0]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort
-}
-count_by_month() {
-    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$1]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort
-}
-count_by_date_with_ex() {
-    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+.*$' | awk '{date=sprintf("%s %2s", $1, $2); date_count_dict[date]++; date_ex_dict[date]=$0} END {for (date in date_count_dict) printf "%s : %5s : %s\n", date, date_count_dict[date], date_ex_dict[date]}' | sort
-}
-count_by_month_with_ex() {
-    grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+.*$' | awk '{date=$1; date_count_dict[date]++; date_ex_dict[date]=$0} END {for (date in date_count_dict) printf "%s : %5s : %s\n", date, date_count_dict[date], date_ex_dict[date]}' | sort
-}
-
-
-## File modification
-
-touch_all() {
-    echo "Will recursively search through argument directories and touch all files within"
-    if (( $# == 0 )); then
-        echo "Usage: touch_all path1 path2 ... pathN"
-        return
     fi
-    while (( $# > 0 )); do
-        echo "Touching files in: ${1}"
-        find "$1" -type f -exec touch {} \;
-        shift
+    cmd_arr_in=("$@")
+    cmd_arr_out=()
+    for arg_idx in "${!cmd_arr_in[@]}"; do
+        arg_out="${cmd_arr_in[$arg_idx]}"
+        for rep_idx in "${!cmd_arr_in[@]}"; do
+            if (( rep_idx < arg_idx )); then
+                arg_rep="${cmd_arr_out[$rep_idx]}"
+            else
+                arg_rep="${cmd_arr_in[$rep_idx]}"
+            fi
+            arg_out=$(echo "$arg_out" | sed -r "s|%${rep_idx}([^0-9]\|$)|${arg_rep}\1|g")
+        done
+        cmd_arr_out+=( "$arg_out" )
     done
-    echo "Done!"
+    cmd_out="${cmd_arr_out[*]}"
+    if [ "$debug" = true ]; then
+        echo "$cmd_out"
+    else
+        $cmd_out
+    fi
+}
+
+tokentx() {
+    local tx="$1"
+    local token_arr=()
+    local token_tx_arr=()
+    local token_delim='\n'
+    local token
+    while IFS= read -r token; do
+        token_arr+=( "$token" )
+    done
+    if (( ${#token_arr[@]} == 1 )); then
+        token_delim=' '
+        IFS="$token_delim" read -r -a token_arr <<< "${token_arr[0]}"
+    fi
+    local token_tx
+    for token in "${token_arr[@]}"; do
+        token_tx=${tx//'%'/${token}}
+        token_tx_arr+=( "$token_tx" )
+    done
+    printf "%s${token_delim}" "${token_tx_arr[@]}"
+}
+
+echoeval() {
+    local echo_args
+    if [[ -p /dev/stdin ]]; then
+        IFS= read -r echo_args
+    else
+        echo_args="$*"
+    fi
+    cmd="echo ${echo_args}"
+    eval "$cmd"
 }
 
 
@@ -414,86 +509,4 @@ git_clone_replace() {
     fi
 
     echo -e "\nDone!"
-}
-
-
-## Other
-
-layz() {
-    local cmd_arr_in cmd_arr_out
-    local arg_idx rep_idx
-    local arg_out arg_rep
-    local cmd_out debug arg_opt
-    debug=false
-    if [[ $1 == -* ]]; then
-        arg_opt=$(echo "$1" | sed -r 's|\-+(.*)|\1|')
-        if [ "$arg_opt" = 'dryrun' ] || [ "$arg_opt" = 'debug' ]; then
-            debug=true
-            shift
-        fi
-    fi
-    cmd_arr_in=("$@")
-    cmd_arr_out=()
-    for arg_idx in "${!cmd_arr_in[@]}"; do
-        arg_out="${cmd_arr_in[$arg_idx]}"
-        for rep_idx in "${!cmd_arr_in[@]}"; do
-            if (( rep_idx < arg_idx )); then
-                arg_rep="${cmd_arr_out[$rep_idx]}"
-            else
-                arg_rep="${cmd_arr_in[$rep_idx]}"
-            fi
-            arg_out=$(echo "$arg_out" | sed -r "s|%${rep_idx}([^0-9]\|$)|${arg_rep}\1|g")
-        done
-        cmd_arr_out+=( "$arg_out" )
-    done
-    cmd_out="${cmd_arr_out[*]}"
-    if [ "$debug" = true ]; then
-        echo "$cmd_out"
-    else
-        $cmd_out
-    fi
-}
-
-tokentx() {
-    local tx="$1"
-    local token_arr=()
-    local token_tx_arr=()
-    local token_delim='\n'
-    local token
-    while IFS= read -r token; do
-        token_arr+=( "$token" )
-    done
-    if (( ${#token_arr[@]} == 1 )); then
-        token_delim=' '
-        IFS="$token_delim" read -r -a token_arr <<< "${token_arr[0]}"
-    fi
-    local token_tx
-    for token in "${token_arr[@]}"; do
-        token_tx=${tx//'%'/${token}}
-        token_tx_arr+=( "$token_tx" )
-    done
-    printf "%s${token_delim}" "${token_tx_arr[@]}"
-}
-
-echoeval() {
-    local echo_args
-    if [[ -p /dev/stdin ]]; then
-        IFS= read -r echo_args
-    else
-        echo_args="$*"
-    fi
-    cmd="echo ${echo_args}"
-    eval "$cmd"
-}
-
-sum_col() {
-    local col_num=1
-    local col_delim=' '
-    if (( $# >= 1 )); then
-        col_num="$1"
-    fi
-    if (( $# >= 2 )); then
-        col_delim="$2"
-    fi
-    awk -F"$col_delim" "{print \$${col_num}}" | paste -s -d"+" | bc
 }
