@@ -61,7 +61,8 @@ Options:
         before printing list of field values.
         Useful when redirecting output to a CSV file.
 -db,--debug
-        Print 'ogrinfo' command used to extract information.
+        Print 'ogrinfo' command used to extract information,
+        without executing.
 EOM
 if (( $# < 1 )); then
     echo_e -e "$script_usage"
