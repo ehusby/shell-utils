@@ -228,7 +228,11 @@ for (( i=0; i<${#octal_perms}; i++ )); do
         perm_group='o'
     fi
     octal_rwx=$(chmod_octal_digit_to_rwx "$octal_digit")
-    chmod_perms_setting="${chmod_perms_setting},${perm_group}${chmod_mode_operator}${octal_rwx}"
+    if [ -z "$octal_rwx" ] && [ "$chmod_mode_operator" != '=' ]; then
+        :
+    else
+        chmod_perms_setting="${chmod_perms_setting},${perm_group}${chmod_mode_operator}${octal_rwx}"
+    fi
 done
 chmod_perms_setting=$(string_lstrip "$chmod_perms_setting" ',')
 if [ "$files_x" = false ]; then
