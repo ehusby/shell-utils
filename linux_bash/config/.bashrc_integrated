@@ -51,11 +51,18 @@ export MY_EMAIL="<your-email-address>"  # Necessary for shell-utils 'email_me' s
 export PATH="${PATH}:${SHELL_UTILS_PATH}/linux_bash/exec"  # Easily call shell-utils executable scripts
 #export PATH="${PATH}:<path-to>/pyscript-utils"  # Easily call pyscript-utils executable scripts
 
+# Remove duplicate PATH entries, preserving order
+export PATH="$(LANG=C perl -e 'print join(":", grep { not $seen{$_}++ } split(/:/, $ENV{PATH}))')"
+
+
 ## Aliases
+
 
 ## Functions
 
+
 ## Startup processes
+
 
 ################################
 ################################
