@@ -160,15 +160,16 @@ get_stats() {
 find_alias() {
     local find_func_name="$1"; shift
 
-    local pos_args opt_args debug depth_arg_provided stock_depth_args find_cmd_suffix
+    local opt_args_1 pos_args opt_args_2 debug depth_arg_provided stock_depth_args find_cmd_suffix
+    opt_args_1=()
     pos_args=()
-    opt_args=()
+    opt_args_2=()
     debug=false
     depth_arg_provided=false
     stock_depth_args=''
     find_cmd_suffix=''
 
-    local parsing_opt_args arg arg_opt
+    local parsing_opt_args arg arg_opt argval
     parsing_opt_args=false
     while (( "$#" )); do
         arg="$1"
@@ -182,6 +183,13 @@ find_alias() {
                 depth_arg_provided=true
             elif [ "$arg_opt" = 'maxdepth' ]; then
                 depth_arg_provided=true
+            elif [ "$arg_opt" = 'H' ] || [ "$arg_opt" = 'L' ] || [ "$arg_opt" = 'P' ]; then
+                opt_args_1+=( "$arg" )
+                shift; continue
+            elif [ "$arg_opt" = 'D' ] || [ "$arg_opt" = 'Olevel' ]; then
+                shift; argval="$1"
+                opt_args_1+=( "$arg" "$argval" )
+                shift; continue
             fi
         elif [[ $arg == [\(\)\;] ]]; then
             parsing_opt_args=true
@@ -191,7 +199,7 @@ find_alias() {
             if [[ $arg == *"*"* ]] || [[ $arg == *" "* ]]; then
                 arg="'${arg}'"
             fi
-            opt_args+=( "$arg" )
+            opt_args_2+=( "$arg" )
         else
             pos_args+=( "$arg" )
         fi
@@ -211,7 +219,7 @@ find_alias() {
         find_cmd_suffix=" -type f -exec ls -lh {} \; | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
     fi
 
-    cmd="find ${pos_args[*]} ${stock_depth_args} ${opt_args[*]} ${find_cmd_suffix}"
+    cmd="find ${opt_args_1[*]} ${pos_args[*]} ${stock_depth_args} ${opt_args_2[*]} ${find_cmd_suffix}"
     if [ "$debug" = true ]; then
         echo "$cmd"
     else
@@ -247,7 +255,7 @@ find_missing_suffix() {
         shift
     done
 
-    find_alias find_missing_suffix "$search_dir" -name "*${base_suffix}" "$@" -exec bash -c 'base_dirent={}; for suffix in '"${check_suffix_arr[*]}"'; do check_dirent="${base_dirent/'"${base_suffix}"'/${suffix}}"; if [ ! -e "$check_dirent" ]; then echo "$base_dirent"; break; fi; done;' \;
+    find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -exec bash -c 'base_dirent={}; for suffix in '"${check_suffix_arr[*]}"'; do check_dirent="${base_dirent/'"${base_suffix}"'/${suffix}}"; if [ ! -e "$check_dirent" ]; then echo "$base_dirent"; break; fi; done;' \;
 }
 
 
