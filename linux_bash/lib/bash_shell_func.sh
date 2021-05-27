@@ -4,6 +4,20 @@
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/bash_script_func.sh"
 
 
+## Bash prompts
+
+prompt_dname() { export PS1='\W \$ '; }
+prompt_dfull() { export PS1='\w \$ '; }
+prompt_short() { export PS1='[\u@\h:\W]\$ '; }
+prompt_med()   { export PS1='[\u@\h:\w]\$ '; }
+prompt_long()  { export PS1='[\u@\H:\w]\$ '; }
+ccmd() {
+    read -r -e -p "$ " cmd
+    history -s "$cmd"
+    eval "$cmd"
+}
+
+
 ## String manipulation
 
 line2space() {
