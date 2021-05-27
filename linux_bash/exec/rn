@@ -18,9 +18,10 @@ source "$bash_functions_script"
 
 
 ## Arguments
-src=''
+src_path=''
 new_name=''
-mv_opt_arg_arr=()
+force_glob=false
+mv_args_arr=()
 dryrun=false
 
 ## Custom globals
@@ -28,7 +29,32 @@ dryrun=false
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage: ${script_name} ['mv' option]... SOURCE NEW_NAME [--dryrun]
+Usage: ${script_name} [OPTION]... SRC_PATH NEW_NAME ['mv' OPTION]...
+
+Rename one or more files or folders.
+
+  SRC_PATH may be a relative or absolute path to a file/folder,
+or a path leading up and including the common filename/foldername
+prefix of multiple files/folders in the same source directory.
+
+  If SRC_PATH is a single file, the full filename/foldername of
+the source file is renamed to NEW_NAME.
+  If SRC_PATH ends in a prefix matching multiple files/folders
+in the same directory, the filenames/foldernames of the matches
+are renamed to "{NEW_NAME}{old-name-suffix}".
+
+  If NEW_NAME does not start with '/', it is treated as a path
+relative to the directory of SRC_PATH.
+  If NEW_NAME starts with '/', it is treated as an absolute path.
+
+Options:
+ -g,--glob
+        When SRC_PATH is the full path to an existing file/folder,
+        force treating SRC_PATH as a prefix matching additional
+        files/folders in the same directory.
+-dr,--dryrun
+        Print 'mv' command(s) used to rename files/folders,
+        without executing.
 EOM
 if (( $# < 1 )); then
     echo_e -e "$script_usage"
@@ -38,12 +64,36 @@ fi
 
 ## Parse arguments
 set +u
+parsing_fwd_args=false
 while (( "$#" )); do
     arg="$1"
 
-    if ! [[ $arg == -* ]]; then
-        if [ -z "$src" ]; then
-            src="$arg"
+    if [ "$parsing_fwd_args" = true ]; then
+        # Accept critical script optional arguments
+        # specified at end of command.
+        is_fwd_arg=true
+        if [ "$(string_startswith "$arg" '-')" = true ]; then
+            arg_opt="$(string_lstrip "$arg" '-')"
+            is_fwd_arg=false
+            if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
+                arg_opt_nargs=0
+                echo "$script_usage"
+                exit 0
+            elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+                dryrun=true
+            elif [ "$arg_opt" = 'g' ] || [ "$arg_opt" = 'glob' ]; then
+                force_glob=true
+            else
+                is_fwd_arg=true
+            fi
+        fi
+        if [ "$is_fwd_arg" = true ]; then
+            find_args_arr+=( "$arg" )
+        fi
+
+    elif [ "$(string_startswith "$arg" '-')" = false ]; then
+        if [ -z "$src_path" ]; then
+            src_path="$arg"
         elif [ -z "$new_name" ]; then
             new_name="$arg"
         else
@@ -52,8 +102,16 @@ while (( "$#" )); do
         fi
 
     else
-        arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+        arg_opt="$(string_lstrip "$arg" '-')"
         arg_opt_nargs=''
+        if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+            arg_val="${arg_opt#*=}"
+            arg_opt="${arg_opt%%=*}"
+            arg_opt_nargs_do_shift=false
+        else
+            arg_val="$2"
+            arg_opt_nargs_do_shift=true
+        fi
         arg_val_can_start_with_dash=false
 
         if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
@@ -61,13 +119,24 @@ while (( "$#" )); do
             echo "$script_usage"
             exit 0
 
-        elif [ "$arg_opt" = 'dryrun' ]; then
+        elif [ "$arg_opt" = 'g' ] || [ "$arg_opt" = 'glob' ]; then
+            arg_opt_nargs=0
+            force_glob=true
+
+        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
             dryrun=true
 
         else
             arg_opt_nargs=0
-            mv_opt_arg_arr+=( "$arg" )
+            
+            if [ -n "$src_path" ] && [ -n "$new_name" ]; then
+                mv_args_arr+=( "$arg" )
+                parsing_fwd_args=true
+            else
+                echo_e "Unexpected argument: ${arg}"
+                exit_script_with_status 1
+            fi
         fi
 
         if [ -z "$arg_opt_nargs" ]; then
@@ -75,14 +144,19 @@ while (( "$#" )); do
             exit_script_with_status 1
         fi
 
-        for i in $(seq 1 $arg_opt_nargs); do
-            shift
-            arg_val="$1"
-            if [ "$arg_val_can_start_with_dash" = false ] && [[ $arg_val == -* ]]; then
-                echo_e "Unexpected argument value: ${arg} ${arg_val}"
-                exit_script_with_status 1
-            fi
-        done
+        if [ "$arg_opt_nargs_do_shift" = true ]; then
+            for arg_num in $(seq 1 $arg_opt_nargs); do
+                shift
+                arg_val="$1"
+                if [ -z "$arg_val" ]; then
+                    echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                    exit_script_with_status 1
+                elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                    exit_script_with_status 1
+                fi
+            done
+        fi
     fi
 
     shift
@@ -90,24 +164,44 @@ done
 set -u
 
 
-## Validate arguments
+## Validate and adjust arguments
 
-if [ -z "$src" ] || [ -z "$new_name" ]; then
-    echo_e "Both SOURCE and NEW_NAME arguments must be provided"
+if [ -z "$src_path" ] || [ -z "$new_name" ]; then
+    echo_e "Both SRC_PATH and NEW_NAME arguments must be provided"
     exit_script_with_status 1
 fi
-if [[ $new_name == /* ]]; then
-    echo_e "NEW_NAME cannot begin with '/'" >&2
-    exit_script_with_status 1
+
+if [ ! -e "$src_path" ] || [ "$force_glob" = true ]; then
+    src_dirent_arr=( "$src_path"* )
+    if (( ${#src_dirent_arr[@]} == 0 )); then
+        echo_e "Cannot find any files/dirs matching SRC_PATH argument: ${src_path}*"
+        exit_script_with_status 1
+    fi
+else
+    src_dirent_arr=( "$src_path" )
 fi
+
+src_dir=$(dirname "$src_path")
+if [ "$(string_startswith "$new_name" '/')" = true ]; then
+    new_name_prefix="$new_name"
+else
+    new_name_prefix="${src_dir}/${new_name}"
+fi
+
+mv_opt_args="${mv_args_arr[*]+${mv_args_arr[*]}}"
 
 
 ## Perform renaming
 
-src_dir=$(dirname "$src")
-cmd="mv ${mv_opt_arg_arr[*]+${mv_opt_arg_arr[*]}} ${src} ${src_dir}/${new_name}"
-if [ "$dryrun" = true ]; then
-    echo "$cmd"
-else
-    eval "$cmd"
-fi
+for src_dirent in "${src_dirent_arr[@]}"; do
+
+    new_name_suffix="${src_dirent/${src_path}/}"
+
+    cmd="mv ${mv_opt_args} ${src_dirent} ${new_name_prefix}${new_name_suffix}"
+
+    if [ "$dryrun" = true ]; then
+        echo "$cmd"
+    else
+        eval "$cmd"
+    fi
+done
