@@ -69,6 +69,10 @@ string_endswith() { re_test "${2}\$" "$1"; }
 
 string_contains() { re_test "${2}" "$1"; }
 
+string_common_prefix() {
+    printf "%s\n" "$@" | sed -e '$!{N;s/^\(.*\).*\n\1.*$/\1\n\1/;D;}'
+}
+
 string_is_int() { re_test '^-?[0-9]+$' "$1"; }
 
 string_is_posint_or_zero() { re_test '^[0-9]+$' "$1"; }
@@ -240,7 +244,7 @@ prompt_y_or_n() {
     local confirm=''
 
     while true; do
-        read -p "$prompt" confirm
+        read -e -r -p "$prompt" confirm
         if [[ $confirm == [yY] || $confirm == [nN] ]]; then
             break
         fi
