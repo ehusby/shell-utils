@@ -32,14 +32,14 @@ debug=false
 read -r -d '' script_usage << EOM
 Usage: ${script_name} [DBASE] [OPTION]...
 
-List information from a Shapefile or FileGDB database,
+List information from a Shapefile/CSV or FileGDB database,
 leveraging the GDAL/OGR 'ogrinfo' command.
 
-If no options are provided, layer names are listed for
-FileGDB DBASE, or field names are listed for Shapefile DBASE.
-If layer name option is provided, field names in that layer
+  If no options are provided, layer names are listed for
+FileGDB DBASE, or field names are listed for Shapefile/CSV DBASE.
+  If layer name option is provided, field names in that layer
 are listed.
-If layer and field name options are provided, the values of
+  If layer and field name options are provided, the values of
 all records for that field in that layer are listed.
 
 Options:
@@ -172,7 +172,7 @@ fi
 
 ## Adjust arguments
 
-if [ -z "$layer_name" ] && [ "$(string_endswith "$dbase_path" '.shp')" = true ]; then
+if [ -z "$layer_name" ] && [ ! -d "$dbase_path" ]; then
     # Assume layer name is the same as the filename (works for most shapefiles)
     layer_name=$(basename "$dbase_path")
     layer_name="${layer_name%.*}"
