@@ -43,59 +43,74 @@ strcat() { sed -r "s|(.*)|\1${1}|"; }
 
 ## Path representation
 
-fullpath() {
-    local dirent dirent_arr
-    if [[ -p /dev/stdin ]]; then
-        dirent_arr=()
-        while IFS= read -r dirent; do
-            dirent_arr+=( "$dirent" )
-        done
-    else
-        if (( $# > 0 )); then
-            dirent_arr=("$@")
+process_items() {
+    local process_func="$1"; shift
+    local pipe_in_items="$1"; shift
+    local cwd_glob_if_no_items_provided="$1"; shift
+    local processed_items=false
+    local item
+    if (( $# > 0 )); then
+        if [ "$pipe_in_items" = true ]; then
+            eval "printf '%s\n' \"$@\" | ${process_func}"
+            while (( $# > 0 )); do shift; done
         else
-            dirent_arr=(*)
+            while (( $# > 0 )); do
+                item="$1"
+                eval "${process_func} ${item}"
+                shift
+            done
+        fi
+        processed_items=true
+    fi
+    if [[ -p /dev/stdin ]]; then
+        if [ "$pipe_in_items" = true ]; then
+            eval "$process_func"
+        else
+            while IFS= read -r item; do
+                eval "${process_func} ${item}"
+            done
+        fi
+        processed_items=true
+    fi
+    if [ "$processed_items" = false ] && [ "$cwd_glob_if_no_items_provided" = true ]; then
+        if [ "$pipe_in_items" = true ]; then
+            eval "printf '%s\n' * | ${process_func}"
+        else
+            for item in *; do
+                eval "${process_func} ${item}"
+            done
         fi
     fi
-    for dirent in "${dirent_arr[@]}"; do
-        readlink -f "$dirent"
-    done
+}
+
+fullpath() {
+    process_items "readlink -f" false true "$@"
 }
 basename_all() {
-    local dirent dirent_arr
-    if [[ -p /dev/stdin ]]; then
-        dirent_arr=()
-        while IFS= read -r dirent; do
-            dirent_arr+=( "$dirent" )
-        done
-    else
-        if (( $# > 0 )); then
-            dirent_arr=("$@")
-        else
-            dirent_arr=(*)
-        fi
-    fi
-    for dirent in "${dirent_arr[@]}"; do
-        basename "$dirent"
-    done
+    process_items "basename" false true "$@"
 }
 dirname_all() {
-    local dirent dirent_arr
-    if [[ -p /dev/stdin ]]; then
-        dirent_arr=()
-        while IFS= read -r dirent; do
-            dirent_arr+=( "$dirent" )
-        done
+    process_items "dirname" false true "$@"
+}
+
+pathfromend() {
+    local start_idx end_idx
+    if [[ $1 == *-* ]]; then
+        start_idx=$(echo "$1" | cut -d'-' -f1)
+        end_idx=$(echo "$1" | cut -d'-' -f2)
+        shift
     else
-        if (( $# > 0 )); then
-            dirent_arr=("$@")
-        else
-            dirent_arr=(*)
-        fi
+        start_idx="$1"; shift
+        end_idx="$1"; shift
     fi
-    for dirent in "${dirent_arr[@]}"; do
-        dirname "$dirent"
-    done
+    if (( start_idx < end_idx )); then
+        local temp_idx="$start_idx"
+        start_idx="$end_idx"
+        end_idx="$temp_idx"
+    fi
+    start_idx="-${start_idx}"
+    cmd="rev | cut -d'/' -f${end_idx}${start_idx} | rev"
+    process_items "$cmd" true false "$@"
 }
 
 
