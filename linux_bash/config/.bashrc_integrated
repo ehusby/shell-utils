@@ -16,8 +16,9 @@ if [ -n "$PS1" ]; then
 
     # Overwrite possibly goofy system default for command prompt
     # that messes with screen window names
-    export PS1='[\u@\h:\w]\$ '
     export PROMPT_COMMAND=''
+#    export PS1='[\u@\h:\w]\$ '  # no colors
+    export PS1='[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ '  # colors
 
     # Append trailing slash when tab-completing directory paths
     bind 'set mark-symlinked-directories on'
