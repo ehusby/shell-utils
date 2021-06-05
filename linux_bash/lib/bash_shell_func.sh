@@ -101,6 +101,13 @@ dirname_all() {
 
 ## File operations
 
+link_or_copy() {
+    ln -f "$@"
+    if (( $? != 0 )); then
+        cp "$@"
+    fi
+}
+
 absymlink_defunct() {
     local arg_arr arg
     arg_arr=()
@@ -130,7 +137,73 @@ touch_all() {
 }
 
 
-## Gather information
+## Read inputs
+
+SHELL_UTILS_READ_CSV_IP=false
+read_csv() {
+    local get_fields="$1"
+    local csv_delim=','
+    if (( $# >= 2 )); then
+        csv_delim="$2"
+    fi
+
+    local read_status IFS
+
+    if [ "$SHELL_UTILS_READ_CSV_IP" = false ]; then
+        SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR=()
+        SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR=()
+        local header_line get_fields_arr header_fields_arr
+        read -r header_line
+        read_status=$?
+        if (( read_status != 0 )); then return "$read_status"; fi
+        IFS="$csv_delim" read -ra get_fields_arr <<< "$get_fields"
+        IFS="$csv_delim" read -ra header_fields_arr <<< "$header_line"
+        local field_name field_idx
+        for field_name in "${get_fields_arr[@]}"; do
+            eval "unset ${field_name}"
+            field_idx=$(indexOf "$field_name" "${header_fields_arr[@]}")
+            if (( field_idx == -1 )); then
+                echo "ERROR: Cannot find field name '${field_name}' in CSV header" >&2
+                unset SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR
+                unset SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR
+                return 1
+            fi
+            SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR+=( "$field_name" )
+            SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR+=( "$field_idx" )
+        done
+        SHELL_UTILS_READ_CSV_IP=true
+    fi
+
+    local csv_line csv_line_arr
+
+    read -r csv_line
+    read_status=$?
+    if (( read_status != 0 )); then
+        SHELL_UTILS_READ_CSV_IP=false
+        unset SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR
+        unset SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR
+        local field_name
+        for field_name in "${SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR[@]}"; do
+            eval "unset ${field_name}"
+        done
+        return "$read_status"
+    fi
+
+    IFS="$csv_delim" read -ra csv_line_arr <<< "$csv_line"
+
+    local i field_name field_idx field_val
+    for i in "${!SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR[@]}"; do
+        field_name="${SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR[$i]}"
+        field_idx="${SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR[$i]}"
+        field_val="${csv_line_arr[$field_idx]}"
+        eval "${field_name}=\"${field_val}\""
+    done
+
+    return "$read_status"
+}
+
+
+## Summarize information
 
 count_by_date() {
     grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$0]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort
@@ -192,7 +265,7 @@ find_alias() {
     parsing_opt_args=false
     while (( "$#" )); do
         arg="$1"
-        if [[ $arg == -* ]]; then
+        if [[ $arg == -* ]] || [ "$arg" == '!' ]; then
             parsing_opt_args=true
             arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
             if [ "$arg_opt" = 'debug' ]; then
@@ -343,8 +416,7 @@ echoeval() {
     else
         echo_args="$*"
     fi
-    cmd="echo ${echo_args}"
-    eval "$cmd"
+    eval "echo ${echo_args}"
 }
 
 
