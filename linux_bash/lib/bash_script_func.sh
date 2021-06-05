@@ -3,7 +3,7 @@
 
 ## Basic printing
 
-print_string() { printf "%s" "$*"; }
+print_string() { printf '%s' "$*"; }
 
 echo_e() { echo "$@" >&2; }
 

@@ -174,7 +174,7 @@ awk_uniq_all() {
     col_nums="$3"
     jobinfo_mode="$4"
     # awk_cmd="!seen[${col_nums}]++"
-    awk_cmd='BEGIN { pat_num=0 } { current_line=$0; if (current_line=="") next; user=$2; jobabbrev=$4; status=$10; if (status=="C") next; sub(/[0-9]+$/, "", jobabbrev); sub(/_[0-9]+_$/, "", jobabbrev); pat='"${col_nums}"'; pat=sprintf("%s%s", jobabbrev, pat); '"${awk_user_filter}"' if ("'"${jobinfo_mode}"'" == "qstat-by-user") pat=user; if (!count[pat]++) { pat_num++; line[pat_num]=$0; line_pat[pat_num]=pat; } } END { for (i=1; i<=pat_num; i++) printf "%-124s %7s\n", line[i], count[line_pat[i]] } '
+    awk_cmd='BEGIN { pat_num=0 } { current_line=$0; if (current_line=="") next; user=$2; jobabbrev=$4; status=$10; if (status=="C") next; sub(/[_0-9]+$/, "", jobabbrev); pat='"${col_nums}"'; pat=sprintf("%s%s", jobabbrev, pat); '"${awk_user_filter}"' if ("'"${jobinfo_mode}"'" == "qstat-by-user") pat=user; if (!count[pat]++) { pat_num++; line[pat_num]=$0; line_pat[pat_num]=pat; } } END { for (i=1; i<=pat_num; i++) printf "%-124s %7s\n", line[i], count[line_pat[i]] } '
     echo "$rows_blob" | awk -F" " "$awk_cmd"
 }
 
@@ -183,7 +183,7 @@ awk_uniq_blocks() {
     delim="$2"
     col_nums="$3"
     jobinfo_mode="$4"
-    awk_cmd='BEGIN { last_pat=""; pat_num=0 } { current_line=$0; if (current_line=="") next; user=$2; jobabbrev=$4; status=$10; if (status=="C") next; sub(/[0-9]+$/, "", jobabbrev); sub(/_[0-9]+_$/, "", jobabbrev); pat='"${col_nums}"'; pat=sprintf("%s%s", jobabbrev, pat); '"${awk_user_filter}"' if ("'"${jobinfo_mode}"'" == "qstat-by-user") pat=user; if (pat!=last_pat) { last_pat=pat; pat_num++; line[pat_num]=$0; count[pat_num]=1; } else { count[pat_num]++ } } END { for (i=1; i<=pat_num; i++) printf "%-124s %7s\n", line[i], count[i] } '
+    awk_cmd='BEGIN { last_pat=""; pat_num=0 } { current_line=$0; if (current_line=="") next; user=$2; jobabbrev=$4; status=$10; if (status=="C") next; sub(/[_0-9]+$/, "", jobabbrev); pat='"${col_nums}"'; pat=sprintf("%s%s", jobabbrev, pat); '"${awk_user_filter}"' if ("'"${jobinfo_mode}"'" == "qstat-by-user") pat=user; if (pat!=last_pat) { last_pat=pat; pat_num++; line[pat_num]=$0; count[pat_num]=1; } else { count[pat_num]++ } } END { for (i=1; i<=pat_num; i++) printf "%-124s %7s\n", line[i], count[i] } '
     # mapfile -t uniq_first < <( echo "$rows_blob" | awk -F" " "$awk_cmd" )
     # mapfile -t uniq_last < <( echo "$rows_blob" | tac | awk -F" " "$awk_cmd" | tac )
     while IFS= read -r line; do uniq_first+=( "$line" ); done < <( echo "$rows_blob" | awk -F" " "$awk_cmd" )

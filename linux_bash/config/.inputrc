@@ -37,4 +37,8 @@ set bell-style none
 "\eOH": beginning-of-line
 "\eOF": end-of-line
 
+# Enable colors on tab complete
+# Requires at least readline 6.3
+set colored-stats on
+
 # End /etc/inputrc
