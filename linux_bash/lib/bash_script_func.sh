@@ -141,10 +141,7 @@ run_and_swap_out_err() { ("$@" 3>&2 2>&1 1>&3); }
 run_and_catch_out_err() {
     local __return_out="$1"; shift
     local __return_err="$1"; shift
-    local cmd="$*"
-
-    local cmd_out=''
-    local cmd_err=''
+    local cmd_args=("$@")
     local status=0
 
     if [ -n "$(env | grep '^TMPDIR=')" ]; then
@@ -153,21 +150,18 @@ run_and_catch_out_err() {
         fi
     fi
 
-    local tmpfile_out=$(mktemp)
-    local tmpfile_err=$(mktemp)
+    local tmpfile_out="$(mktemp)"
+    local tmpfile_err="$(mktemp)"
     trap "rm -f ${tmpfile_out} ${tmpfile_err}" 0
 
-    { { $cmd | tee ${tmpfile_out}; } 2>&1 1>&3 | tee ${tmpfile_err}; } 3>&1 1>&2
+    { { eval "${cmd_args[@]}" | tee "$tmpfile_out"; } 2>&1 1>&3 | tee "$tmpfile_err"; } 3>&1 1>&2
     status=$?
 
-    cmd_out=$(cat ${tmpfile_out})
-    cmd_err=$(cat ${tmpfile_err})
+    eval "${__return_out}=\"$(cat ${tmpfile_out})\""
+    eval "${__return_err}=\"$(cat ${tmpfile_err})\""
 
-    rm -f ${tmpfile_out}
-    rm -f ${tmpfile_err}
-
-    eval $__return_out="'$cmd_out'"
-    eval $__return_err="'$cmd_err'"
+    rm -f "$tmpfile_out"
+    rm -f "$tmpfile_err"
 
     return $status
 }
@@ -175,17 +169,15 @@ run_and_catch_out_err() {
 run_and_catch_out_custom() {
     local command_redirect_fun="$1"; shift
     local __return_out="$1"; shift
-    local cmd="$*"
-
+    local cmd_args=("$@")
     local cmd_out=''
-    local cmd_err=''
     local status=0
 
     exec 5>&1
-    cmd_out=$(eval $command_redirect_fun $cmd | tee >(cat - >&5))
+    cmd_out=$(eval "$command_redirect_fun" "${cmd_args[@]}" | tee >(cat - >&5))
     status=$?
 
-    eval $__return_out="'$cmd_out'"
+    eval "${__return_out}=\"${cmd_out}\""
 
     return $status
 }
@@ -195,7 +187,7 @@ run_and_catch_out() {
     local __return_out="$1"; shift
     local status=0
 
-    run_and_catch_out_custom "$command_redirect_fun" "$__return_out" "$*"
+    run_and_catch_out_custom "$command_redirect_fun" "$__return_out" "$@"
     status=$?
 
     return $status
@@ -206,7 +198,7 @@ run_and_catch_swapped_err() {
     local __return_out="$1"; shift
     local status=0
 
-    run_and_catch_out_custom "$command_redirect_fun" "$__return_out" "$*"
+    run_and_catch_out_custom "$command_redirect_fun" "$__return_out" "$@"
     status=$?
 
     return $status
@@ -217,7 +209,7 @@ run_and_catch_mix() {
     local __return_out="$1"; shift
     local status=0
 
-    run_and_catch_out_custom "$command_redirect_fun" "$__return_out" "$*"
+    run_and_catch_out_custom "$command_redirect_fun" "$__return_out" "$@"
     status=$?
 
     return $status

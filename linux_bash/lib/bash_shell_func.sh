@@ -292,11 +292,11 @@ find_alias() {
                 depth_arg_provided=true
             elif [ "$arg_opt" = 'H' ] || [ "$arg_opt" = 'L' ] || [ "$arg_opt" = 'P' ]; then
                 opt_args_1+=( "$arg" )
-                shift; continue
+                shift; parsing_opt_args=false; continue
             elif [ "$arg_opt" = 'D' ] || [ "$arg_opt" = 'Olevel' ]; then
                 shift; argval="$1"
                 opt_args_1+=( "$arg" "$argval" )
-                shift; continue
+                shift; parsing_opt_args=false; continue
             fi
         elif [[ $arg == [\(\)\;] ]]; then
             parsing_opt_args=true
@@ -349,6 +349,7 @@ find_missing_suffix() {
     local search_dir base_suffix check_suffix_arr
     search_dir="$1"; shift
     base_suffix="$1"; shift
+    suffix_exist_cond='all'
     check_suffix_arr=()
 
     local arg
@@ -357,12 +358,32 @@ find_missing_suffix() {
         if ! [[ $arg == -* ]]; then
             check_suffix_arr+=( "$arg" )
         else
-            break
+            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+            if [ "$arg_opt" = 'any' ]; then
+                suffix_exist_cond='any'
+            elif [ "$arg_opt" = 'all' ]; then
+                suffix_exist_cond='all'
+            else
+                break
+            fi
         fi
         shift
     done
 
-    find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -exec bash -c 'base_dirent={}; for suffix in '"${check_suffix_arr[*]}"'; do check_dirent="${base_dirent/'"${base_suffix}"'/${suffix}}"; if [ ! -e "$check_dirent" ]; then echo "$base_dirent"; break; fi; done;' \;
+    if [ "$suffix_exist_cond" = 'all' ]; then
+        require_all_suffix_exist=true
+    elif [ "$suffix_exist_cond" = 'any' ]; then
+        require_all_suffix_exist=false
+    fi
+
+    suffix_list=$(printf '"%s" ' "${check_suffix_arr[@]}")
+    if [ -n "$base_suffix" ]; then
+        suffix_sub_expr='${base_dirent/'"${base_suffix}"'/${suffix}}'
+    else
+        suffix_sub_expr='${base_dirent}${suffix}'
+    fi
+
+    find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -exec bash -c 'base_dirent={}; require_all_suffix_exist='"$require_all_suffix_exist"'; all_exist=true; some_exist=false; for suffix in '"$suffix_list"'; do check_dirent="'"$suffix_sub_expr"'"; if [ -e "$check_dirent" ]; then some_exist=true; else all_exist=false; fi; if [ "$require_all_suffix_exist" = true ]; then if [ "$all_exist" = false ]; then echo "$base_dirent"; exit; fi; elif [ "$some_exist" = true ]; then exit; fi; done; if [ "$some_exist" = false ]; then echo "$base_dirent"; fi;' \;
 }
 
 

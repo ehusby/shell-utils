@@ -29,11 +29,14 @@ email_address="$MY_EMAIL"
 read -r -d '' script_usage << EOM
 Usage: ${script_name} [-{email output option:o|e|q}] run_command (can be quoted to perform multiline commands such as for/while loop)
  Email output option detrmines which text streams are recorded in the email body:
+  -s : separate stdout and stderr
   -o : stdout only (stdout and stderr are printed to terminal during run command as usual)
   -e : stderr only (stderr is captured and printed to terminal at end of run command)
   -q : no output   (stdout and stderr are printed to terminal during run command as usual)
-  (if no option is given, both stdout and stderr are included in email body text)
+  (if no option is given, stdout and stderr are included as mixed output in email body text)
 EOM
+
+script_name_caps=$(string_to_uppercase "$script_name")
 
 
 cmd_args=("$@")
@@ -47,7 +50,7 @@ else
         echo "$script_usage"
         exit 0
     fi
-    if [ "$first_arg" ==  '-o' ] || [ "$first_arg" ==  '-e' ] || [ "$first_arg" ==  '-q' ]; then
+    if [ "$first_arg" ==  '-s' ] || [ "$first_arg" ==  '-o' ] || [ "$first_arg" ==  '-e' ] || [ "$first_arg" ==  '-q' ]; then
         email_output_opt="$first_arg"
         cmd_args=("${cmd_args[@]:1}")
     fi
@@ -59,46 +62,58 @@ else
     fi
 fi
 
-email_output_desc=''
+email_out_desc=''
+cmd_err=''
 
 time_started=$(date)
 if [ "$cmd" = "(none)" ]; then
-    cmd_output="(none)"
+    cmd_out="(none)"
 else
     set +u
     if [ "$email_output_opt" = '-q' ]; then
         eval "$cmd"
-        cmd_output='(suppressed by -q option)'
+        cmd_out='(suppressed by -q option)'
     elif [ "$email_output_opt" = '-e' ]; then
-        email_output_desc=" (stderr only)"
-        { cmd_output=$(eval "$cmd" 2>&1 1>&3-) ;} 3>&1
-        echo "$cmd_output"
+        email_out_desc=" (stderr only)"
+        { cmd_out=$(eval "$cmd" 2>&1 1>&3-) ;} 3>&1
+        echo "$cmd_out"
+    elif [ "$email_output_opt" = '-o' ]; then
+        exec 5>&1
+        email_out_desc=" (stdout only)"
+        cmd_out=$(eval "$cmd" | tee >(cat - >&5))
+    elif [ "$email_output_opt" = '-s' ]; then
+        run_and_catch_out_err cmd_out cmd_err "$cmd"
     else
         exec 5>&1
-        if [ "$email_output_opt" = '-o' ]; then
-            email_output_desc=" (stdout only)"
-            cmd_output=$(eval "$cmd" | tee >(cat - >&5))
-        else
-            cmd_output=$(eval "$cmd" 2>&1 | tee >(cat - >&5))
-        fi
+        cmd_out=$(eval "$cmd" 2>&1 | tee >(cat - >&5))
     fi
     set -u
 fi
 time_finished=$(date)
 
+if [ -n "$cmd_err" ]; then
+    read -r -d '' email_err << EOM
+
+----- ${script_name_caps} COMMAND ERROR -----
+${cmd_err}
+EOM
+else
+    email_err=''
+fi
+
 email_subject="Finished command: ${cmd_preview}"
-email_body=$(cat <<EOF
--- Command --
+read -r -d '' email_body << EOM
+----- ${script_name_caps} COMMAND -----
 ${cmd}
 
--- Time Started --
+--- TIME STARTED ---
 ${time_started}
 ${time_finished}
--- Time Finished --
+--- TIME FINISHED ---
 
--- Output${email_output_desc} --
-${cmd_output}
-EOF
-)
+----- ${script_name_caps} COMMAND OUTPUT${email_out_desc} -----
+${cmd_out}
+${email_err}
+EOM
 
 echo "$email_body" | mail -s "$email_subject" "$email_address"
