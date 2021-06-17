@@ -292,11 +292,11 @@ find_alias() {
                 depth_arg_provided=true
             elif [ "$arg_opt" = 'H' ] || [ "$arg_opt" = 'L' ] || [ "$arg_opt" = 'P' ]; then
                 opt_args_1+=( "$arg" )
-                shift; continue
+                shift; parsing_opt_args=false; continue
             elif [ "$arg_opt" = 'D' ] || [ "$arg_opt" = 'Olevel' ]; then
                 shift; argval="$1"
                 opt_args_1+=( "$arg" "$argval" )
-                shift; continue
+                shift; parsing_opt_args=false; continue
             fi
         elif [[ $arg == [\(\)\;] ]]; then
             parsing_opt_args=true
