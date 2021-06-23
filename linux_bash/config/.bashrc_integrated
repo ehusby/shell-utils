@@ -31,12 +31,22 @@ if [ -n "$PS1" ]; then
     stty -ixon
 
     # Set options for standard programs
-    export LS_OPTIONS='--color=auto'
-    eval "$(dircolors -b)"
-    alias ls='ls $LS_OPTIONS'
-    alias grep='grep --color=auto'
     export LESS='RXMi'  # https://man7.org/linux/man-pages/man1/less.1.html#OPTIONS
-    alias tmux="tmux -2"  # enable 256 color support
+    export CLICOLOR=1
+    if which dircolors; then
+        eval "$(dircolors -b)"
+    else
+        export LSCOLORS=ExGxBxDxCxEgEdxbxgxcxd
+    fi
+    if ls --color=auto /dev/null 1>/dev/null 2>/dev/null; then
+        alias ls='ls --color=auto'
+    elif ls -G /dev/null 1>/dev/null 2>/dev/null; then
+        alias ls='ls -G'
+    fi
+    if grep --color=auto '' /dev/null 1>/dev/null 2>/dev/null; [ "$?" -ne 2 ]; then
+        alias grep='grep --color=auto'
+    fi
+    alias tmux='tmux -2'  # enable 256 color support
 
 fi
 
