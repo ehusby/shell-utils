@@ -4,12 +4,19 @@
 set -uo pipefail
 
 ## Script globals
-script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
-script_dir=$(dirname "$script_file")
-script_name=$(basename "$script_file")
+script_name=$(basename "${BASH_SOURCE[0]}")
+script_dir=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd)
+script_dir_abs=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd -P)
+script_file="${script_dir}/${script_name}"
+if [ -L "${BASH_SOURCE[0]}" ]; then
+    script_file_abs=$(readlink "${BASH_SOURCE[0]}")
+else
+    script_file_abs="${script_dir_abs}/${script_name}"
+fi
+export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
 script_args=("$@")
 
-shell_utils_config_dir="${script_dir}/config/"
+shell_utils_config_dir="${script_dir_abs}/config/"
 symlink_errors=false
 
 echo
@@ -20,7 +27,7 @@ while IFS='' read -r config_file_new; do
 
     if [ -e "$config_file_old" ]; then
         if [ -L "$config_file_old" ]; then
-            config_file_old_target=$(readlink -f "$config_file_old")
+            config_file_old_target=$(readlink "$config_file_old")
             echo "Removing existing config file symlink from home dir (${config_file_old} -> ${config_file_old_target})"
             rm "$config_file_old"
         elif [ -e "$config_file_bak" ] && [ ! -L "$config_file_bak" ]; then
