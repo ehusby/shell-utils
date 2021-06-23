@@ -16,7 +16,7 @@ fi
 export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
 script_args=("$@")
 
-shell_utils_config_dir="${script_dir_abs}/config/"
+shell_utils_config_dir="${script_dir_abs}/config"
 symlink_errors=false
 
 echo
@@ -49,7 +49,7 @@ done <<< "$(find "$shell_utils_config_dir" -mindepth 1 -maxdepth 1)"
 
 if [ -L "${HOME}/.bashrc" ]; then
     echo "Duplicating .bashrc_integrated symlink as .bashrc in home directory"
-    cp -Pf "${HOME}/.bashrc_integrated" "${HOME}/.bashrc"
+    cp -af "${HOME}/.bashrc_integrated" "${HOME}/.bashrc"
 fi
 
 echo -e "\nDone!"
