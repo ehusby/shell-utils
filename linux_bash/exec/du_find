@@ -4,9 +4,16 @@
 set -uo pipefail
 
 ## Script globals
-script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
-script_dir=$(dirname "$script_file")
-script_name=$(basename "$script_file")
+script_name=$(basename "${BASH_SOURCE[0]}")
+script_dir=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd)
+script_dir_abs=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd -P)
+script_file="${script_dir}/${script_name}"
+if [ -L "${BASH_SOURCE[0]}" ]; then
+    script_file_abs=$(readlink "${BASH_SOURCE[0]}")
+else
+    script_file_abs="${script_dir_abs}/${script_name}"
+fi
+export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
 script_args=("$@")
 
 ## Script imports
@@ -171,7 +178,7 @@ while (( "$#" )); do
             exit_script_with_status 1
         fi
 
-        if [ "$arg_opt_nargs_do_shift" = true ]; then
+        if [ "$arg_opt_nargs_do_shift" = true ] && (( arg_opt_nargs >= 1 )); then
             for arg_num in $(seq 1 $arg_opt_nargs); do
                 shift
                 arg_val="$1"

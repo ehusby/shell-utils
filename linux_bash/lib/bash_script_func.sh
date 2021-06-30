@@ -22,9 +22,9 @@ string_to_uppercase() { print_string "$@" | tr '[:lower:]' '[:upper:]'; }
 
 string_to_lowercase() { print_string "$@" | tr '[:upper:]' '[:lower:]'; }
 
-string_lstrip() { print_string "$1" | sed "s|^\(${2}\)\+||"; }
+string_lstrip() { print_string "$1" | sed -r "s|^(${2})+||"; }
 
-string_rstrip() { print_string "$1" | sed "s|\(${2}\)\+\$||"; }
+string_rstrip() { print_string "$1" | sed -r "s|(${2})+$||"; }
 
 string_strip() {
     local string_in="$1"
@@ -45,7 +45,7 @@ string_strip() {
 
 string_rstrip_decimal_zeros() { print_string "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
 
-collapse_repeated_substring() { print_string "$1" | sed "s|\(${2}\)\+|\1|g"; }
+collapse_repeated_substring() { print_string "$1" | sed -r "s|(${2})+|\1|g"; }
 
 string_join() { local IFS="$1"; shift; print_string "$*"; }
 
@@ -312,7 +312,7 @@ round() {
 
     number=$(printf "%.${decimals}f" "$number")
 
-    number_trimmed=$(echo "$number" | sed '/\./ s/\.\{0,1\}0\{1,\}$//')
+    number_trimmed=$(string_rstrip_decimal_zeros "$number")
     if [ "$number_trimmed" = "-0" ]; then
         number="${number:1}"
     fi
