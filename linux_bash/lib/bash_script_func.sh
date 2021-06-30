@@ -250,6 +250,54 @@ prompt_y_or_n() {
 }
 
 
+## Path representation
+
+if readlink -f ~ 1>/dev/null 2>/dev/null; then
+    READLINK_F_AVAILABLE=true
+else
+    READLINK_F_AVAILABLE=false
+fi
+
+fullpath_alias() {
+    local path="$1"
+    local dereference_symlinks="$2"
+    if [ "$dereference_symlinks" = true ]; then
+        fullpath_fn="pwd -P"
+    else
+        fullpath_fn="pwd"
+    fi
+    pushd . >/dev/null
+    if [ -d "$path" ]; then
+        cd "$path" || { echo "Failed to access path" ; return; }
+        eval "$fullpath_fn"
+    else
+        cd "$(dirname "$path")" || { echo "Failed to access path" ; return; }
+        local path_parent_dir=$(eval "$fullpath_fn")
+        local path_basename=$(basename "$path")
+        if [ "$path_parent_dir" = '/' ]; then
+            echo "${path_parent_dir}${path_basename}"
+        else
+            echo "${path_parent_dir}/${path_basename}"
+        fi
+    fi
+    popd >/dev/null
+}
+
+fullpath() {
+    local path="$1"
+    fullpath_alias "$path" false
+}
+
+abspath() {
+    local path="$1"
+    if [ "$READLINK_F_AVAILABLE" = true ]; then
+        readlink -f "$path"
+    else
+        fullpath_alias "$path" true
+    fi
+}
+
+
 ## Other
 
 #indexOf() { local el="$1"; shift; local arr=("$@"); local index=-1; local i; for i in "${!arr[@]}"; do [ "${arr[$i]}" = "$el" ] && { index=$i; break; } done; echo $index; }

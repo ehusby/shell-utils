@@ -41,51 +41,16 @@ strrep() { sed -r "s|${1}|${2}|g"; }
 strcat() { sed -r "s|(.*)|\1${1}|"; }
 
 
-## Path representation
+## Command-line argument manipulation
 
-if readlink -f ~ 1>/dev/null 2>/dev/null; then
-    READLINK_F_AVAILABLE=true
-else
-    READLINK_F_AVAILABLE=false
-fi
-
-fullpath_alias() {
-    local path="$1"
-    local dereference_symlinks="$2"
-    if [ "$dereference_symlinks" = true ]; then
-        fullpath_fn="pwd -P"
+echoeval() {
+    local echo_args
+    if [[ -p /dev/stdin ]]; then
+        IFS= read -r echo_args
     else
-        fullpath_fn="pwd"
+        echo_args="$*"
     fi
-    pushd . >/dev/null
-    if [ -d "$path" ]; then
-        cd "$path" || { echo "Failed to access path" ; return; }
-        eval "$fullpath_fn"
-    else
-        cd "$(dirname "$path")" || { echo "Failed to access path" ; return; }
-        local path_parent_dir=$(eval "$fullpath_fn")
-        local path_basename=$(basename "$path")
-        if [ "$path_parent_dir" = '/' ]; then
-            echo "${path_parent_dir}${path_basename}"
-        else
-            echo "${path_parent_dir}/${path_basename}"
-        fi
-    fi
-    popd >/dev/null
-}
-
-fullpath() {
-    local path="$1"
-    fullpath_alias "$path" false
-}
-
-abspath() {
-    local path="$1"
-    if [ "$READLINK_F_AVAILABLE" = true ]; then
-        readlink -f "$path"
-    else
-        fullpath_alias "$path" true
-    fi
+    eval "echo ${echo_args}"
 }
 
 process_items() {
@@ -127,6 +92,65 @@ process_items() {
         fi
     fi
 }
+
+tokentx() {
+    local tx="$1"
+    local token_arr=()
+    local token_tx_arr=()
+    local token_delim='\n'
+    local token
+    while IFS= read -r token; do
+        token_arr+=( "$token" )
+    done
+    if (( ${#token_arr[@]} == 1 )); then
+        token_delim=' '
+        IFS="$token_delim" read -r -a token_arr <<< "${token_arr[0]}"
+    fi
+    local token_tx
+    for token in "${token_arr[@]}"; do
+        token_tx=${tx//'%'/${token}}
+        token_tx_arr+=( "$token_tx" )
+    done
+    printf "%s${token_delim}" "${token_tx_arr[@]}"
+}
+
+layz() {
+    local cmd_arr_in cmd_arr_out
+    local arg_idx rep_idx
+    local arg_out arg_rep
+    local cmd_out debug arg_opt
+    debug=false
+    if [[ $1 == -* ]]; then
+        arg_opt=$(echo "$1" | sed -r 's|\-+(.*)|\1|')
+        if [ "$arg_opt" = 'dryrun' ] || [ "$arg_opt" = 'debug' ]; then
+            debug=true
+            shift
+        fi
+    fi
+    cmd_arr_in=("$@")
+    cmd_arr_out=()
+    for arg_idx in "${!cmd_arr_in[@]}"; do
+        arg_out="${cmd_arr_in[$arg_idx]}"
+        for rep_idx in "${!cmd_arr_in[@]}"; do
+            if (( rep_idx < arg_idx )); then
+                arg_rep="${cmd_arr_out[$rep_idx]}"
+            else
+                arg_rep="${cmd_arr_in[$rep_idx]}"
+            fi
+            arg_out=$(echo "$arg_out" | sed -r "s|%${rep_idx}([^0-9]\|$)|${arg_rep}\1|g")
+        done
+        cmd_arr_out+=( "$arg_out" )
+    done
+    cmd_out="${cmd_arr_out[*]}"
+    if [ "$debug" = true ]; then
+        echo "$cmd_out"
+    else
+        $cmd_out
+    fi
+}
+
+
+## Path representation
 
 abspath_all() {
     process_items "abspath" false true "$@"
@@ -432,75 +456,6 @@ find_missing_suffix() {
     fi
 
     find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -exec bash -c 'base_dirent={}; require_all_suffix_exist='"$require_all_suffix_exist"'; all_exist=true; some_exist=false; for suffix in '"$suffix_list"'; do check_dirent="'"$suffix_sub_expr"'"; if [ -e "$check_dirent" ]; then some_exist=true; else all_exist=false; fi; if [ "$require_all_suffix_exist" = true ]; then if [ "$all_exist" = false ]; then echo "$base_dirent"; exit; fi; elif [ "$some_exist" = true ]; then exit; fi; done; if [ "$some_exist" = false ]; then echo "$base_dirent"; fi;' \;
-}
-
-
-## Command-line argument manipulation
-
-layz() {
-    local cmd_arr_in cmd_arr_out
-    local arg_idx rep_idx
-    local arg_out arg_rep
-    local cmd_out debug arg_opt
-    debug=false
-    if [[ $1 == -* ]]; then
-        arg_opt=$(echo "$1" | sed -r 's|\-+(.*)|\1|')
-        if [ "$arg_opt" = 'dryrun' ] || [ "$arg_opt" = 'debug' ]; then
-            debug=true
-            shift
-        fi
-    fi
-    cmd_arr_in=("$@")
-    cmd_arr_out=()
-    for arg_idx in "${!cmd_arr_in[@]}"; do
-        arg_out="${cmd_arr_in[$arg_idx]}"
-        for rep_idx in "${!cmd_arr_in[@]}"; do
-            if (( rep_idx < arg_idx )); then
-                arg_rep="${cmd_arr_out[$rep_idx]}"
-            else
-                arg_rep="${cmd_arr_in[$rep_idx]}"
-            fi
-            arg_out=$(echo "$arg_out" | sed -r "s|%${rep_idx}([^0-9]\|$)|${arg_rep}\1|g")
-        done
-        cmd_arr_out+=( "$arg_out" )
-    done
-    cmd_out="${cmd_arr_out[*]}"
-    if [ "$debug" = true ]; then
-        echo "$cmd_out"
-    else
-        $cmd_out
-    fi
-}
-
-tokentx() {
-    local tx="$1"
-    local token_arr=()
-    local token_tx_arr=()
-    local token_delim='\n'
-    local token
-    while IFS= read -r token; do
-        token_arr+=( "$token" )
-    done
-    if (( ${#token_arr[@]} == 1 )); then
-        token_delim=' '
-        IFS="$token_delim" read -r -a token_arr <<< "${token_arr[0]}"
-    fi
-    local token_tx
-    for token in "${token_arr[@]}"; do
-        token_tx=${tx//'%'/${token}}
-        token_tx_arr+=( "$token_tx" )
-    done
-    printf "%s${token_delim}" "${token_tx_arr[@]}"
-}
-
-echoeval() {
-    local echo_args
-    if [[ -p /dev/stdin ]]; then
-        IFS= read -r echo_args
-    else
-        echo_args="$*"
-    fi
-    eval "echo ${echo_args}"
 }
 
 
