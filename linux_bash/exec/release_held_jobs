@@ -1,6 +1,6 @@
 #!/bin/bash
 
-## Bash settings
+## Bash settingsblahahah
 set -uo pipefail
 
 ## Script globals
@@ -25,32 +25,26 @@ source "$bash_functions_script"
 
 
 ## Arguments
-mmin_thresh=''
+max_running_jobs=''
 check_min=5
 jobname_prefix_arr=()
 dryrun=false
 
 ## Custom globals
-hungjobs_stash_dir="${HOME}/hungjobs_outfiles/"
-hungjobs_digest="${HOME}/hungjobs_digest.txt"
 
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage: ${script_name} [OPTION]... JOBLOG_MMIN_THRESH [JOBNAME_PREFIX...]
+Usage: ${script_name} [OPTION]... MAX_RUNNING_JOBS [JOBNAME_PREFIX...]
 
-  Periodically check 'qstat' and delete PBS jobs with "running" status (R)
-matching the designated jobname prefix(es) when the job appears to be "hung".
-A job is deemed hung when its output log file was last modified more than
-JOBLOG_MMIN_THRESH minutes ago.
-  Copies of the hung jobs' output/error log files are placed in
-'${hungjobs_stash_dir}', and 'qstat' information pertaining to the
-hung jobs is preserved in '${hungjobs_digest}'.
+Periodically check 'qstat' and release PBS jobs with "held" status (H)
+matching the designated jobname prefix(es), keeping the total number of
+running jobs to a specified maximum.
 
 Options:
     --check-min (default=${check_min})
-        Time interval in minutes between checks of 'qstat' to delete
-        hung jobs.
+        Time interval in minutes between checks of 'qstat' to release
+        held jobs.
 -dr,--dryrun
         Print actions without executing.
 EOM
@@ -66,8 +60,8 @@ while (( "$#" )); do
     arg="$1"
 
     if [ "$(string_startswith "$arg" '-')" = false ]; then
-        if [ -z "$mmin_thresh" ]; then
-            mmin_thresh="$arg"
+        if [ -z "$max_running_jobs" ]; then
+            max_running_jobs="$arg"
         else
             jobname_prefix_arr+=( "$arg" )
         fi
@@ -130,11 +124,11 @@ set -u
 
 ## Validate arguments
 
-if [ -z "$mmin_thresh" ]; then
-    echo_e "JOBLOG_MMIN_THRESH argument must be provided"
+if [ -z "$max_running_jobs" ]; then
+    echo_e "MAX_RUNNING_JOBS argument must be provided"
     exit_script_with_status 1
-elif [ "$(string_is_posint "$mmin_thresh")" = false ]; then
-    echo_e "JOBLOG_MMIN_THRESH must be a positive integer"
+elif [ "$(string_is_posint "$max_running_jobs")" = false ]; then
+    echo_e "MAX_RUNNING_JOBS must be a positive integer"
     exit_script_with_status 1
 fi
 
@@ -145,71 +139,35 @@ fi
 
 
 if (( ${#jobname_prefix_arr[@]} > 0 )); then
-    re_jobname_prefix=$(printf "(%s)" "$(string_join '|' "${jobname_prefix_arr[@]}")")
+    re_jobname_prefix=$(printf " (%s)" "$(string_join '|' "${jobname_prefix_arr[@]}")")
 else
     re_jobname_prefix='.*'
-fi
-
-if [ ! -d "$hungjobs_stash_dir" ]; then
-    mkdir -p "$hungjobs_stash_dir"
 fi
 
 
 ## Run queue watch loop
 
 while true; do
-    while read -r qstat_row; do
-        qstat_cols=($qstat_row)
-        jobid=$(echo "${qstat_cols[0]}" | cut -d"." -f1)
-        jobxml=$(qstat -xlf "$jobid")
-        jobname=$(echo "$jobxml" | parse_xml_value 'Job_Name')
+    qstat_selected_jobs=$(qstat -n1 -u "$USER" | grep -E "$re_jobname_prefix")
+    num_jobs_running=$(echo "$qstat_selected_jobs" | grep " R " | wc -l)
+    num_jobs_held=$(echo "$qstat_selected_jobs" | grep " H " | wc -l)
+    num_jobs_total=$(echo "$qstat_selected_jobs" | wc -l)
 
-        if [ "$(re_test "$re_jobname_prefix" "$jobname")" = false ]; then
-            continue
-        fi
+    echo "${num_jobs_total} jobs in queue matching jobname '${re_jobname_prefix}': ${num_jobs_running} running, ${num_jobs_held} held"
 
-        outfile=$(echo "$jobxml" | parse_xml_value 'Output_Path' | rev | cut -d":" -f1 | rev)
-        errfile=$(echo "$jobxml" | parse_xml_value 'Error_Path'  | rev | cut -d":" -f1 | rev)
-
-        outfile=${outfile/\$PBS_JOBNAME/$jobname}
-        outfile=${outfile/\$PBS_JOBID/$jobid}
-        errfile=${errfile/\$PBS_JOBNAME/$jobname}
-        errfile=${errfile/\$PBS_JOBID/$jobid}
-
-        if [ ! -f "$outfile" ]; then
-            # Sometimes job output logs are forced into the home dir
-            outfile="${HOME}/$(basename "$outfile")"
-            errfile="${HOME}/$(basename "$errfile")"
-        fi
-        if [ ! -f "$outfile" ]; then
-            echo "WARNING: Cannot locate output job log file for jobid=${jobid}, jobname='${jobname}'"
-            continue
-        fi
-
-        inactive_outfile=$(find "$outfile" -mmin +${mmin_thresh})
-
-        if [ -n "$inactive_outfile" ]; then
-            outfile_mtime_sec=$(date +%s -r "$outfile")
-            current_time_sec=$(date +%s)
-            inactive_sec=$(( current_time_sec - outfile_mtime_sec ))
-            inactive_hms=$(sec2hms "$inactive_sec")
-
-            hungjob_msg="Deleting hung job with outfile last modified ${inactive_hms} ago (mmin_thresh=${mmin_thresh}):\n${qstat_row}"
-            echo -e "$hungjob_msg"
+    if (( num_jobs_held > 0 )); then
+        num_jobs_can_be_released=$(( max_running_jobs - num_jobs_running ))
+        if (( num_jobs_can_be_released > 0 )); then
+            jobids_to_release=$(echo "$qstat_selected_jobs" | grep " H " | head -n $num_jobs_can_be_released | cut -d" " -f1 | cut -d"." -f1)
+            echo "Releasing $(echo "$jobids_to_release" | wc -l) jobids: $(echo "$jobids_to_release" | tr '\n' ' ')"
             if [ "$dryrun" = false ]; then
-                echo -e "$hungjob_msg" >> "$hungjobs_digest"
-                qdel "$jobid"
-                cp "$outfile" "$hungjobs_stash_dir"
-                if [ "$errfile" != "$outfile" ]; then
-                    cp "$errfile" "$hungjobs_stash_dir"
-                fi
+                echo "$jobids_to_release" | xargs qrls
             fi
         fi
-
-    done < <( qstat -n1 -u "$USER" | grep " R " )
+    fi
 
     for (( min_til_check=check_min; min_til_check > 0; min_til_check-- )); do
-        echo -en "\r\033[K${min_til_check} minutes until next check for hung jobs (mmin_thresh=${mmin_thresh}, check_min=${check_min}, jobname_prefix='${re_jobname_prefix}')"
+        echo -en "\r\033[K${min_til_check} minutes until next check for held jobs (max_running_jobs=${max_running_jobs}, check_min=${check_min}, jobname_prefix='${re_jobname_prefix}')"
         sleep 1m
     done
     echo -en "\r\033[K"
