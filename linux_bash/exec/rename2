@@ -28,7 +28,7 @@ source "$bash_functions_script"
 src_path=''
 new_name=''
 force_glob=false
-mv_args_arr=()
+fwd_args_arr=()
 dryrun=false
 
 ## Custom globals
@@ -95,7 +95,7 @@ while (( "$#" )); do
             fi
         fi
         if [ "$is_fwd_arg" = true ]; then
-            find_args_arr+=( "$arg" )
+            fwd_args_arr+=( "$arg" )
         fi
 
     elif [ "$(string_startswith "$arg" '-')" = false ]; then
@@ -138,7 +138,7 @@ while (( "$#" )); do
             arg_opt_nargs=0
             
             if [ -n "$src_path" ] && [ -n "$new_name" ]; then
-                mv_args_arr+=( "$arg" )
+                fwd_args_arr+=( "$arg" )
                 parsing_fwd_args=true
             else
                 echo_e "Unexpected argument: ${arg}"
@@ -195,7 +195,7 @@ else
     new_name_prefix="${src_dir}/${new_name}"
 fi
 
-mv_opt_args="${mv_args_arr[*]+${mv_args_arr[*]}}"
+mv_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
 
 
 ## Perform renaming

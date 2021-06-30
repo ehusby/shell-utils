@@ -511,7 +511,7 @@ EOM
     while (( "$#" )); do
         arg="$1"
 
-        if ! [[ $arg == -* ]]; then
+        if [ "$(string_startswith "$arg" '-')" = false ]; then
             if (( $(indexOf "$arg" ${git_cmd_choices_arr[@]+"${git_cmd_choices_arr[@]}"}) != -1 )); then
                 git_cmd_arr+=( "$arg" )
             else
@@ -519,8 +519,16 @@ EOM
             fi
 
         else
-            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+            arg_opt="$(string_lstrip "$arg" '-')"
             arg_opt_nargs=''
+            if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+                arg_val="${arg_opt#*=}"
+                arg_opt="${arg_opt%%=*}"
+                arg_opt_nargs_do_shift=false
+            else
+                arg_val="$2"
+                arg_opt_nargs_do_shift=true
+            fi
             arg_val_can_start_with_dash=false
 
             if [ "$arg_opt" = 'p' ] || [ "$arg_opt" = 'pw' ]; then
@@ -543,14 +551,19 @@ EOM
             fi
 
             local i
-            for i in $(seq 1 $arg_opt_nargs); do
-                shift
-                arg_val="$1"
-                if [ "$arg_val_can_start_with_dash" = false ] && [[ $arg_val == -* ]]; then
-                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
-                    return
-                fi
-            done
+            if [ "$arg_opt_nargs_do_shift" = true ] && (( arg_opt_nargs >= 1 )); then
+                for arg_num in $(seq 1 $arg_opt_nargs); do
+                    shift
+                    arg_val="$1"
+                    if [ -z "$arg_val" ]; then
+                        echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                        exit_script_with_status 1
+                    elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                        echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                        exit_script_with_status 1
+                    fi
+                done
+            fi
         fi
 
         shift
@@ -587,8 +600,8 @@ git_pull_in() {
 
     local arg arg_opt
     for arg in "${func_args_in[@]}"; do
-        if [[ $arg == -* ]]; then
-            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+        if [ "$(string_startswith "$arg" '-')" = true ]; then
+            arg_opt="$(string_lstrip "$arg" '-')"
 
             if [ "$arg_opt" = 'stash' ]; then
                 do_stashing=true

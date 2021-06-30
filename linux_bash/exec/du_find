@@ -36,7 +36,7 @@ round_mode='up'
 namepat_arr=()
 sum_all=false
 debug=false
-find_args_arr=()
+fwd_args_arr=()
 srcpath_arr=()
 
 ## Custom globals
@@ -105,7 +105,7 @@ while (( "$#" )); do
             fi
         fi
         if [ "$is_fwd_arg" = true ]; then
-            find_args_arr+=( "$arg" )
+            fwd_args_arr+=( "$arg" )
         fi
 
     elif [ "$(string_startswith "$arg" '-')" = false ]; then
@@ -164,7 +164,7 @@ while (( "$#" )); do
 
             else
                 if (( ${#srcpath_arr} >= 1 )); then
-                    find_args_arr+=( "$arg" )
+                    fwd_args_arr+=( "$arg" )
                     parsing_fwd_args=true
                 else
                     echo_e "Unexpected argument: ${arg}"
@@ -278,7 +278,7 @@ if (( ${#namepat_arr[@]} > 0 )); then
     done
     find_name_args="${find_name_args} \)"
 fi
-find_args="${find_args_arr[*]+${find_args_arr[*]}} ${find_name_args}"
+find_args="${fwd_args_arr[*]+${fwd_args_arr[*]}} ${find_name_args}"
 find_args=$(string_strip "$find_args" ' ')
 
 

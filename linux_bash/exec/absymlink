@@ -27,7 +27,7 @@ source "$bash_functions_script"
 ## Arguments
 target=''
 link_name=''
-ln_opt_arg_arr=()
+fwd_args_arr=()
 dryrun=false
 
 ## Custom globals
@@ -35,7 +35,15 @@ dryrun=false
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage: ${script_name} ['ln' option (-s already provided)]... TARGET LINK_NAME [--dryrun]
+Usage: ${script_name} [OPTION]... TARGET LINK_NAME ['ln' OPTION]...
+
+  Create a symbolic link with 'ln -s', where an existing file/dir
+TARGET path is automatically converted to an absolute path for
+link creation.
+
+Options:
+-dr,--dryrun
+        Print 'ln' command used to create link, without executing.
 EOM
 if (( $# < 1 )); then
     echo_e -e "$script_usage"
@@ -45,12 +53,34 @@ fi
 
 ## Parse arguments
 set +u
+parsing_fwd_args=false
 while (( "$#" )); do
     arg="$1"
 
-    if ! [[ $arg == -* ]]; then
+    if [ "$parsing_fwd_args" = true ]; then
+        # Accept critical script optional arguments
+        # specified at end of command.
+        is_fwd_arg=true
+        if [ "$(string_startswith "$arg" '-')" = true ]; then
+            arg_opt="$(string_lstrip "$arg" '-')"
+            is_fwd_arg=false
+            if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
+                arg_opt_nargs=0
+                echo "$script_usage"
+                exit 0
+            elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+                dryrun=true
+            else
+                is_fwd_arg=true
+            fi
+        fi
+        if [ "$is_fwd_arg" = true ]; then
+            fwd_args_arr+=( "$arg" )
+        fi
+
+    elif [ "$(string_startswith "$arg" '-')" = false ]; then
         if [ -z "$target" ]; then
-            target=$(readlink -f "$arg")
+            target="$arg"
         elif [ -z "$link_name" ]; then
             link_name="$arg"
         else
@@ -59,8 +89,16 @@ while (( "$#" )); do
         fi
 
     else
-        arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+        arg_opt="$(string_lstrip "$arg" '-')"
         arg_opt_nargs=''
+        if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+            arg_val="${arg_opt#*=}"
+            arg_opt="${arg_opt%%=*}"
+            arg_opt_nargs_do_shift=false
+        else
+            arg_val="$2"
+            arg_opt_nargs_do_shift=true
+        fi
         arg_val_can_start_with_dash=false
 
         if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
@@ -68,13 +106,20 @@ while (( "$#" )); do
             echo "$script_usage"
             exit 0
 
-        elif [ "$arg_opt" = 'dryrun' ]; then
+        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
             dryrun=true
 
         else
             arg_opt_nargs=0
-            ln_opt_arg_arr+=( "$arg" )
+            
+            if [ -n "$target" ] && [ -n "$link_name" ]; then
+                fwd_args_arr+=( "$arg" )
+                parsing_fwd_args=true
+            else
+                echo_e "Unexpected argument: ${arg}"
+                exit_script_with_status 1
+            fi
         fi
 
         if [ -z "$arg_opt_nargs" ]; then
@@ -82,14 +127,19 @@ while (( "$#" )); do
             exit_script_with_status 1
         fi
 
-        for i in $(seq 1 $arg_opt_nargs); do
-            shift
-            arg_val="$1"
-            if [ "$arg_val_can_start_with_dash" = false ] && [[ $arg_val == -* ]]; then
-                echo_e "Unexpected argument value: ${arg} ${arg_val}"
-                exit_script_with_status 1
-            fi
-        done
+        if [ "$arg_opt_nargs_do_shift" = true ] && (( arg_opt_nargs >= 1 )); then
+            for arg_num in $(seq 1 $arg_opt_nargs); do
+                shift
+                arg_val="$1"
+                if [ -z "$arg_val" ]; then
+                    echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                    exit_script_with_status 1
+                elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                    exit_script_with_status 1
+                fi
+            done
+        fi
     fi
 
     shift
@@ -104,10 +154,14 @@ if [ -z "$target" ] || [ -z "$link_name" ]; then
     exit_script_with_status 1
 fi
 
+target=$(abspath "$target")
+ln_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
 
-## Perform renaming
 
-cmd="ln -s ${ln_opt_arg_arr[*]+${ln_opt_arg_arr[*]}} ${target} ${link_name}"
+## Perform linking
+
+cmd="ln -s ${ln_opt_args} ${target} ${link_name}"
+
 if [ "$dryrun" = true ]; then
     echo "$cmd"
 else
