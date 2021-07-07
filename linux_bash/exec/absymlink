@@ -25,8 +25,7 @@ source "$bash_functions_script"
 
 
 ## Arguments
-target=''
-link_name=''
+path_arg_arr=()
 fwd_args_arr=()
 dryrun=false
 
@@ -35,13 +34,18 @@ dryrun=false
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage: ${script_name} [OPTION]... TARGET LINK_NAME ['ln' OPTION]...
+Usage:
+    ${script_name} [OPTION]... [-T] TARGET LINK_NAME   (1st form)
+    ${script_name} [OPTION]... TARGET                  (2nd form)
+    ${script_name} [OPTION]... TARGET... DIRECTORY     (3rd form)
+    ${script_name} [OPTION]... -t DIRECTORY TARGET...  (4th form)
+    (see 'man ln' for further details)
 
-  Create a symbolic link with 'ln -s', where an existing file/dir
-TARGET path is automatically converted to an absolute path for
-link creation.
+  Create symbolic link(s) with 'ln -s', converting TARGET paths
+to absolute paths for link creation.
 
 Options:
+[all 'ln' options]
 -dr,--dryrun
         Print 'ln' command used to create link, without executing.
 EOM
@@ -53,40 +57,11 @@ fi
 
 ## Parse arguments
 set +u
-parsing_fwd_args=false
 while (( "$#" )); do
     arg="$1"
 
-    if [ "$parsing_fwd_args" = true ]; then
-        # Accept critical script optional arguments
-        # specified at end of command.
-        is_fwd_arg=true
-        if [ "$(string_startswith "$arg" '-')" = true ]; then
-            arg_opt="$(string_lstrip "$arg" '-')"
-            is_fwd_arg=false
-            if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
-                arg_opt_nargs=0
-                echo "$script_usage"
-                exit 0
-            elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
-                dryrun=true
-            else
-                is_fwd_arg=true
-            fi
-        fi
-        if [ "$is_fwd_arg" = true ]; then
-            fwd_args_arr+=( "$arg" )
-        fi
-
-    elif [ "$(string_startswith "$arg" '-')" = false ]; then
-        if [ -z "$target" ]; then
-            target="$arg"
-        elif [ -z "$link_name" ]; then
-            link_name="$arg"
-        else
-            echo_e "Unexpected argument: ${arg}"
-            exit_script_with_status 1
-        fi
+    if [ "$(string_startswith "$arg" '-')" = false ]; then
+        path_arg_arr+=( "$arg" )
 
     else
         arg_opt="$(string_lstrip "$arg" '-')"
@@ -110,16 +85,13 @@ while (( "$#" )); do
             arg_opt_nargs=0
             dryrun=true
 
+        elif [ "$(itemOneOf "$arg_opt" 'suffix' 'target-directory' )" = true ]; then
+            arg_opt_nargs=1
+            fwd_args_arr+=( "$arg_opt" "$arg_val" )
+
         else
             arg_opt_nargs=0
-            
-            if [ -n "$target" ] && [ -n "$link_name" ]; then
-                fwd_args_arr+=( "$arg" )
-                parsing_fwd_args=true
-            else
-                echo_e "Unexpected argument: ${arg}"
-                exit_script_with_status 1
-            fi
+            fwd_args_arr+=( "$arg" )
         fi
 
         if [ -z "$arg_opt_nargs" ]; then
@@ -149,18 +121,33 @@ set -u
 
 ## Validate arguments
 
-if [ -z "$target" ] || [ -z "$link_name" ]; then
-    echo_e "Both TARGET and LINK_NAME arguments must be provided"
+num_path_args="${#path_arg_arr[@]}"
+if (( num_path_args == 0 )); then
+    echo_e "At least one TARGET argument must be provided"
     exit_script_with_status 1
+elif (( num_path_args == 1 )); then
+    last_target_idx=0
+else
+    last_target_idx=$(( num_path_args - 2 ))
 fi
 
-target=$(abspath "$target")
+abspath_arg_arr=()
+
+for idx in "${!path_arg_arr[@]}"; do
+    path=$(abspath "${path_arg_arr[$idx]}")
+    if (( idx <= last_target_idx )); then
+        abspath_arg_arr+=( "$(abspath "$path")" )
+    else
+        abspath_arg_arr+=( "$path" )
+    fi
+done
+
 ln_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
 
 
 ## Perform linking
 
-cmd="ln -s ${ln_opt_args} ${target} ${link_name}"
+cmd="ln -s ${ln_opt_args} $(printf ' "%s"' "${abspath_arg_arr[@]}")"
 
 if [ "$dryrun" = true ]; then
     echo "$cmd"
