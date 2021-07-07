@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ## Source base functions
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/bash_script_func.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/bash_script_func.sh"
 
 
 ## Bash prompts
@@ -41,7 +41,17 @@ strrep() { sed -r "s|${1}|${2}|g"; }
 strcat() { sed -r "s|(.*)|\1${1}|"; }
 
 
-## Path representation
+## Command-line argument manipulation
+
+echoeval() {
+    local echo_args
+    if [[ -p /dev/stdin ]]; then
+        IFS= read -r echo_args
+    else
+        echo_args="$*"
+    fi
+    eval "echo ${echo_args}"
+}
 
 process_items() {
     local process_func="$1"; shift
@@ -83,14 +93,76 @@ process_items() {
     fi
 }
 
-fullpath() {
-    process_items "readlink -f" false true "$@"
+tokentx() {
+    local tx="$1"
+    local token_arr=()
+    local token_tx_arr=()
+    local token_delim='\n'
+    local token
+    while IFS= read -r token; do
+        token_arr+=( "$token" )
+    done
+    if (( ${#token_arr[@]} == 1 )); then
+        token_delim=' '
+        IFS="$token_delim" read -r -a token_arr <<< "${token_arr[0]}"
+    fi
+    local token_tx
+    for token in "${token_arr[@]}"; do
+        token_tx=${tx//'%'/${token}}
+        token_tx_arr+=( "$token_tx" )
+    done
+    printf "%s${token_delim}" "${token_tx_arr[@]}"
+}
+
+layz() {
+    local cmd_arr_in cmd_arr_out
+    local arg_idx rep_idx
+    local arg_out arg_rep
+    local cmd_out debug arg_opt
+    debug=false
+    if [[ $1 == -* ]]; then
+        arg_opt=$(echo "$1" | sed -r 's|\-+(.*)|\1|')
+        if [ "$arg_opt" = 'dryrun' ] || [ "$arg_opt" = 'debug' ]; then
+            debug=true
+            shift
+        fi
+    fi
+    cmd_arr_in=("$@")
+    cmd_arr_out=()
+    for arg_idx in "${!cmd_arr_in[@]}"; do
+        arg_out="${cmd_arr_in[$arg_idx]}"
+        for rep_idx in "${!cmd_arr_in[@]}"; do
+            if (( rep_idx < arg_idx )); then
+                arg_rep="${cmd_arr_out[$rep_idx]}"
+            else
+                arg_rep="${cmd_arr_in[$rep_idx]}"
+            fi
+            arg_out=$(echo "$arg_out" | sed -r "s|%${rep_idx}([^0-9]\|$)|${arg_rep}\1|g")
+        done
+        cmd_arr_out+=( "$arg_out" )
+    done
+    cmd_out="${cmd_arr_out[*]}"
+    if [ "$debug" = true ]; then
+        echo "$cmd_out"
+    else
+        $cmd_out
+    fi
+}
+
+
+## Path representation
+
+abspath_all() {
+    process_items 'abspath' false true "$@"
+}
+fullpath_all() {
+    process_items 'fullpath' false true "$@"
 }
 basename_all() {
-    process_items "basename" false true "$@"
+    process_items 'basename' false true "$@"
 }
 dirname_all() {
-    process_items "dirname" false true "$@"
+    process_items 'dirname' false true "$@"
 }
 
 pathfromend() {
@@ -168,7 +240,7 @@ read_csv() {
         SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR=()
         SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR=()
         local header_line get_fields_arr header_fields_arr
-        read -r header_line
+        IFS= read -r header_line
         read_status=$?
         if (( read_status != 0 )); then return "$read_status"; fi
         IFS="$csv_delim" read -ra get_fields_arr <<< "$get_fields"
@@ -191,7 +263,7 @@ read_csv() {
 
     local csv_line csv_line_arr
 
-    read -r csv_line
+    IFS= read -r csv_line
     read_status=$?
     if (( read_status != 0 )); then
         SHELL_UTILS_READ_CSV_IP=false
@@ -387,75 +459,6 @@ find_missing_suffix() {
 }
 
 
-## Command-line argument manipulation
-
-layz() {
-    local cmd_arr_in cmd_arr_out
-    local arg_idx rep_idx
-    local arg_out arg_rep
-    local cmd_out debug arg_opt
-    debug=false
-    if [[ $1 == -* ]]; then
-        arg_opt=$(echo "$1" | sed -r 's|\-+(.*)|\1|')
-        if [ "$arg_opt" = 'dryrun' ] || [ "$arg_opt" = 'debug' ]; then
-            debug=true
-            shift
-        fi
-    fi
-    cmd_arr_in=("$@")
-    cmd_arr_out=()
-    for arg_idx in "${!cmd_arr_in[@]}"; do
-        arg_out="${cmd_arr_in[$arg_idx]}"
-        for rep_idx in "${!cmd_arr_in[@]}"; do
-            if (( rep_idx < arg_idx )); then
-                arg_rep="${cmd_arr_out[$rep_idx]}"
-            else
-                arg_rep="${cmd_arr_in[$rep_idx]}"
-            fi
-            arg_out=$(echo "$arg_out" | sed -r "s|%${rep_idx}([^0-9]\|$)|${arg_rep}\1|g")
-        done
-        cmd_arr_out+=( "$arg_out" )
-    done
-    cmd_out="${cmd_arr_out[*]}"
-    if [ "$debug" = true ]; then
-        echo "$cmd_out"
-    else
-        $cmd_out
-    fi
-}
-
-tokentx() {
-    local tx="$1"
-    local token_arr=()
-    local token_tx_arr=()
-    local token_delim='\n'
-    local token
-    while IFS= read -r token; do
-        token_arr+=( "$token" )
-    done
-    if (( ${#token_arr[@]} == 1 )); then
-        token_delim=' '
-        IFS="$token_delim" read -r -a token_arr <<< "${token_arr[0]}"
-    fi
-    local token_tx
-    for token in "${token_arr[@]}"; do
-        token_tx=${tx//'%'/${token}}
-        token_tx_arr+=( "$token_tx" )
-    done
-    printf "%s${token_delim}" "${token_tx_arr[@]}"
-}
-
-echoeval() {
-    local echo_args
-    if [[ -p /dev/stdin ]]; then
-        IFS= read -r echo_args
-    else
-        echo_args="$*"
-    fi
-    eval "echo ${echo_args}"
-}
-
-
 ## Git
 
 git_drop_all_changes() {
@@ -508,16 +511,24 @@ EOM
     while (( "$#" )); do
         arg="$1"
 
-        if ! [[ $arg == -* ]]; then
-            if (( $(indexOf "$arg" ${git_cmd_choices_arr[@]+"${git_cmd_choices_arr[@]}"}) != -1 )); then
+        if [ "$(string_startswith "$arg" '-')" = false ]; then
+            if [ "$(itemOneOf "$arg" "${git_cmd_choices_arr[@]}")" = true ]; then
                 git_cmd_arr+=( "$arg" )
             else
                 repo_dir_arr+=( "$(fullpath "$arg")" )
             fi
 
         else
-            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+            arg_opt="$(string_lstrip "$arg" '-')"
             arg_opt_nargs=''
+            if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+                arg_val="${arg_opt#*=}"
+                arg_opt="${arg_opt%%=*}"
+                arg_opt_nargs_do_shift=false
+            else
+                arg_val="$2"
+                arg_opt_nargs_do_shift=true
+            fi
             arg_val_can_start_with_dash=false
 
             if [ "$arg_opt" = 'p' ] || [ "$arg_opt" = 'pw' ]; then
@@ -540,14 +551,19 @@ EOM
             fi
 
             local i
-            for i in $(seq 1 $arg_opt_nargs); do
-                shift
-                arg_val="$1"
-                if [ "$arg_val_can_start_with_dash" = false ] && [[ $arg_val == -* ]]; then
-                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
-                    return
-                fi
-            done
+            if [ "$arg_opt_nargs_do_shift" = true ] && (( arg_opt_nargs >= 1 )); then
+                for arg_num in $(seq 1 $arg_opt_nargs); do
+                    shift
+                    arg_val="$1"
+                    if [ -z "$arg_val" ]; then
+                        echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                        exit_script_with_status 1
+                    elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                        echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                        exit_script_with_status 1
+                    fi
+                done
+            fi
         fi
 
         shift
@@ -560,7 +576,7 @@ EOM
 
         for git_cmd in "${git_cmd_arr[@]}"; do
             echo "'${repo_name}' results of 'git ${git_cmd}' command:"
-            if [ -n "$ssh_passphrase" ] && (( $(indexOf "$git_cmd" ${git_cmd_need_ssh_arr[@]+"${git_cmd_need_ssh_arr[@]}"}) != -1 )); then
+            if [ -n "$ssh_passphrase" ] && [ "$(itemOneOf "$git_cmd" "${git_cmd_need_ssh_arr[@]}")" = true ]; then
                 expect -c "spawn git ${git_cmd}; expect \"passphrase\"; send \"${ssh_passphrase}\r\"; interact"
             else
                 git -c pager.branch=false ${git_cmd}
@@ -584,8 +600,8 @@ git_pull_in() {
 
     local arg arg_opt
     for arg in "${func_args_in[@]}"; do
-        if [[ $arg == -* ]]; then
-            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+        if [ "$(string_startswith "$arg" '-')" = true ]; then
+            arg_opt="$(string_lstrip "$arg" '-')"
 
             if [ "$arg_opt" = 'stash' ]; then
                 do_stashing=true

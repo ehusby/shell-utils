@@ -18,13 +18,15 @@ log_oe() { log "$@" | tee >(cat >&2); }
 
 ## String manipulation
 
+base10() { print_string "$((10#$1))"; }
+
 string_to_uppercase() { print_string "$@" | tr '[:lower:]' '[:upper:]'; }
 
 string_to_lowercase() { print_string "$@" | tr '[:upper:]' '[:lower:]'; }
 
-string_lstrip() { print_string "$1" | sed "s|^\(${2}\)\+||"; }
+string_lstrip() { print_string "$1" | sed -r "s|^(${2})+||"; }
 
-string_rstrip() { print_string "$1" | sed "s|\(${2}\)\+\$||"; }
+string_rstrip() { print_string "$1" | sed -r "s|(${2})+$||"; }
 
 string_strip() {
     local string_in="$1"
@@ -45,7 +47,7 @@ string_strip() {
 
 string_rstrip_decimal_zeros() { print_string "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
 
-collapse_repeated_substring() { print_string "$1" | sed "s|\(${2}\)\+|\1|g"; }
+collapse_repeated_substring() { print_string "$1" | sed -r "s|(${2})+|\1|g"; }
 
 string_join() { local IFS="$1"; shift; print_string "$*"; }
 
@@ -250,6 +252,95 @@ prompt_y_or_n() {
 }
 
 
+## Path representation
+
+if readlink -f ~ 1>/dev/null 2>/dev/null; then
+    READLINK_F_AVAILABLE=true
+else
+    READLINK_F_AVAILABLE=false
+fi
+
+fullpath_alias() {
+    local path="$1"
+    local dereference_symlinks="$2"
+    if [ "$dereference_symlinks" = true ]; then
+        fullpath_fn="pwd -P"
+    else
+        fullpath_fn="pwd"
+    fi
+    pushd . >/dev/null
+    if [ -d "$path" ]; then
+        cd "$path" || { echo "Failed to access path" ; return; }
+        eval "$fullpath_fn"
+    else
+        cd "$(dirname "$path")" || { echo "Failed to access path" ; return; }
+        local path_parent_dir=$(eval "$fullpath_fn")
+        local path_basename=$(basename "$path")
+        if [ "$path_parent_dir" = '/' ]; then
+            echo "${path_parent_dir}${path_basename}"
+        else
+            echo "${path_parent_dir}/${path_basename}"
+        fi
+    fi
+    popd >/dev/null
+}
+
+fullpath() {
+    if (( $# != 1 )); then
+        echo_e "fullpath: expected one path operand"
+        return 1
+    fi
+    local path="$1"
+    fullpath_alias "$path" false
+}
+
+abspath() {
+    if (( $# != 1 )); then
+        echo_e "abspath: expected one path operand"
+        return 1
+    fi
+    local path="$1"
+    if [ "$READLINK_F_AVAILABLE" = true ]; then
+        readlink -f "$path"
+    else
+        fullpath_alias "$path" true
+    fi
+}
+
+preserve_trailing_slash_alias() {
+    if (( $# != 2 )); then
+        echo_e "preserve_trailing_slash_alias: expected a path function name and one path operand"
+        return 1
+    fi
+    local path_fn="$1"
+    local path_in="$2"
+    local path_out=$(eval "${path_fn} \"$path_in\"")
+    if [ "$(string_endswith "$path_in" '/')" = true ]; then
+        if [ "$(string_endswith "$path_out" '/')" = false ]; then
+            path_out="${path_out}/"
+        fi
+    elif [ "$(string_endswith "$path_out" '/')" = true ]; then
+        path_out=$(string_rstrip "$path_out" '/')
+    fi
+    echo "$path_out"
+}
+
+fullpath_preserve_trailing_slash() {
+    if (( $# != 1 )); then
+        echo_e "fullpath_preserve_trailing_slash: expected one path operand"
+        return 1
+    fi
+    preserve_trailing_slash_alias 'fullpath' "$1"
+}
+abspath_preserve_trailing_slash() {
+    if (( $# != 1 )); then
+        echo_e "abspath_preserve_trailing_slash: expected one path operand"
+        return 1
+    fi
+    abspath_trailing_slash_alias 'fullpath' "$1"
+}
+
+
 ## Other
 
 #indexOf() { local el="$1"; shift; local arr=("$@"); local index=-1; local i; for i in "${!arr[@]}"; do [ "${arr[$i]}" = "$el" ] && { index=$i; break; } done; echo $index; }
@@ -284,10 +375,7 @@ itemOneOf() {
 
 parse_xml_value() {
     local xml_tag="$1"
-    local xml_onelinestring=''
-    while read -r xml_onelinestring; do
-        echo "$xml_onelinestring" | grep -Po "<${xml_tag}>(.*?)</${xml_tag}>" | sed -r "s|<${xml_tag}>(.*?)</${xml_tag}>|\1|"
-    done
+    grep -Po "<${xml_tag}>(.*?)</${xml_tag}>" | sed -r "s|<${xml_tag}>(.*?)</${xml_tag}>|\1|"
 }
 
 round() {
@@ -312,7 +400,7 @@ round() {
 
     number=$(printf "%.${decimals}f" "$number")
 
-    number_trimmed=$(echo "$number" | sed '/\./ s/\.\{0,1\}0\{1,\}$//')
+    number_trimmed=$(string_rstrip_decimal_zeros "$number")
     if [ "$number_trimmed" = "-0" ]; then
         number="${number:1}"
     fi

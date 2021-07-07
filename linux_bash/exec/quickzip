@@ -25,8 +25,8 @@ source "$bash_functions_script"
 
 
 ## Arguments
-src_path=''
-new_name=''
+src_path_arr=()
+zipfile=''
 force_glob=false
 fwd_args_arr=()
 dryrun=false
@@ -36,32 +36,36 @@ dryrun=false
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage: ${script_name} [OPTION]... SRC_PATH NEW_NAME ['mv' OPTION]...
+Usage: ${script_name} [OPTION]... SRC_PATH... ['zip' OPTION]...
 
-Rename one or more files or folders.
+Quickly zip batches of files and/or folders.
 
   SRC_PATH may be a relative or absolute path to a file/folder,
 or a path leading up and including the common filename/foldername
 prefix of multiple files/folders in the same source directory.
 
-  If SRC_PATH is a single file, the full filename/foldername of
-the source file is renamed to NEW_NAME.
-  If SRC_PATH ends in a prefix matching multiple files/folders
-in the same directory, the filenames/foldernames of the matches
-are renamed to "{NEW_NAME}{old-name-suffix}".
+  If only one SRC_PATH argument is provided, the --zipfile option
+does not need to be provided; the default output zipfile location
+is next to the source item(s) indicated by SRC_PATH. If SRC_PATH
+is a directory and SRC_PATH does not end with a forward slash (/),
+the folder is placed at the root of the zipfile -- if it does end
+with a forward slash, the immediate contents of the folder are
+placed at the root of the zipfile.
+  If multiple SRC_PATH arguments are provided, the ZIPFILE argument
+must be provided indicating the output zipfile location.
 
-  If NEW_NAME does not start with '/', it is treated as a path
-relative to the directory of SRC_PATH.
-  If NEW_NAME starts with '/', it is treated as an absolute path.
+  For 'zip' options, note that --recurse-paths (-r) is automatically
+provided, and --junk-paths (-j) is not advised.
 
 Options:
+ -o,--zipfile
+        Location of output zipfile.
  -g,--glob
         When SRC_PATH is the full path to an existing file/folder,
-        force treating SRC_PATH as a prefix matching additional
-        files/folders in the same directory.
+        force treating all SRC_PATH arguments as prefixes matching
+        additional files/folders in the same directories.
 -dr,--dryrun
-        Print 'mv' command(s) used to rename files/folders,
-        without executing.
+        Print command(s) used to zip files/folders, without executing.
 EOM
 if (( $# < 1 )); then
     echo_e -e "$script_usage"
@@ -97,14 +101,7 @@ while (( "$#" )); do
         fi
 
     elif [ "$(string_startswith "$arg" '-')" = false ]; then
-        if [ -z "$src_path" ]; then
-            src_path="$arg"
-        elif [ -z "$new_name" ]; then
-            new_name="$arg"
-        else
-            echo_e "Unexpected argument: ${arg}"
-            exit_script_with_status 1
-        fi
+        src_path_arr+=( "$arg" )
 
     else
         arg_opt="$(string_lstrip "$arg" '-')"
@@ -124,6 +121,10 @@ while (( "$#" )); do
             echo "$script_usage"
             exit 0
 
+        elif [ "$arg_opt" = 'o' ] || [ "$arg_opt" = 'zipfile' ]; then
+            arg_opt_nargs=1
+            zipfile="$arg_val"
+
         elif [ "$arg_opt" = 'g' ] || [ "$arg_opt" = 'glob' ]; then
             arg_opt_nargs=0
             force_glob=true
@@ -135,7 +136,7 @@ while (( "$#" )); do
         else
             arg_opt_nargs=0
             
-            if [ -n "$src_path" ] && [ -n "$new_name" ]; then
+            if (( ${#src_path_arr[@]} > 0 )); then
                 fwd_args_arr+=( "$arg" )
                 parsing_fwd_args=true
             else
@@ -171,42 +172,72 @@ set -u
 
 ## Validate and adjust arguments
 
-if [ -z "$src_path" ] || [ -z "$new_name" ]; then
-    echo_e "Both SRC_PATH and NEW_NAME arguments must be provided"
+num_src_path_args="${#src_path_arr[@]}"
+if (( num_src_path_args == 0 )); then
+    echo_e "At least one SRC_PATH argument must be provided"
     exit_script_with_status 1
-fi
-
-if [ ! -e "$src_path" ] || { [ "$(string_endswith "$src_path" '/')" = false ] && [ "$force_glob" = true ]; }; then
-    src_dirent_arr=( "$src_path"* )
-    if (( ${#src_dirent_arr[@]} == 0 )); then
-        echo_e "Cannot find any files/dirs matching SRC_PATH argument: ${src_path}*"
+elif (( num_src_path_args == 1 )) && [ -z "$zipfile" ]; then
+    zipfile="$(fullpath "${src_path_arr[0]}").zip"
+else
+    if [ -n "$zipfile" ]; then
+        zipfile=$(fullpath "$zipfile")
+    else
+        echo_e "Output zipfile must be specified when multiple SRC_PATH arguments are provided"
         exit_script_with_status 1
     fi
-else
-    src_dirent_arr=( "$src_path" )
 fi
 
-src_dir=$(dirname "$src_path")
-if [ "$(string_startswith "$new_name" '/')" = true ]; then
-    new_name_prefix="$new_name"
-else
-    new_name_prefix="${src_dir}/${new_name}"
-fi
+src_fullpath_arr=()
+for src_path in "${src_path_arr[@]}"; do
+    if [ ! -e "$src_path" ] || [ "$(string_endswith "$src_path" '/')" = true ] || [ "$force_glob" = true ]; then
+        src_dirent_arr=( "$src_path"* )
+        if (( ${#src_dirent_arr[@]} == 0 )); then
+            echo_e "Cannot find any files/dirs matching SRC_PATH argument: ${src_path}*"
+            exit_script_with_status 1
+        fi
+    fi
+    src_fullpath_arr+=( "$(fullpath_preserve_trailing_slash "$src_path")" )
+done
 
-mv_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
+zip_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
 
 
-## Perform renaming
+## Perform zipping
 
-for src_dirent in "${src_dirent_arr[@]}"; do
+for src_path in "${src_fullpath_arr[@]}"; do
 
-    new_name_suffix="${src_dirent/${src_path}/}"
+    if [ "$(string_endswith "$src_path" '/')" = true ]; then
+        working_dir="$src_path"
+        src_path_basename=""
+    else
+        working_dir=$(dirname "$src_path")
+        src_path_basename=$(basename "$src_path")
+    fi
 
-    cmd="mv ${mv_opt_args} \"${src_dirent}\" \"${new_name_prefix}${new_name_suffix}\""
+    echo "Changing to directory: ${working_dir}"
+    cd "$working_dir"
+    cd_status=$?
+    if (( cd_status != 0 )); then
+        echo_e "Cannot 'cd' to directory: ${working_dir}"
+        exit_script_with_status 1
+    fi
+
+    if [ ! -e "$src_path" ] || [ "$(string_endswith "$src_path" '/')" = true ] || [ "$force_glob" = true ]; then
+        src_dirent_arr=( "$src_path_basename"* )
+    else
+        src_dirent_arr=( "$src_path_basename" )
+    fi
+
+    cmd="zip -r ${zip_opt_args} \"${zipfile}\" $(printf ' "%s"' "${src_dirent_arr[@]}")"
 
     if [ "$dryrun" = true ]; then
         echo "$cmd"
     else
         eval "$cmd"
+        cmd_status=$?
+        if (( cmd_status != 0 )); then
+            echo_e "Processing command failed with non-zero exit status (${cmd_status}): ${cmd}"
+            exit_script_with_status 1
+        fi
     fi
 done
