@@ -153,16 +153,16 @@ layz() {
 ## Path representation
 
 abspath_all() {
-    process_items "abspath" false true "$@"
+    process_items 'abspath' false true "$@"
 }
 fullpath_all() {
-    process_items "fullpath" false true "$@"
+    process_items 'fullpath' false true "$@"
 }
 basename_all() {
-    process_items "basename" false true "$@"
+    process_items 'basename' false true "$@"
 }
 dirname_all() {
-    process_items "dirname" false true "$@"
+    process_items 'dirname' false true "$@"
 }
 
 pathfromend() {
@@ -240,7 +240,7 @@ read_csv() {
         SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR=()
         SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR=()
         local header_line get_fields_arr header_fields_arr
-        read -r header_line
+        IFS= read -r header_line
         read_status=$?
         if (( read_status != 0 )); then return "$read_status"; fi
         IFS="$csv_delim" read -ra get_fields_arr <<< "$get_fields"
@@ -263,7 +263,7 @@ read_csv() {
 
     local csv_line csv_line_arr
 
-    read -r csv_line
+    IFS= read -r csv_line
     read_status=$?
     if (( read_status != 0 )); then
         SHELL_UTILS_READ_CSV_IP=false
@@ -512,7 +512,7 @@ EOM
         arg="$1"
 
         if [ "$(string_startswith "$arg" '-')" = false ]; then
-            if (( $(indexOf "$arg" ${git_cmd_choices_arr[@]+"${git_cmd_choices_arr[@]}"}) != -1 )); then
+            if [ "$(itemOneOf "$arg" "${git_cmd_choices_arr[@]}")" = true ]; then
                 git_cmd_arr+=( "$arg" )
             else
                 repo_dir_arr+=( "$(fullpath "$arg")" )
@@ -576,7 +576,7 @@ EOM
 
         for git_cmd in "${git_cmd_arr[@]}"; do
             echo "'${repo_name}' results of 'git ${git_cmd}' command:"
-            if [ -n "$ssh_passphrase" ] && (( $(indexOf "$git_cmd" ${git_cmd_need_ssh_arr[@]+"${git_cmd_need_ssh_arr[@]}"}) != -1 )); then
+            if [ -n "$ssh_passphrase" ] && [ "$(itemOneOf "$git_cmd" "${git_cmd_need_ssh_arr[@]}")" = true ]; then
                 expect -c "spawn git ${git_cmd}; expect \"passphrase\"; send \"${ssh_passphrase}\r\"; interact"
             else
                 git -c pager.branch=false ${git_cmd}

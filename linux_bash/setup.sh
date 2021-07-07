@@ -20,7 +20,7 @@ shell_utils_config_dir="${script_dir_abs}/config"
 symlink_errors=false
 
 echo
-while IFS='' read -r config_file_new; do
+while IFS= read -r config_file_new; do
     config_fname=$(basename "$config_file_new")
     config_file_old="${HOME}/${config_fname}"
     config_file_bak="${HOME}/${config_fname}_system_default"

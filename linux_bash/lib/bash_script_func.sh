@@ -18,6 +18,8 @@ log_oe() { log "$@" | tee >(cat >&2); }
 
 ## String manipulation
 
+base10() { print_string "$((10#$1))"; }
+
 string_to_uppercase() { print_string "$@" | tr '[:lower:]' '[:upper:]'; }
 
 string_to_lowercase() { print_string "$@" | tr '[:upper:]' '[:lower:]'; }
@@ -284,17 +286,58 @@ fullpath_alias() {
 }
 
 fullpath() {
+    if (( $# != 1 )); then
+        echo_e "fullpath: expected one path operand"
+        return 1
+    fi
     local path="$1"
     fullpath_alias "$path" false
 }
 
 abspath() {
+    if (( $# != 1 )); then
+        echo_e "abspath: expected one path operand"
+        return 1
+    fi
     local path="$1"
     if [ "$READLINK_F_AVAILABLE" = true ]; then
         readlink -f "$path"
     else
         fullpath_alias "$path" true
     fi
+}
+
+preserve_trailing_slash_alias() {
+    if (( $# != 2 )); then
+        echo_e "preserve_trailing_slash_alias: expected a path function name and one path operand"
+        return 1
+    fi
+    local path_fn="$1"
+    local path_in="$2"
+    local path_out=$(eval "${path_fn} \"$path_in\"")
+    if [ "$(string_endswith "$path_in" '/')" = true ]; then
+        if [ "$(string_endswith "$path_out" '/')" = false ]; then
+            path_out="${path_out}/"
+        fi
+    elif [ "$(string_endswith "$path_out" '/')" = true ]; then
+        path_out=$(string_rstrip "$path_out" '/')
+    fi
+    echo "$path_out"
+}
+
+fullpath_preserve_trailing_slash() {
+    if (( $# != 1 )); then
+        echo_e "fullpath_preserve_trailing_slash: expected one path operand"
+        return 1
+    fi
+    preserve_trailing_slash_alias 'fullpath' "$1"
+}
+abspath_preserve_trailing_slash() {
+    if (( $# != 1 )); then
+        echo_e "abspath_preserve_trailing_slash: expected one path operand"
+        return 1
+    fi
+    abspath_trailing_slash_alias 'fullpath' "$1"
 }
 
 
@@ -332,10 +375,7 @@ itemOneOf() {
 
 parse_xml_value() {
     local xml_tag="$1"
-    local xml_onelinestring=''
-    while read -r xml_onelinestring; do
-        echo "$xml_onelinestring" | grep -Po "<${xml_tag}>(.*?)</${xml_tag}>" | sed -r "s|<${xml_tag}>(.*?)</${xml_tag}>|\1|"
-    done
+    grep -Po "<${xml_tag}>(.*?)</${xml_tag}>" | sed -r "s|<${xml_tag}>(.*?)</${xml_tag}>|\1|"
 }
 
 round() {
