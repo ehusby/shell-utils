@@ -33,7 +33,7 @@ if [ -n "$PS1" ]; then
     # Set options for standard programs
     export LESS='RXMi'  # https://man7.org/linux/man-pages/man1/less.1.html#OPTIONS
     export CLICOLOR=1
-    if which dircolors; then
+    if which dircolors 1>/dev/null 2>/dev/null; then
         eval "$(dircolors -b)"
     else
         export LSCOLORS=ExGxBxDxCxEgEdxbxgxcxd
