@@ -25,28 +25,63 @@ source "$bash_functions_script"
 
 
 ## Arguments
-cleanup_mode_choices_arr=( 'pbs' 'ssh' )
-cleanup_mode=''
-use_ssh=false
+method_choices_arr=( 'pbs' 'ssh' )
+method=''
+cleanup_dir="/local"
 ssh_passphrase=''
 remove_all=false
+find_args=''
 ssh_dryrun=false
 dryrun=false
+
+## Custom globals
+removed_files_log="${HOME}/${script_name}_<timestamp>_removed_files.txt"
 
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Remove files from /local directory on cluster nodes
-Usage: ${script_name} (pbs|ssh) [--all] [--dryrun] [--ssh-dryrun]
-  pbs : submit single-core PBS job to every node on the cluster for cleanup
-  ssh : SSH into every node on the cluster in serial and run cleanup command over SSH
-  --ssh-pw : passPHRASE for all SSH connections (if not provided, may need to be entered for every node)
-  --all : attempt to remove all files within /local directories regardless of ownership (by default only the USER(${USER})'s files are removed)
-  --ssh-dryrun : print list of files to be deleted over SSH into ~/${script_name}_<timestamp>_removed_files.txt log file without actually deleting
-  --dryrun : print actions without executing
+Usage: ${script_name} [OPTION]... METHOD
+
+  Remove files within a specified local directory path that exists on
+all PBS cluster nodes.
+  The list of cluster nodes is sourced from the command 'pbsnodes -l up'.
+  A list of all files removed (or 'to be removed' if dryrun options are
+provided) is generated at '${removed_files_log}'.
+
+METHOD:
+    pbs
+        Submit a single-core PBS job to each cluster node for cleanup.
+    ssh
+        SSH into each cluster node in serial and run cleanup command over SSH.
+Options:
+    --cleanup-dir (default='${cleanup_dir}')
+        Local directory on cluster nodes where cleanup will be performed.
+    --ssh-pw
+        SSH key passphrase for all SSH connections established when
+        METHOD is 'ssh'. If this option is not provided, the passphrase 
+        may need to be entered upon each serial SSH connection to
+        cluster nodes.
+    --all
+        Attempt to remove all files within the cleanup directories
+        regardless of ownership. By default only the USER(${USER})'s
+        files are removed.
+    --find-args
+        Additional arguments to 'find' command used to perform cleanup.
+        e.g. '-mindepth 2 -maxdepth 2 -name "*.tif"'
+        If '-mindepth' >= 1 is not specified, '-mindepth 1' will be
+        added automatically.
+        If the --all script option is not provided, '-user \${USER}'
+        will be added automatically.
+        The '-ls' and '-delete' find arguments should not be provided,
+        as they are applied as part of normal script execution.
+    --ssh-dryrun
+        If METHOD is 'ssh', run serial SSH connections to cluster nodes
+        to generate the list of files to be removed.
+-dr,--dryrun
+        Print commands used to perform cleanup, without executing.
 EOM
 if (( $# < 1 )); then
-    echo_e "$script_usage"
+    echo_e -e "$script_usage"
     exit_script_with_status 1
 fi
 
@@ -56,10 +91,9 @@ set +u
 while (( "$#" )); do
     arg="$1"
 
-    if ! [[ $arg == -* ]]; then
-
-        if [ -z "$cleanup_mode" ]; then
-            cleanup_mode="$arg"
+    if [ "$(string_startswith "$arg" '-')" = false ]; then
+        if [ -z "$method" ]; then
+            method="$arg"
         else
             echo_e "Unexpected argument: ${arg}"
             exit_script_with_status 1
@@ -91,11 +125,16 @@ while (( "$#" )); do
             arg_opt_nargs=0
             remove_all=true
 
+        elif [ "$arg_opt" = 'find-args' ]; then
+            arg_opt_nargs=1
+            find_args="$2"
+            arg_val_can_start_with_dash=true
+
         elif [ "$arg_opt" = 'ssh-dryrun' ]; then
             arg_opt_nargs=0
             ssh_dryrun=true
 
-        elif [ "$arg_opt" = 'dryrun' ]; then
+        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
             dryrun=true
 
@@ -131,18 +170,38 @@ set -u
 
 ## Validate arguments
 
-if (( $(indexOf "$cleanup_mode" "${cleanup_mode_choices_arr[@]}") == -1 )); then
-    echo_e "Rounding mode must be one of the following: ${cleanup_mode_choices_arr[*]}"
+if [ "$(itemOneOf "$method" "${method_choices_arr[@]}")" = false ]; then
+    echo_e "METHOD must be one of the following: ${method_choices_arr[*]}"
     exit_script_with_status 1
 fi
-if [ "$cleanup_mode" = 'ssh' ]; then
-    use_ssh=true
+
+if [ -n "$find_args" ]; then
+    if [ "$(string_contains "$find_args" '-mindepth')" = true ]; then
+        find_args_mindepth=$(echo "$find_args" | sed -r 's/.*-mindepth(=|[[:space:]]+)([0-9]+).*/\2/')
+        if (( find_args_mindepth < 1 )); then
+            echo_e "--find-args '-mindepth' must be >= 1"
+            exit_script_with_status 1
+        fi
+    else
+        find_args="-mindepth 1 ${find_args}"
+    fi
+    if [ "$remove_all" = false ] && [ "$(string_contains "$find_args" '-user')" = false ]; then
+        find_args="${find_args} -user ${USER}"
+    fi
+else
+    find_args="-mindepth 1"
+    if [ "$remove_all" = false ]; then
+        find_args="${find_args} -user ${USER}"
+    fi
 fi
 
 
-log_date=$(date +'%Y%m%d%H%M%S')
+## Setup variables
 
-qsubscript=$(cat <<EOF
+log_date=$(date +'%Y%m%d%H%M%S')
+removed_files_log="${removed_files_log/<timestamp>/${log_date}}"
+
+read -r -d '' pbs_jobscript << EOM
 #!/bin/bash
 
 #PBS -N CleanupLocal
@@ -180,27 +239,23 @@ echo
 
 echo "Removed the following files:"
 
-find /local/ -mindepth 1 -user ${USER} -ls -delete
-EOF
-)
+find "${cleanup_dir}" ${find_args} -ls -delete | tee -a "${removed_files_log}"
+EOM
 
-nodelist=$(pbsnodes -l up | gawk '{print $1}' | sort)
+nodelist=$(pbsnodes -l up | awk '{print $1}' | sort -u)
 
-for host in $nodelist ; do
 
-    if [ "$use_ssh" = true ]; then
+## Perform cleanup
 
-        cmd="ssh ${host} -f 'find /local -mindepth 1"
+while IFS= read -r node; do
 
-        if [ "$remove_all" = false ]; then
-            cmd="${cmd} -user ${USER}"
-        fi
-        cmd="${cmd} -ls"
+    if [ "$method" = 'ssh' ]; then
+        cmd="ssh ${node} -f 'find \"${cleanup_dir}\" ${find_args} -ls"
 
         if [ "$ssh_dryrun" = false ]; then
             cmd="${cmd} -delete"
         fi
-        cmd="${cmd} >> ~/${script_name}_${log_date}_removed_files.txt'"
+        cmd="${cmd} >> \"${removed_files_log}\"'"
 
         if [ -n "$ssh_passphrase" ]; then
             cmd="expect -c \"spawn ${cmd}; expect 'passphrase'; send '${ssh_passphrase}\r'; interact\""
@@ -212,15 +267,15 @@ for host in $nodelist ; do
             eval "$cmd"
         fi
 
-    else
-        ncpus=$(pbsnodes -a ${host} | grep np | gawk '{print $3}')
-        echo "Host: ${host} -- ncpus: ${ncpus}"
+    elif [ "$method" = 'pbs' ]; then
+        ncpus=$(pbsnodes -x "$node" | parse_xml_value 'np')
 
-        if [ "$dryrun" = true ]; then
-            echo 'echo $qsubscript'" | qsub -l 'nodes=${host},ncpus=${ncpus}'"
-        else
-            echo "$qsubscript" | qsub -l "nodes=${host},ncpus=${ncpus}"
+        cmd="echo \"\$pbs_jobscript\" | qsub -l \"nodes=${node},ncpus=${ncpus}\""
+
+        echo "$cmd"
+        if [ "$dryrun" = false ]; then
+            eval "$cmd"
         fi
     fi
 
-done
+done <<< "$nodelist"
