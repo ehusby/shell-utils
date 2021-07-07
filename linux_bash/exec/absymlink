@@ -4,9 +4,16 @@
 set -uo pipefail
 
 ## Script globals
-script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
-script_dir=$(dirname "$script_file")
-script_name=$(basename "$script_file")
+script_name=$(basename "${BASH_SOURCE[0]}")
+script_dir=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd)
+script_dir_abs=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd -P)
+script_file="${script_dir}/${script_name}"
+if [ -L "${BASH_SOURCE[0]}" ]; then
+    script_file_abs=$(readlink "${BASH_SOURCE[0]}")
+else
+    script_file_abs="${script_dir_abs}/${script_name}"
+fi
+export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
 script_args=("$@")
 
 ## Script imports
@@ -18,9 +25,8 @@ source "$bash_functions_script"
 
 
 ## Arguments
-target=''
-link_name=''
-ln_opt_arg_arr=()
+path_arg_arr=()
+fwd_args_arr=()
 dryrun=false
 
 ## Custom globals
@@ -28,7 +34,20 @@ dryrun=false
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage: ${script_name} ['ln' option (-s already provided)]... TARGET LINK_NAME [--dryrun]
+Usage:
+    ${script_name} [OPTION]... [-T] TARGET LINK_NAME   (1st form)
+    ${script_name} [OPTION]... TARGET                  (2nd form)
+    ${script_name} [OPTION]... TARGET... DIRECTORY     (3rd form)
+    ${script_name} [OPTION]... -t DIRECTORY TARGET...  (4th form)
+    (see 'man ln' for further details)
+
+  Create symbolic link(s) with 'ln -s', converting TARGET paths
+to absolute paths for link creation.
+
+Options:
+[all 'ln' options]
+-dr,--dryrun
+        Print 'ln' command used to create link, without executing.
 EOM
 if (( $# < 1 )); then
     echo_e -e "$script_usage"
@@ -41,19 +60,20 @@ set +u
 while (( "$#" )); do
     arg="$1"
 
-    if ! [[ $arg == -* ]]; then
-        if [ -z "$target" ]; then
-            target=$(readlink -f "$arg")
-        elif [ -z "$link_name" ]; then
-            link_name="$arg"
-        else
-            echo_e "Unexpected argument: ${arg}"
-            exit_script_with_status 1
-        fi
+    if [ "$(string_startswith "$arg" '-')" = false ]; then
+        path_arg_arr+=( "$arg" )
 
     else
-        arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+        arg_opt="$(string_lstrip "$arg" '-')"
         arg_opt_nargs=''
+        if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+            arg_val="${arg_opt#*=}"
+            arg_opt="${arg_opt%%=*}"
+            arg_opt_nargs_do_shift=false
+        else
+            arg_val="$2"
+            arg_opt_nargs_do_shift=true
+        fi
         arg_val_can_start_with_dash=false
 
         if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
@@ -61,13 +81,17 @@ while (( "$#" )); do
             echo "$script_usage"
             exit 0
 
-        elif [ "$arg_opt" = 'dryrun' ]; then
+        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
             dryrun=true
 
+        elif [ "$(itemOneOf "$arg_opt" 'suffix' 'target-directory' )" = true ]; then
+            arg_opt_nargs=1
+            fwd_args_arr+=( "$arg_opt" "$arg_val" )
+
         else
             arg_opt_nargs=0
-            ln_opt_arg_arr+=( "$arg" )
+            fwd_args_arr+=( "$arg" )
         fi
 
         if [ -z "$arg_opt_nargs" ]; then
@@ -75,14 +99,19 @@ while (( "$#" )); do
             exit_script_with_status 1
         fi
 
-        for i in $(seq 1 $arg_opt_nargs); do
-            shift
-            arg_val="$1"
-            if [ "$arg_val_can_start_with_dash" = false ] && [[ $arg_val == -* ]]; then
-                echo_e "Unexpected argument value: ${arg} ${arg_val}"
-                exit_script_with_status 1
-            fi
-        done
+        if [ "$arg_opt_nargs_do_shift" = true ] && (( arg_opt_nargs >= 1 )); then
+            for arg_num in $(seq 1 $arg_opt_nargs); do
+                shift
+                arg_val="$1"
+                if [ -z "$arg_val" ]; then
+                    echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                    exit_script_with_status 1
+                elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                    exit_script_with_status 1
+                fi
+            done
+        fi
     fi
 
     shift
@@ -92,15 +121,34 @@ set -u
 
 ## Validate arguments
 
-if [ -z "$target" ] || [ -z "$link_name" ]; then
-    echo_e "Both TARGET and LINK_NAME arguments must be provided"
+num_path_args="${#path_arg_arr[@]}"
+if (( num_path_args == 0 )); then
+    echo_e "At least one TARGET argument must be provided"
     exit_script_with_status 1
+elif (( num_path_args == 1 )); then
+    last_target_idx=0
+else
+    last_target_idx=$(( num_path_args - 2 ))
 fi
 
+abspath_arg_arr=()
 
-## Perform renaming
+for idx in "${!path_arg_arr[@]}"; do
+    path=$(abspath "${path_arg_arr[$idx]}")
+    if (( idx <= last_target_idx )); then
+        abspath_arg_arr+=( "$(abspath "$path")" )
+    else
+        abspath_arg_arr+=( "$path" )
+    fi
+done
 
-cmd="ln -s ${ln_opt_arg_arr[*]+${ln_opt_arg_arr[*]}} ${target} ${link_name}"
+ln_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
+
+
+## Perform linking
+
+cmd="ln -s ${ln_opt_args} $(printf ' "%s"' "${abspath_arg_arr[@]}")"
+
 if [ "$dryrun" = true ]; then
     echo "$cmd"
 else

@@ -82,9 +82,7 @@ sec2time() {
 }
 parse_xml_value() {
     xml_tag="$1"
-    while read -r xml_onelinestring; do
-        echo "$xml_onelinestring" | grep -Eo "<${xml_tag}>(.*?)</${xml_tag}>" | sed -r "s|<${xml_tag}>(.*?)</${xml_tag}>|\1|"
-    done
+    grep -Eo "<${xml_tag}>(.*?)</${xml_tag}>" | sed -r "s|<${xml_tag}>(.*?)</${xml_tag}>|\1|"
 }
 
 

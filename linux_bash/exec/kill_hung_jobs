@@ -4,9 +4,16 @@
 set -uo pipefail
 
 ## Script globals
-script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
-script_dir=$(dirname "$script_file")
-script_name=$(basename "$script_file")
+script_name=$(basename "${BASH_SOURCE[0]}")
+script_dir=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd)
+script_dir_abs=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd -P)
+script_file="${script_dir}/${script_name}"
+if [ -L "${BASH_SOURCE[0]}" ]; then
+    script_file_abs=$(readlink "${BASH_SOURCE[0]}")
+else
+    script_file_abs="${script_dir_abs}/${script_name}"
+fi
+export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
 script_args=("$@")
 
 ## Script imports
@@ -18,68 +25,192 @@ source "$bash_functions_script"
 
 
 ## Arguments
-mmin_thresh="$1"
+mmin_thresh=''
 check_min=5
-jobname_prefix=''
+jobname_prefix_arr=()
+dryrun=false
+
+## Custom globals
+hungjobs_stash_dir="${HOME}/hungjobs_outfiles/"
+hungjobs_digest="${HOME}/hungjobs_digest.txt"
 
 
 ## Script usage
-if [ "$#" -lt 2 -o "$#" -gt 3 ]; then
-    echo "Script requires 2 arguments + 1 optional: mmin_thresh, check_min, [jobname_prefix]"
-    echo "    mmin_thresh      - number of minutes since ~/<jobname>.o<jobnum> job output log file was last modified at which point the job is deemed 'hung'"
-    echo "    check_min        - time interval between checks of 'qstat -r -n1 -u ${USER}' for hung jobs"
-    echo "    [jobname_prefix] - only check running jobs matching this jobname prefix"
-    exit 1
+read -r -d '' script_usage << EOM
+Usage: ${script_name} [OPTION]... JOBLOG_MMIN_THRESH [JOBNAME_PREFIX...]
+
+  Periodically check 'qstat' and delete PBS jobs with "running" status (R)
+matching the designated jobname prefix(es) when the job appears to be "hung".
+A job is deemed hung when its output log file was last modified more than
+JOBLOG_MMIN_THRESH minutes ago.
+  Copies of the hung jobs' output/error log files are placed in
+'${hungjobs_stash_dir}', and 'qstat' information pertaining to the
+hung jobs is preserved in '${hungjobs_digest}'.
+
+Options:
+    --check-min (default=${check_min})
+        Time interval in minutes between checks of 'qstat' to delete
+        hung jobs.
+-dr,--dryrun
+        Print actions without executing.
+EOM
+if (( $# < 1 )); then
+    echo_e "$script_usage"
+    exit_script_with_status 1
 fi
 
-mmin_thresh="$1"
-check_min="$2"
-jobname_prefix=''
-if [ "$#" -ge 3 ]; then
-    jobname_prefix="$3"
+
+## Parse arguments
+set +u
+while (( "$#" )); do
+    arg="$1"
+
+    if [ "$(string_startswith "$arg" '-')" = false ]; then
+        if [ -z "$mmin_thresh" ]; then
+            mmin_thresh="$arg"
+        else
+            jobname_prefix_arr+=( "$arg" )
+        fi
+
+    else
+        arg_opt="$(string_lstrip "$arg" '-')"
+        arg_opt_nargs=''
+        if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+            arg_val="${arg_opt#*=}"
+            arg_opt="${arg_opt%%=*}"
+            arg_opt_nargs_do_shift=false
+        else
+            arg_val="$2"
+            arg_opt_nargs_do_shift=true
+        fi
+        arg_val_can_start_with_dash=false
+
+        if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
+            arg_opt_nargs=0
+            echo "$script_usage"
+            exit 0
+
+        elif [ "$arg_opt" = 'check-min' ]; then
+            arg_opt_nargs=1
+            check_min="$arg_val"
+
+        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        else
+            arg_opt_nargs=0
+            ln_opt_arg_arr+=( "$arg" )
+        fi
+
+        if [ -z "$arg_opt_nargs" ]; then
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ "$arg_opt_nargs_do_shift" = true ] && (( arg_opt_nargs >= 1 )); then
+            for arg_num in $(seq 1 $arg_opt_nargs); do
+                shift
+                arg_val="$1"
+                if [ -z "$arg_val" ]; then
+                    echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                    exit_script_with_status 1
+                elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                    exit_script_with_status 1
+                fi
+            done
+        fi
+    fi
+
+    shift
+done
+set -u
+
+
+## Validate arguments
+
+if [ -z "$mmin_thresh" ]; then
+    echo_e "JOBLOG_MMIN_THRESH argument must be provided"
+    exit_script_with_status 1
+elif [ "$(string_is_posint "$mmin_thresh")" = false ]; then
+    echo_e "JOBLOG_MMIN_THRESH must be a positive integer"
+    exit_script_with_status 1
 fi
 
-hungjobs_stash_dir="${HOME}/scratch/hungjobs_outfiles/"
-hungjobs_digest="${HOME}/scratch/hungjobs_digest.txt"
-
-if [ ! -d "${hungjobs_stash_dir}" ]; then
-    mkdir -p "${hungjobs_stash_dir}"
+if [ "$(string_is_posint "$check_min")" = false ]; then
+    echo_e "CHECK_MIN must be a positive integer"
+    exit_script_with_status 1
 fi
+
+
+if (( ${#jobname_prefix_arr[@]} > 0 )); then
+    re_jobname_prefix=$(printf "(%s)" "$(string_join '|' "${jobname_prefix_arr[@]}")")
+else
+    re_jobname_prefix='.*'
+fi
+
+if [ ! -d "$hungjobs_stash_dir" ]; then
+    mkdir -p "$hungjobs_stash_dir"
+fi
+
+
+## Run queue watch loop
 
 while true; do
-    while read -r qstat_row; do
+    while IFS= read -r qstat_row; do
         qstat_cols=($qstat_row)
-        jobnum=$(echo "${qstat_cols[0]}" | cut -d"." -f1)
-        jobxml=$(qstat -xlf "$jobnum")
+        jobid=$(echo "${qstat_cols[0]}" | cut -d"." -f1)
+        jobxml=$(qstat -xlf "$jobid")
         jobname=$(echo "$jobxml" | parse_xml_value 'Job_Name')
 
-        if [[ "${jobname}" != "${jobname_prefix}"* ]]; then continue; fi
+        if [ "$(re_test "$re_jobname_prefix" "$jobname")" = false ]; then
+            continue
+        fi
 
-        outfile=$(echo "$jobxml" | parse_xml_value 'Output_Path')
-        outfile=$(echo "$outfile" | rev | cut -d":" -f1 | rev)
+        outfile=$(echo "$jobxml" | parse_xml_value 'Output_Path' | rev | cut -d":" -f1 | rev)
+        errfile=$(echo "$jobxml" | parse_xml_value 'Error_Path'  | rev | cut -d":" -f1 | rev)
 
-        # Job output logs on Nunatak are forced into the home dir
-        outfname=$(basename "$outfile")
-        outfile="${HOME}/${outfname}"
+        outfile=${outfile/\$PBS_JOBNAME/$jobname}
+        outfile=${outfile/\$PBS_JOBID/$jobid}
+        errfile=${errfile/\$PBS_JOBNAME/$jobname}
+        errfile=${errfile/\$PBS_JOBID/$jobid}
+
+        if [ ! -f "$outfile" ]; then
+            # Sometimes job output logs are forced into the home dir
+            outfile="${HOME}/$(basename "$outfile")"
+            errfile="${HOME}/$(basename "$errfile")"
+        fi
+        if [ ! -f "$outfile" ]; then
+            echo "WARNING: Cannot locate output job log file for jobid=${jobid}, jobname='${jobname}'"
+            continue
+        fi
 
         inactive_outfile=$(find "$outfile" -mmin +${mmin_thresh})
 
         if [ -n "$inactive_outfile" ]; then
-            outfile_mtime_sec=$(date +%s -r "$inactive_outfile")
+            outfile_mtime_sec=$(date +%s -r "$outfile")
             current_time_sec=$(date +%s)
-            inactive_sec=$((current_time_sec - outfile_mtime_sec))
+            inactive_sec=$(( current_time_sec - outfile_mtime_sec ))
             inactive_hms=$(sec2hms "$inactive_sec")
 
-            log "Deleting hung job with outfile last modified ${inactive_hms} ago (mmin_thresh=${mmin_thresh}):\n${qstat_row}" | tee -a "$hungjobs_digest"
-            qdel "$jobnum"
-            cp "$inactive_outfile" "$hungjobs_stash_dir"
+            hungjob_msg="Deleting hung job with outfile last modified ${inactive_hms} ago (mmin_thresh=${mmin_thresh}):\n${qstat_row}"
+            echo -e "$hungjob_msg"
+            if [ "$dryrun" = false ]; then
+                echo -e "$hungjob_msg" >> "$hungjobs_digest"
+                qdel "$jobid"
+                cp "$outfile" "$hungjobs_stash_dir"
+                if [ "$errfile" != "$outfile" ]; then
+                    cp "$errfile" "$hungjobs_stash_dir"
+                fi
+            fi
         fi
 
-    done < <( qstat -r -n1 -u "$USER" | tail -n +6 )
+    done < <( qstat -n1 -u "$USER" | grep " R " )
 
-    for (( min_til_check=${check_min}; min_til_check > 0; min_til_check-- )); do
-        echo -en "\r${min_til_check} minutes until next check for hung jobs (mmin_thresh=${mmin_thresh}, check_min=${check_min}, jobname_prefix='${jobname_prefix}')"
+    for (( min_til_check=check_min; min_til_check > 0; min_til_check-- )); do
+        echo -en "\r\033[K${min_til_check} minutes until next check for hung jobs (mmin_thresh=${mmin_thresh}, check_min=${check_min}, jobname_prefix='${re_jobname_prefix}')"
         sleep 1m
     done
-    echo -en "\r"
+    echo -en "\r\033[K"
 done
