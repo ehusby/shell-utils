@@ -188,7 +188,7 @@ else
 fi
 
 if [ "$(itemOneOf "$chmod_mode" "${chmod_mode_choices_arr[@]}")" = false ]; then
-    echo_e "chmod mode must be one of the following: ${chmod_mode_choices_arr[*]}"
+    echo_e "--mode must be one of the following: ${chmod_mode_choices_arr[*]}"
     exit_script_with_status 1
 fi
 

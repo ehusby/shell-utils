@@ -158,7 +158,7 @@ fi
 ## Run queue watch loop
 
 while true; do
-    while read -r qstat_row; do
+    while IFS= read -r qstat_row; do
         qstat_cols=($qstat_row)
         jobid=$(echo "${qstat_cols[0]}" | cut -d"." -f1)
         jobxml=$(qstat -xlf "$jobid")

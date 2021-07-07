@@ -99,7 +99,7 @@ fi
 time_finished=$(date)
 
 if [ -n "$cmd_err" ]; then
-    IFS= read -r -d '' email_err << EOM
+    read -r -d '' email_err << EOM
 
 ----- ${script_name_caps} COMMAND ERROR -----
 ${cmd_err}
