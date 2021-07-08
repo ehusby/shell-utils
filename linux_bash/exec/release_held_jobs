@@ -39,7 +39,7 @@ Usage: ${script_name} [OPTION]... MAX_RUNNING_JOBS [JOBNAME_PREFIX...]
 
 Periodically check 'qstat' and release PBS jobs with "held" status (H)
 matching the designated jobname prefix(es), keeping the total number of
-running jobs to a specified maximum.
+running (R) and queued (Q) jobs to a specified maximum.
 
 Options:
     --check-min (default=${check_min})
@@ -150,13 +150,14 @@ fi
 while true; do
     qstat_selected_jobs=$(qstat -n1 -u "$USER" | grep -E "$re_jobname_prefix")
     num_jobs_running=$(echo "$qstat_selected_jobs" | grep " R " | wc -l)
+    num_jobs_queued=$(echo "$qstat_selected_jobs" | grep " Q " | wc -l)
     num_jobs_held=$(echo "$qstat_selected_jobs" | grep " H " | wc -l)
     num_jobs_total=$(echo "$qstat_selected_jobs" | wc -l)
 
-    echo "${num_jobs_total} jobs in queue matching jobname '${re_jobname_prefix}': ${num_jobs_running} running, ${num_jobs_held} held"
+    echo "${num_jobs_total} jobs in queue matching jobname '${re_jobname_prefix}': ${num_jobs_running} running, ${num_jobs_queued} queued, ${num_jobs_held} held"
 
     if (( num_jobs_held > 0 )); then
-        num_jobs_can_be_released=$(( max_running_jobs - num_jobs_running ))
+        num_jobs_can_be_released=$(( max_running_jobs - (num_jobs_running + num_jobs_queued) ))
         if (( num_jobs_can_be_released > 0 )); then
             jobids_to_release=$(echo "$qstat_selected_jobs" | grep " H " | head -n $num_jobs_can_be_released | cut -d" " -f1 | cut -d"." -f1)
             echo "Releasing $(echo "$jobids_to_release" | wc -l) jobids: $(echo "$jobids_to_release" | tr '\n' ' ')"
