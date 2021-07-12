@@ -1,0 +1,5 @@
+# .bashrc
+
+source "${HOME}/.bashrc"
+cd "$HOME"
+screen -x

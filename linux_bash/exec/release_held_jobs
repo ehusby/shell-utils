@@ -1,6 +1,6 @@
 #!/bin/bash
 
-## Bash settingsblahahah
+## Bash settings
 set -uo pipefail
 
 ## Script globals
@@ -152,15 +152,21 @@ while true; do
     num_jobs_running=$(echo "$qstat_selected_jobs" | grep " R " | wc -l)
     num_jobs_queued=$(echo "$qstat_selected_jobs" | grep " Q " | wc -l)
     num_jobs_held=$(echo "$qstat_selected_jobs" | grep " H " | wc -l)
-    num_jobs_total=$(echo "$qstat_selected_jobs" | wc -l)
+    if [ -n "$qstat_selected_jobs" ]; then
+        num_jobs_total=$(echo "$qstat_selected_jobs" | wc -l)
+    else
+        num_jobs_total=0
+    fi
 
-    echo "${num_jobs_total} jobs in queue matching jobname '${re_jobname_prefix}': ${num_jobs_running} running, ${num_jobs_queued} queued, ${num_jobs_held} held"
+    if (( num_jobs_total > 0 )); then
+        log "${num_jobs_total} jobs in queue matching jobname '${re_jobname_prefix}': ${num_jobs_running} running, ${num_jobs_queued} queued, ${num_jobs_held} held"
+    fi
 
     if (( num_jobs_held > 0 )); then
         num_jobs_can_be_released=$(( max_running_jobs - (num_jobs_running + num_jobs_queued) ))
         if (( num_jobs_can_be_released > 0 )); then
             jobids_to_release=$(echo "$qstat_selected_jobs" | grep " H " | head -n $num_jobs_can_be_released | cut -d" " -f1 | cut -d"." -f1)
-            echo "Releasing $(echo "$jobids_to_release" | wc -l) jobids: $(echo "$jobids_to_release" | tr '\n' ' ')"
+            log "Releasing $(echo "$jobids_to_release" | wc -l) jobids: $(echo "$jobids_to_release" | tr '\n' ' ')"
             if [ "$dryrun" = false ]; then
                 echo "$jobids_to_release" | xargs qrls
             fi
