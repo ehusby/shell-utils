@@ -195,9 +195,9 @@ while true; do
             inactive_hms=$(sec2hms "$inactive_sec")
 
             hungjob_msg="Deleting hung job with outfile last modified ${inactive_hms} ago (mmin_thresh=${mmin_thresh}):\n${qstat_row}"
-            echo -e "$hungjob_msg"
+            log "$hungjob_msg"
             if [ "$dryrun" = false ]; then
-                echo -e "$hungjob_msg" >> "$hungjobs_digest"
+                log "$hungjob_msg" >> "$hungjobs_digest"
                 qdel "$jobid"
                 cp "$outfile" "$hungjobs_stash_dir"
                 if [ "$errfile" != "$outfile" ]; then

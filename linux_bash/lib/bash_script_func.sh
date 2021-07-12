@@ -1,6 +1,39 @@
 #!/bin/bash
 
 
+## Array parsing
+
+#indexOf() { local el="$1"; shift; local arr=("$@"); local index=-1; local i; for i in "${!arr[@]}"; do [ "${arr[$i]}" = "$el" ] && { index=$i; break; } done; echo $index; }
+indexOf() {
+    local el="$1"     # Save first argument in a variable
+    shift             # Shift all arguments to the left (original $1 gets lost)
+    local arr=("$@")  # Rebuild the array with rest of arguments
+    local index=-1
+
+    local i
+    for i in "${!arr[@]}"; do
+        if [ "${arr[$i]}" = "$el" ]; then
+            index=$i
+            break
+        fi
+    done
+
+    echo "$index"
+}
+
+itemOneOf() {
+    local el="$1"
+    shift
+    local arr=("$@")
+
+    if (( $(indexOf "$el" ${arr[@]+"${arr[@]}"}) == -1 )); then
+        echo false
+    else
+        echo true
+    fi
+}
+
+
 ## Basic printing
 
 print_string() { printf '%s' "$*"; }
@@ -8,12 +41,6 @@ print_string() { printf '%s' "$*"; }
 echo_e() { echo "$@" >&2; }
 
 echo_oe() { echo "$@" | tee >(cat >&2); }
-
-log() { echo -e "$(date) -- $*"; }
-
-log_e() { log "$@" >&2; }
-
-log_oe() { log "$@" | tee >(cat >&2); }
 
 
 ## String manipulation
@@ -122,6 +149,33 @@ string_is_negnum() {
 string_is_datenum() { re_test '^[1-2][0-9]{3}(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3[0-1])$' "$1"; }
 
 string_is_pairname() { re_test '^[A-Z0-9]{4}_[0-9]{8}_[0-9A-F]{16}_[0-9A-F]{16}$' "$1"; }
+
+
+## Log printing
+
+log() {
+    local echo_args=( '-e' )
+    local arg
+    while (( "$#" )); do
+        arg="$1"
+        if [ "$(string_startswith "$arg" '-')" = true ]; then
+            arg_opt=$(string_lstrip "$arg" '-')
+            if [ "$(re_test '^[neE]+$' "$arg_opt")" = true ]; then
+                echo_args+=( "$arg" )
+                shift
+            else
+                break
+            fi
+        else
+            break
+        fi
+    done
+    echo ${echo_args[*]+${echo_args[*]}} "$(date) -- $*"
+}
+
+log_e() { log "$@" >&2; }
+
+log_oe() { log "$@" | tee >(cat >&2); }
 
 
 ## Run command and catch stdout/stderr
@@ -342,36 +396,6 @@ abspath_preserve_trailing_slash() {
 
 
 ## Other
-
-#indexOf() { local el="$1"; shift; local arr=("$@"); local index=-1; local i; for i in "${!arr[@]}"; do [ "${arr[$i]}" = "$el" ] && { index=$i; break; } done; echo $index; }
-indexOf() {
-    local el="$1"     # Save first argument in a variable
-    shift             # Shift all arguments to the left (original $1 gets lost)
-    local arr=("$@")  # Rebuild the array with rest of arguments
-    local index=-1
-
-    local i
-    for i in "${!arr[@]}"; do
-        if [ "${arr[$i]}" = "$el" ]; then
-            index=$i
-            break
-        fi
-    done
-
-    echo "$index"
-}
-
-itemOneOf() {
-    local el="$1"
-    shift
-    local arr=("$@")
-
-    if (( $(indexOf "$el" ${arr[@]+"${arr[@]}"}) == -1 )); then
-        echo false
-    else
-        echo true
-    fi
-}
 
 parse_xml_value() {
     local xml_tag="$1"
