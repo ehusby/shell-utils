@@ -98,18 +98,8 @@ else
 fi
 time_finished=$(date)
 
-if [ -n "$cmd_err" ]; then
-    read -r -d '' email_err << EOM
 
------ ${script_name_caps} COMMAND ERROR -----
-${cmd_err}
-EOM
-else
-    email_err=''
-fi
-
-email_subject="Finished command: ${cmd_preview}"
-read -r -d '' email_body << EOM
+read -r -d '' email_header << EOM
 ----- ${script_name_caps} COMMAND -----
 ${cmd}
 
@@ -117,9 +107,28 @@ ${cmd}
 ${time_started}
 ${time_finished}
 --- TIME FINISHED ---
-${email_err}
------ ${script_name_caps} COMMAND OUTPUT${email_out_desc} -----
-${cmd_out}
 EOM
 
-echo "$email_body" | mail -s "$email_subject" "$email_address"
+if true; then
+    read -r -d '' email_out << EOM
+------ ${script_name_caps} COMMAND OUTPUT${email_out_desc} -----
+${cmd_out}
+EOM
+    email_out="\n\n${email_out}"
+else
+    email_out=''
+fi
+
+if [ -n "$cmd_err" ]; then
+    read -r -d '' email_err << EOM
+----- ${script_name_caps} COMMAND ERROR -----
+${cmd_err}
+EOM
+    email_err="\n\n${email_err}"
+else
+    email_err=''
+fi
+
+email_subject="Finished command: ${cmd_preview}"
+email_body="${email_header}${email_err}${email_out}"
+echo -e "$email_body" | mail -s "$email_subject" "$email_address"
