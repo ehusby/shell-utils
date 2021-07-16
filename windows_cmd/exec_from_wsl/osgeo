@@ -1,0 +1,8 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+script_name="start_osgeo_py3"
+dp0=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd -P)
+"/mnt/c/Windows/System32/cmd.exe" "${dp0}/../starter_scripts/${script_name}.bat"
