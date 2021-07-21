@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ## Bash settings
-set -uo pipefail
+set -euo pipefail
 
 ## Script globals
 script_name=$(basename "${BASH_SOURCE[0]}")
