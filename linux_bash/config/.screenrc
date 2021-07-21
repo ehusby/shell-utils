@@ -153,13 +153,21 @@ bind ^] paste [.]
 
 ################
 #
-# Added by Erik for PGC, fall 2020
+# added by Erik
 #
 
+# Neatly display screen tabs at center bottom
 hardstatus alwayslastline
 hardstatus string '%{= kG}[ %{G}%H - %l %{g}][%= %{= kw}%?%-Lw%?%{r}(%{W}%n*%f%t%?(%u)%?%{r})%{w}%?%+Lw%?%?%= %{g}][%{B} %m/%d %{W}%c %{g}]'
 
+# Longer scrollback
 defscrollback 10000
+
+# Suppress "Utmp slot not found -> not removed" message
+deflogin off
+
+# Fix term issues on remote SSH connections within screen tabs
+term screen-256color
 
 # Force Bash shell if not default shell
 #shell "/bin/bash"

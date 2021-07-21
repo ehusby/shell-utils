@@ -87,10 +87,16 @@ while (( "$#" )); do
 
         elif [ "$(itemOneOf "$arg_opt" 'suffix' 'target-directory' )" = true ]; then
             arg_opt_nargs=1
+            if [ "$(string_contains "$arg_val" '\*')" = true ] || [ "$(string_contains "$arg_val" ' ')" = true ]; then
+                arg_val="'${arg_val}'"
+            fi
             fwd_args_arr+=( "$arg_opt" "$arg_val" )
 
         else
             arg_opt_nargs=0
+            if [ "$(string_contains "$arg" '\*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
+                arg="'${arg}'"
+            fi
             fwd_args_arr+=( "$arg" )
         fi
 
