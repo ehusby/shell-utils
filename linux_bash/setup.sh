@@ -19,6 +19,14 @@ script_args=("$@")
 shell_utils_config_dir="${script_dir_abs}/config"
 symlink_errors=false
 
+
+# Create ~/.ssh directory, if it doesn't already exist, to ensure that
+# the .ssh folder at shell-utils/config/.ssh is NOT symlinked into the home directory.
+if [ -e "${shell_utils_config_dir}/.ssh" ] && [ ! -e "${HOME}/.ssh" ]; then
+    mkdir -m 700 "${HOME}/.ssh"
+fi
+
+
 echo
 while IFS= read -r config_file_new; do
     config_fname=$(basename "$config_file_new")
@@ -30,6 +38,9 @@ while IFS= read -r config_file_new; do
             config_file_old_target=$(readlink "$config_file_old")
             echo "Removing existing config file symlink from home dir (${config_file_old} -> ${config_file_old_target})"
             rm "$config_file_old"
+        elif [ -d "$config_file_old" ]; then
+            echo -e "\nWARNING: Will not tamper with existing directory:\n  ${config_file_old}"
+            echo -e "** You may want to manually copy/link over contents of the following directory **\n${config_file_new}\n"
         elif [ -e "$config_file_bak" ] && [ ! -L "$config_file_bak" ]; then
             symlink_errors=true
             echo -e "\nERROR: Will not replace existing non-link backup config file:\n  ${config_file_bak}"

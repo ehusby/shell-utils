@@ -1,5 +1,10 @@
 # .bashrc
 
+# Invoke this wrapper script upon SSH connection to
+# resume existing screen session on remote server:
+#
+# ssh <params> -t "bash --rcfile ~/.bashrc_screen-x"
+
 source "${HOME}/.bashrc"
 cd "$HOME"
 screen -x
