@@ -66,7 +66,7 @@ process_items() {
         else
             while (( $# > 0 )); do
                 item="$1"
-                eval "${process_func} ${item}"
+                eval "${process_func} \"${item}\""
                 shift
             done
         fi
@@ -77,7 +77,7 @@ process_items() {
             eval "$process_func"
         else
             while IFS= read -r item; do
-                eval "${process_func} ${item}"
+                eval "${process_func} \"${item}\""
             done
         fi
         processed_items=true
@@ -87,7 +87,7 @@ process_items() {
             eval "printf '%s\n' * | ${process_func}"
         else
             for item in *; do
-                eval "${process_func} ${item}"
+                eval "${process_func} \"${item}\""
             done
         fi
     fi
@@ -223,6 +223,65 @@ touch_all() {
     echo "Done!"
 }
 
+#alias rsync_example='rsync_alias auto user@hostname -rtLPv'
+rsync_alias() {
+    local direction_choices_arr=( 'to-host' 'from-host' 'auto' )
+    local direction="$1"; shift
+    local remote_host="$1"; shift
+    local opt_arg_arr=()
+    local dryrun=false
+
+    local arg arg_opt
+    while (( $# > 2 )); do
+        arg="$1"; shift
+        if [[ $arg == -* ]]; then
+            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+            if [ "$arg_opt" == 'dryrun' ]; then
+                dryrun=true
+                continue
+            fi
+        fi
+        if [[ $arg == *"*"* ]] || [[ $arg == *" "* ]]; then
+            arg="'${arg}'"
+        fi
+        opt_arg_arr+=( "$arg" )
+    done
+    local src_path="$1"
+    local dst_path="$2"
+
+    if [ "$(itemOneOf "$direction" "${direction_choices_arr[@]}")" = false ]; then
+        echo_e "ERROR: rsync_alias DIRECTION must be one of the following: ${direction_choices_arr[*]}"
+        return 1
+    elif [ -z "$remote_host" ] || [ -z "$src_path" ] || [ -z "$dst_path" ]; then
+        echo_e "ERROR: rsync_alias required postional arguments: DIRECTION HOST SRC DEST"
+        return 1
+    fi
+
+    if [ "$direction" = 'to-host' ]; then
+        dst_path="${remote_host}:${dst_path}"
+    elif [ "$direction" = 'from-host' ]; then
+        src_path="${remote_host}:${src_path}"
+    elif [ "$direction" = 'auto' ]; then
+        if [ -e "$src_path" ] && [ -e "$dst_path" ]; then
+            echo_e "ERROR: rsync_alias cannot automatically determine DIRECTION when both SRC and DEST paths exist locally"
+            return 1
+        elif [ -e "$src_path" ]; then
+            dst_path="${remote_host}:${dst_path}"
+        elif [ -e "$dst_path" ]; then
+            src_path="${remote_host}:${src_path}"
+        else
+            echo_e "ERROR: rsync_alias neither SRC nor DEST paths exist locally (DIRECTION='auto')"
+            return 1
+        fi
+    fi
+
+    cmd="rsync ${opt_arg_arr[*]} \"${src_path}\" \"${dst_path}\""
+    echo "$cmd"
+    if [ "$dryrun" = false ]; then
+        eval "$cmd"
+    fi
+}
+
 
 ## Read inputs
 
@@ -290,7 +349,11 @@ read_csv() {
 }
 
 
-## Summarize information
+## Distill information
+
+wc_nlines() {
+    process_items 'wc -l' false true "$@" | awk '{print $1}'
+}
 
 count_by_date() {
     grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$0]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort
