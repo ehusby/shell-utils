@@ -200,7 +200,7 @@ run_and_catch_out_err() {
     local cmd_args=("$@")
     local status=0
 
-    if [ -n "$(env | grep '^TMPDIR=')" ]; then
+    if env | grep -q '^TMPDIR='; then
         if [ ! -d "$TMPDIR" ]; then
             mkdir -p "$TMPDIR"
         fi
