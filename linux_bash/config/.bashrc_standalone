@@ -1,5 +1,7 @@
 # .bashrc
 
+#echo "In ~/.bashrc"
+
 # >>> CHANGE NAME OF YOUR EXISTING SYSTEM-PROVIDED .bashrc FILE
 # >>> to '.bashrc_system_default', and this .bashrc will source that!!
 if [ -e "${HOME}/.bashrc_system_default" ]; then
@@ -17,7 +19,7 @@ fi
 umask 007  # disallow OTHER read|write|execute perms
 
 ### Settings for interactive shells only
-if [ -n "$PS1" ]; then
+if [ -n "$PS1" ] && [ "$BASHRC_LOADED" != true ]; then
 
     # Overwrite possibly goofy system default for command prompt
     # that messes with screen window names
@@ -59,6 +61,7 @@ if [ -n "$PS1" ]; then
         mkdir -p -m 700 "$SCREENDIR"
     fi
 
+    export BASHRC_LOADED=true
 fi
 
 
@@ -67,6 +70,8 @@ fi
 ################################
 
 ## Exports (PATH changes and global vars)
+export SYSTEM_CLEAR_LOC=$(which clear 2>/dev/null)  # Used in .bashrc_over_ssh wrapper
+
 # >>> FILL OUT OR COMMENT OUT THE FOLLOWING LINES <<< #
 SHELL_UTILS_PATH="<path-to>/shell-utils"  # Necessary for sourcing general purpose shell functions
 export MY_EMAIL="<your-email-address>"  # Necessary for shell-utils 'email_me' script
@@ -104,16 +109,24 @@ source "$(dirname "${BASH_SOURCE[0]}")/bash_script_func.sh"
 
 ## Bash prompts
 
-#prompt_dname() { export PS1='\W \$ '; }
-#prompt_dfull() { export PS1='\w \$ '; }
-#prompt_short() { export PS1='[\u@\h:\W]\$ '; }
-#prompt_med()   { export PS1='[\u@\h:\w]\$ '; }
-#prompt_long()  { export PS1='[\u@\H:\w]\$ '; }
-prompt_dname() { export PS1='\[\033[01;34m\]\W\[\033[00m\] \$ '; }
-prompt_dfull() { export PS1='\[\033[01;34m\]\w\[\033[00m\] \$ '; }
-prompt_short() { export PS1='[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\W\[\033[00m\]]\$ '; }
-prompt_med()   { export PS1='[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ '; }
-prompt_long()  { export PS1='[\[\033[01;32m\]\u@\H\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ '; }
+prompt_venv_prefix() { printf '%s' "$PS1" | grep -Eo '^[[:space:]]*\([^\(\)]*\)[[:space:]]+'; }
+
+# no colors
+#prompt_dname() { export PS1="$(prompt_venv_prefix)\W \$ "; }
+#prompt_dfull() { export PS1="$(prompt_venv_prefix)\w \$ "; }
+#prompt_short() { export PS1="$(prompt_venv_prefix)[\u@\h:\W]\$ "; }
+#prompt_med()   { export PS1="$(prompt_venv_prefix)[\u@\h:\w]\$ "; }
+#prompt_long()  { export PS1="$(prompt_venv_prefix)[\u@\H:\w]\$ "; }
+#prompt_reset() { export PS1="[\u@\h:\w]\$ "; }
+
+# colors
+prompt_dname() { export PS1="$(prompt_venv_prefix)\[\033[01;34m\]\W\[\033[00m\] \$ "; }
+prompt_dfull() { export PS1="$(prompt_venv_prefix)\[\033[01;34m\]\w\[\033[00m\] \$ "; }
+prompt_short() { export PS1="$(prompt_venv_prefix)[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\W\[\033[00m\]]\$ "; }
+prompt_med()   { export PS1="$(prompt_venv_prefix)[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ "; }
+prompt_long()  { export PS1="$(prompt_venv_prefix)[\[\033[01;32m\]\u@\H\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ "; }
+prompt_reset() { export PS1="[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ "; }
+
 ccmd() {
     read -r -e -p "$ " cmd
     history -s "$cmd"
@@ -821,4 +834,12 @@ git_clone_replace() {
     fi
 
     echo -e "\nDone!"
+}
+
+
+## Other
+
+ssh_alias() {
+    local hostname="$1"
+    set -x; ssh "$hostname" -t "bash --rcfile ~/.bashrc_from_ssh"; set +x
 }

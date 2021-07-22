@@ -1,0 +1,33 @@
+# .bashrc
+
+# Invoke this wrapper script upon SSH connection to run login command(s),
+# such as resuming an existing screen session on the remote server.
+#
+# Example usage:
+#   ssh <params> -t "bash --rcfile ~/.bashrc_from_ssh"
+
+# Deal with issues surrounding local Anaconda installation
+# and source the real ~/.bashrc file.
+if which conda 1>/dev/null 2>/dev/null; then
+    linked_clear_dir="${HOME}/ssh-conda-clear-workaround"
+    if [ ! -d "$linked_clear_dir" ] && [ -n "$SYSTEM_CLEAR_LOC" ]; then
+        mkdir -p "$linked_clear_dir"
+        echo -e "\
+Here is a workaround for the 'terminals database is inaccessible' error received \
+when running 'clear' to clear the terminal screen. This error can be thrown by \
+Anaconda's 'clear' program that may be on the PATH. Appearance of the error probably \
+depends on some quality of the TERM used over SSH connections.\
+\n\nRemove the 'clear' symlink file in this folder to disable this workaround \
+and allow use of Anaconda's clear." > "${linked_clear_dir}/README.txt"
+        ln -s "$SYSTEM_CLEAR_LOC" "${linked_clear_dir}/"
+    fi
+    export CONDA_PREFIX=''
+    source "${HOME}/.bashrc"
+    export PATH="${linked_clear_dir}:${PATH}"
+else
+    source "${HOME}/.bashrc"
+fi
+
+# Perform login commands
+cd "$HOME"
+screen -x
