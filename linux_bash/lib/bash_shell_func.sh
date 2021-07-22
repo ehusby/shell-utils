@@ -6,16 +6,24 @@ source "$(dirname "${BASH_SOURCE[0]}")/bash_script_func.sh"
 
 ## Bash prompts
 
-#prompt_dname() { export PS1='\W \$ '; }
-#prompt_dfull() { export PS1='\w \$ '; }
-#prompt_short() { export PS1='[\u@\h:\W]\$ '; }
-#prompt_med()   { export PS1='[\u@\h:\w]\$ '; }
-#prompt_long()  { export PS1='[\u@\H:\w]\$ '; }
-prompt_dname() { export PS1='\[\033[01;34m\]\W\[\033[00m\] \$ '; }
-prompt_dfull() { export PS1='\[\033[01;34m\]\w\[\033[00m\] \$ '; }
-prompt_short() { export PS1='[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\W\[\033[00m\]]\$ '; }
-prompt_med()   { export PS1='[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ '; }
-prompt_long()  { export PS1='[\[\033[01;32m\]\u@\H\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ '; }
+prompt_venv_prefix() { printf '%s' "$PS1" | grep -Eo '^[[:space:]]*\([^\(\)]*\)[[:space:]]+'; }
+
+# no colors
+#prompt_dname() { export PS1="$(prompt_venv_prefix)\W \$ "; }
+#prompt_dfull() { export PS1="$(prompt_venv_prefix)\w \$ "; }
+#prompt_short() { export PS1="$(prompt_venv_prefix)[\u@\h:\W]\$ "; }
+#prompt_med()   { export PS1="$(prompt_venv_prefix)[\u@\h:\w]\$ "; }
+#prompt_long()  { export PS1="$(prompt_venv_prefix)[\u@\H:\w]\$ "; }
+#prompt_reset() { export PS1="[\u@\h:\w]\$ "; }
+
+# colors
+prompt_dname() { export PS1="$(prompt_venv_prefix)\[\033[01;34m\]\W\[\033[00m\] \$ "; }
+prompt_dfull() { export PS1="$(prompt_venv_prefix)\[\033[01;34m\]\w\[\033[00m\] \$ "; }
+prompt_short() { export PS1="$(prompt_venv_prefix)[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\W\[\033[00m\]]\$ "; }
+prompt_med()   { export PS1="$(prompt_venv_prefix)[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ "; }
+prompt_long()  { export PS1="$(prompt_venv_prefix)[\[\033[01;32m\]\u@\H\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ "; }
+prompt_reset() { export PS1="[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ "; }
+
 ccmd() {
     read -r -e -p "$ " cmd
     history -s "$cmd"
@@ -723,4 +731,12 @@ git_clone_replace() {
     fi
 
     echo -e "\nDone!"
+}
+
+
+## Other
+
+ssh_alias() {
+    local hostname="$1"
+    set -x; ssh "$hostname" -t "bash --rcfile ~/.bashrc_from_ssh"; set +x
 }
