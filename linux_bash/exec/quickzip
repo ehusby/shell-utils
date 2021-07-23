@@ -182,8 +182,16 @@ num_src_path_args="${#src_path_arr[@]}"
 if (( num_src_path_args == 0 )); then
     echo_e "At least one SRC_PATH argument must be provided"
     exit_script_with_status 1
-elif (( num_src_path_args == 1 )) && [ -z "$zipfile" ]; then
-    zipfile="$(fullpath "${src_path_arr[0]}").zip"
+elif (( num_src_path_args == 1 )); then
+    if [ -n "$zipfile" ]; then
+        if [ -d "$zipfile" ]; then
+            zipfile="$(fullpath "$zipfile")/$(string_rstrip "$(basename "${src_path_arr[0]}")" '.').zip"
+        else
+            zipfile=$(fullpath "$zipfile")
+        fi
+    else
+        zipfile="$(fullpath "${src_path_arr[0]}").zip"
+    fi
 else
     if [ -n "$zipfile" ]; then
         zipfile=$(fullpath "$zipfile")

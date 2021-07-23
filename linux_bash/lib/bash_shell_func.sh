@@ -290,6 +290,11 @@ rsync_alias() {
     fi
 }
 
+rsync_alias_defopt() {
+    local remote_host="$1"; shift
+    rsync_alias auto "$remote_host" -rtLv --partial-dir=".rsync-partial" --progress "$@"
+}
+
 
 ## Read inputs
 

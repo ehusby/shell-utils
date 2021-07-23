@@ -47,13 +47,28 @@ echo_oe() { echo "$@" | tee >(cat >&2); }
 
 base10() { print_string "$((10#$1))"; }
 
+escape_regex_special_chars() {
+    local special_chars_arr=( '^' '.' '+' '*' '?' '|' '\' '(' ')' '[' ']' '{' '}' '$' )
+    local str_in="$1"
+    local str_out=''
+    local i char
+    for (( i=0; i<${#str_in}; i++ )); do
+        char="${str_in:$i:1}"
+        if [ "$(itemOneOf "$char" "${special_chars_arr[@]}")" = true ]; then
+            char="\\${char}"
+        fi
+        str_out="${str_out}${char}"
+    done
+    echo "$str_out"
+}
+
 string_to_uppercase() { print_string "$@" | tr '[:lower:]' '[:upper:]'; }
 
 string_to_lowercase() { print_string "$@" | tr '[:upper:]' '[:lower:]'; }
 
-string_lstrip() { print_string "$1" | sed -r "s|^(${2})+||"; }
+string_lstrip() { print_string "$1" | sed -r "s|^($(escape_regex_special_chars "$2"))+||"; }
 
-string_rstrip() { print_string "$1" | sed -r "s|(${2})+$||"; }
+string_rstrip() { print_string "$1" | sed -r "s|($(escape_regex_special_chars "$2"))+$||"; }
 
 string_strip() {
     local string_in="$1"
@@ -74,7 +89,7 @@ string_strip() {
 
 string_rstrip_decimal_zeros() { print_string "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
 
-collapse_repeated_substring() { print_string "$1" | sed -r "s|(${2})+|\1|g"; }
+collapse_repeated_substring() { print_string "$1" | sed -r "s|($(escape_regex_special_chars "$2"))+|\1|g"; }
 
 string_join() { local IFS="$1"; shift; print_string "$*"; }
 
@@ -92,11 +107,11 @@ re_test() {
     fi
 }
 
-string_startswith() { re_test "^${2}" "$1"; }
+string_startswith() { re_test "^$(escape_regex_special_chars "$2")" "$1"; }
 
-string_endswith() { re_test "${2}\$" "$1"; }
+string_endswith() { re_test "$(escape_regex_special_chars "$2")\$" "$1"; }
 
-string_contains() { re_test "${2}" "$1"; }
+string_contains() { re_test "$(escape_regex_special_chars "$2")" "$1"; }
 
 string_common_prefix() {
     printf "%s\n" "$@" | sed -e '$!{N;s/^\(.*\).*\n\1.*$/\1\n\1/;D;}'
