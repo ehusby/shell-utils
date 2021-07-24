@@ -247,6 +247,9 @@ rsync_alias() {
             if [ "$arg_opt" == 'dryrun' ]; then
                 dryrun=true
                 continue
+            elif [ "$arg_opt" == 'to-host' ] || [ "$arg_opt" == 'from-host' ]; then
+                direction="$arg_opt"
+                continue
             fi
         fi
         if [[ $arg == *"*"* ]] || [[ $arg == *" "* ]]; then
@@ -260,7 +263,7 @@ rsync_alias() {
     if [ "$(itemOneOf "$direction" "${direction_choices_arr[@]}")" = false ]; then
         echo_e "ERROR: rsync_alias DIRECTION must be one of the following: ${direction_choices_arr[*]}"
         return 1
-    elif [ -z "$remote_host" ] || [ -z "$src_path" ] || [ -z "$dst_path" ]; then
+    elif [ -z "$remote_host" ] || [ -z "$src_path" ] || [ -z "$dst_path" ] || [[ $src_path == -* ]] || [[ $dst_path == -* ]]; then
         echo_e "ERROR: rsync_alias required postional arguments: DIRECTION HOST SRC DEST"
         return 1
     fi
@@ -292,7 +295,7 @@ rsync_alias() {
 
 rsync_alias_defopt() {
     local remote_host="$1"; shift
-    rsync_alias auto "$remote_host" -rtLv --partial-dir=".rsync-partial" --progress "$@"
+    rsync_alias auto "$remote_host" -rtLv --partial-dir='.rsync-partial' --progress --exclude '.DS_Store' "$@"
 }
 
 
@@ -742,6 +745,5 @@ git_clone_replace() {
 ## Other
 
 ssh_alias() {
-    local hostname="$1"
-    set -x; ssh "$hostname" -t "bash --rcfile ~/.bashrc_from_ssh"; set +x
+    set -x; ssh "$@" -t "bash --rcfile ~/.bashrc_from_ssh"; set +x
 }
