@@ -207,6 +207,9 @@ if [ "$zip_on_ext" = true ]; then
         src_path_dirname=$(dirname "$src_path")
         src_path_basename=$(basename "$src_path")
         src_path_basename_noext="${src_path_basename%%.*}"
+        if [ "$src_path_basename_noext" != "$src_path_basename" ]; then
+            src_path_basename_noext="${src_path_basename_noext}."
+        fi
         src_path_noext="${src_path_dirname}/${src_path_basename_noext}"
         if [ "$(itemOneOf "$src_path_noext" "${src_path_zoe_arr[@]+${src_path_zoe_arr[@]}}")" = false ]; then
             src_path_zoe_arr+=( "$src_path_noext" )
@@ -254,6 +257,7 @@ for src_path in "${src_fullpath_arr[@]}"; do
         src_path_basename=$(basename "$src_path")
     fi
 
+    echo "Writing to zipfile: ${dst_zipfile}"
     echo "Working in directory: ${working_dir}"
     cd "$working_dir"
     cd_status=$?
