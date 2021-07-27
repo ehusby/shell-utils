@@ -166,6 +166,46 @@ string_is_datenum() { re_test '^[1-2][0-9]{3}(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3
 string_is_pairname() { re_test '^[A-Z0-9]{4}_[0-9]{8}_[0-9A-F]{16}_[0-9A-F]{16}$' "$1"; }
 
 
+## Filesystem path testing
+
+parent_dir_exists() {
+    local dirent="$(string_rstrip "$1" '/')"
+    local parent_dir="${dirent%/*}"
+    if [ -d "$parent_dir" ]; then
+        echo true
+    else
+        echo false
+    fi
+}
+
+dirent_is_empty() {
+    local dirent="$1"
+    if [ ! -e "$dirent" ]; then
+        echo_e "Path does not exist: ${dirent}"
+    elif [ -n "$(find "$1" -prune -empty)" ]; then
+        echo true
+    else
+        echo false
+    fi
+}
+file_is_empty() {
+    local file="$1"
+    if [ ! -f "$file" ]; then
+        echo_e "Invalid file path: ${file}"
+    else
+        dirent_is_empty "$file"
+    fi
+}
+dir_is_empty() {
+    local dir="$1"
+    if [ ! -d "$dir" ]; then
+        echo_e "Invalid directory path: ${dir}"
+    else
+        dirent_is_empty "$dir"
+    fi
+}
+
+
 ## Log printing
 
 log() {
@@ -221,15 +261,15 @@ run_and_catch_out_err() {
         fi
     fi
 
-    local tmpfile_out="$(mktemp)"
-    local tmpfile_err="$(mktemp)"
-    trap "rm -f ${tmpfile_out} ${tmpfile_err}" 0
+    local tmpfile_out=$(mktemp)
+    local tmpfile_err=$(mktemp)
+    trap "rm -f \"${tmpfile_out}\" \"${tmpfile_err}\"" 0
 
     { { eval "${cmd_args[@]}" | tee "$tmpfile_out"; } 2>&1 1>&3 | tee "$tmpfile_err"; } 3>&1 1>&2
     status=$?
 
-    eval "${__return_out}=\"$(cat ${tmpfile_out})\""
-    eval "${__return_err}=\"$(cat ${tmpfile_err})\""
+    eval "${__return_out}="'$(cat "$tmpfile_out")'
+    eval "${__return_err}="'$(cat "$tmpfile_err")'
 
     rm -f "$tmpfile_out"
     rm -f "$tmpfile_err"
@@ -248,7 +288,7 @@ run_and_catch_out_custom() {
     cmd_out=$(eval "$command_redirect_fun" "${cmd_args[@]}" | tee >(cat - >&5))
     status=$?
 
-    eval "${__return_out}=\"${cmd_out}\""
+    eval "${__return_out}="'"$cmd_out"'
 
     return $status
 }

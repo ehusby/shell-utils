@@ -93,7 +93,7 @@ while (( "$#" )); do
             fi
         fi
         if [ "$is_fwd_arg" = true ]; then
-            if [ "$(string_contains "$arg" '\*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
+            if [ "$(string_contains "$arg" '*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
                 arg="'${arg}'"
             fi
             fwd_args_arr+=( "$arg" )
@@ -139,7 +139,7 @@ while (( "$#" )); do
             arg_opt_nargs=0
             
             if [ -n "$src_path" ] && [ -n "$new_name" ]; then
-                if [ "$(string_contains "$arg" '\*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
+                if [ "$(string_contains "$arg" '*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
                     arg="'${arg}'"
                 fi
                 fwd_args_arr+=( "$arg" )
