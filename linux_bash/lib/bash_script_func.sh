@@ -166,6 +166,46 @@ string_is_datenum() { re_test '^[1-2][0-9]{3}(0[1-9]|1[0-2])(0[1-9]|[1-2][0-9]|3
 string_is_pairname() { re_test '^[A-Z0-9]{4}_[0-9]{8}_[0-9A-F]{16}_[0-9A-F]{16}$' "$1"; }
 
 
+## Filesystem path testing
+
+parent_dir_exists() {
+    local dirent="$(string_rstrip "$1" '/')"
+    local parent_dir="${dirent%/*}"
+    if [ -d "$parent_dir" ]; then
+        echo true
+    else
+        echo false
+    fi
+}
+
+dirent_is_empty() {
+    local dirent="$1"
+    if [ ! -e "$dirent" ]; then
+        echo_e "Path does not exist: ${dirent}"
+    elif [ -n "$(find "$1" -prune -empty)" ]; then
+        echo true
+    else
+        echo false
+    fi
+}
+file_is_empty() {
+    local file="$1"
+    if [ ! -f "$file" ]; then
+        echo_e "Invalid file path: ${file}"
+    else
+        dirent_is_empty "$file"
+    fi
+}
+dir_is_empty() {
+    local dir="$1"
+    if [ ! -d "$dir" ]; then
+        echo_e "Invalid directory path: ${dir}"
+    else
+        dirent_is_empty "$dir"
+    fi
+}
+
+
 ## Log printing
 
 log() {
