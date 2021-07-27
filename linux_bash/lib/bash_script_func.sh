@@ -221,15 +221,15 @@ run_and_catch_out_err() {
         fi
     fi
 
-    local tmpfile_out="$(mktemp)"
-    local tmpfile_err="$(mktemp)"
-    trap "rm -f ${tmpfile_out} ${tmpfile_err}" 0
+    local tmpfile_out=$(mktemp)
+    local tmpfile_err=$(mktemp)
+    trap "rm -f \"${tmpfile_out}\" \"${tmpfile_err}\"" 0
 
     { { eval "${cmd_args[@]}" | tee "$tmpfile_out"; } 2>&1 1>&3 | tee "$tmpfile_err"; } 3>&1 1>&2
     status=$?
 
-    eval "${__return_out}=\"$(cat ${tmpfile_out})\""
-    eval "${__return_err}=\"$(cat ${tmpfile_err})\""
+    eval "${__return_out}="'$(cat "$tmpfile_out")'
+    eval "${__return_err}="'$(cat "$tmpfile_err")'
 
     rm -f "$tmpfile_out"
     rm -f "$tmpfile_err"
@@ -248,7 +248,7 @@ run_and_catch_out_custom() {
     cmd_out=$(eval "$command_redirect_fun" "${cmd_args[@]}" | tee >(cat - >&5))
     status=$?
 
-    eval "${__return_out}=\"${cmd_out}\""
+    eval "${__return_out}="'"$cmd_out"'
 
     return $status
 }
