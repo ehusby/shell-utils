@@ -28,6 +28,7 @@ source "$bash_functions_script"
 src_path_arr=()
 zipfile=''
 force_glob=false
+zip_on_ext=false
 fwd_args_arr=()
 dryrun=false
 
@@ -44,15 +45,21 @@ Quickly zip batches of files and/or folders.
 or a path leading up and including the common filename/foldername
 prefix of multiple files/folders in the same source directory.
 
-  If only one SRC_PATH argument is provided, the --zipfile option
-does not need to be provided; the default output zipfile location
-is next to the source item(s) indicated by SRC_PATH. If SRC_PATH
-is a directory and SRC_PATH does not end with a forward slash (/),
-the folder is placed at the root of the zipfile -- if it does end
-with a forward slash, the immediate contents of the folder are
-placed at the root of the zipfile.
-  If multiple SRC_PATH arguments are provided, the ZIPFILE argument
-must be provided indicating the output zipfile location.
+  If the --zipfile location is a file path, files/folders from all
+SRC_PATH arguments are combined in a single output zipfile created
+at the indicated file path.
+  If the --zipfile location is an existing directory, separate
+zipfiles are created for each SRC_PATH argument with filnames like
+"\$(basename SRC_PATH).zip" within the indicated directory.
+  If the --zipfile option is not provided, separate zipfiles are
+created for each SRC_PATH argument with filenames like
+"\$(basename SRC_PATH).zip", each zipfile placed in the same
+directory as the SRC_PATH.
+
+  If SRC_PATH is a directory and SRC_PATH does not end with a
+forward slash (/), the folder is placed at the root of the zipfile
+ -- if it does end with a forward slash, the immediate contents of
+the folder are placed at the root of the zipfile.
 
   For 'zip' options, note that --recurse-paths (-r) is automatically
 provided, and --junk-paths (-j) is not advised.
@@ -64,6 +71,9 @@ Options:
         When SRC_PATH is the full path to an existing file/folder,
         force treating all SRC_PATH arguments as prefixes matching
         additional files/folders in the same directories.
+ -e,--zip-on-ext
+        Automatically group SRC_PATH arguments that have the same
+        base filename with different dot extensions.
 -dr,--dryrun
         Print command(s) used to zip files/folders, without executing.
 EOM
@@ -132,6 +142,10 @@ while (( "$#" )); do
             arg_opt_nargs=0
             force_glob=true
 
+        elif [ "$arg_opt" = 'e' ] || [ "$arg_opt" = 'zip-on-ext' ]; then
+            arg_opt_nargs=0
+            zip_on_ext=true
+
         elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
             dryrun=true
@@ -182,31 +196,33 @@ num_src_path_args="${#src_path_arr[@]}"
 if (( num_src_path_args == 0 )); then
     echo_e "At least one SRC_PATH argument must be provided"
     exit_script_with_status 1
-elif (( num_src_path_args == 1 )); then
-    if [ -n "$zipfile" ]; then
-        if [ -d "$zipfile" ]; then
-            zipfile="$(fullpath "$zipfile")/$(string_rstrip "$(basename "${src_path_arr[0]}")" '.').zip"
-        else
-            zipfile=$(fullpath "$zipfile")
+fi
+if [ -n "$zipfile" ]; then
+    zipfile=$(fullpath "$zipfile")
+fi
+
+src_path_zoe_arr=()
+if [ "$zip_on_ext" = true ]; then
+    for src_path in "${src_path_arr[@]}"; do
+        src_path_dirname=$(dirname "$src_path")
+        src_path_basename=$(basename "$src_path")
+        src_path_basename_noext="${src_path_basename%%.*}"
+        src_path_noext="${src_path_dirname}/${src_path_basename_noext}"
+        if [ "$(itemOneOf "$src_path_noext" "${src_path_zoe_arr[@]+${src_path_zoe_arr[@]}}")" = false ]; then
+            src_path_zoe_arr+=( "$src_path_noext" )
         fi
-    else
-        zipfile="$(fullpath "${src_path_arr[0]}").zip"
-    fi
-else
-    if [ -n "$zipfile" ]; then
-        zipfile=$(fullpath "$zipfile")
-    else
-        echo_e "Output zipfile must be specified when multiple SRC_PATH arguments are provided"
-        exit_script_with_status 1
-    fi
+    done
+    src_path_arr=("${src_path_zoe_arr[@]}")
 fi
 
 src_fullpath_arr=()
 for src_path in "${src_path_arr[@]}"; do
     if [ ! -e "$src_path" ] || [ "$(string_endswith "$src_path" '/')" = true ] || [ "$force_glob" = true ]; then
+        shopt -s nullglob
         src_dirent_arr=( "$src_path"* )
+        shopt -u nullglob
         if (( ${#src_dirent_arr[@]} == 0 )); then
-            echo_e "Cannot find any files/dirs matching SRC_PATH argument: ${src_path}*"
+            echo_e "Cannot find any files/dirs matching SRC_PATH argument: $(string_rstrip "$src_path" '*')*"
             exit_script_with_status 1
         fi
     fi
@@ -220,6 +236,16 @@ zip_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
 
 for src_path in "${src_fullpath_arr[@]}"; do
 
+    if [ -n "$zipfile" ]; then
+        if [ -d "$zipfile" ]; then
+            dst_zipfile="${zipfile}/$(string_rstrip "$(basename "$src_path")" '.').zip"
+        else
+            dst_zipfile="$zipfile"
+        fi
+    else
+        dst_zipfile="$(fullpath "$(string_rstrip "$src_path" '.')").zip"
+    fi
+
     if [ "$(string_endswith "$src_path" '/')" = true ]; then
         working_dir="$src_path"
         src_path_basename=""
@@ -228,7 +254,7 @@ for src_path in "${src_fullpath_arr[@]}"; do
         src_path_basename=$(basename "$src_path")
     fi
 
-    echo "Changing to directory: ${working_dir}"
+    echo "Working in directory: ${working_dir}"
     cd "$working_dir"
     cd_status=$?
     if (( cd_status != 0 )); then
@@ -242,7 +268,7 @@ for src_path in "${src_fullpath_arr[@]}"; do
         src_dirent_arr=( "$src_path_basename" )
     fi
 
-    cmd="zip -r ${zip_opt_args} \"${zipfile}\" $(printf ' "%s"' "${src_dirent_arr[@]}")"
+    cmd="zip -r ${zip_opt_args} \"${dst_zipfile}\" $(printf ' "%s"' "${src_dirent_arr[@]}")"
 
     if [ "$dryrun" = true ]; then
         echo "$cmd"
