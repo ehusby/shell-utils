@@ -4,7 +4,7 @@
 
 # >>> CHANGE NAME OF YOUR EXISTING SYSTEM-PROVIDED .bashrc FILE
 # >>> to '.bashrc_system_default', and this .bashrc will source that!!
-if [ -e "${HOME}/.bashrc_system_default" ]; then
+if [ -f "${HOME}/.bashrc_system_default" ]; then
     source "${HOME}/.bashrc_system_default"
 fi
 
