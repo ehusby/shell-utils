@@ -449,6 +449,32 @@ abspath_preserve_trailing_slash() {
     abspath_trailing_slash_alias 'fullpath' "$1"
 }
 
+derefpath() {
+    local deref_count="$1"; shift
+    if [ "$(string_is_posint "$deref_count")" = false ]; then
+        echo_e "derefpath: first argument must be nonzero deref count"
+        return 1
+    fi
+    if (( $# != 1 )); then
+        echo_e "derefpath: expected one path operand"
+        return 1
+    fi
+    local path_temp=$(fullpath "$1")
+    local path_link=''
+    local path_suffix=''
+    while (( deref_count > 0 )) && [ "$path_temp" != '/' ]; do
+        path_link=$(readlink "$path_temp")
+        if [ -n "$path_link" ]; then
+            path_temp="$path_link"
+            ((deref_count--))
+        else
+            path_suffix="$(basename "$path_temp")/${path_suffix}"
+            path_temp=$(dirname "$path_temp")
+        fi
+    done
+    echo "/$(string_strip "${path_temp}/${path_suffix}" '/')"
+}
+
 
 ## Other
 
