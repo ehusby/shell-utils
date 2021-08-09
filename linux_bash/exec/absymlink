@@ -26,6 +26,7 @@ source "$bash_functions_script"
 
 ## Arguments
 path_arg_arr=()
+abspath_func='abspath'
 fwd_args_arr=()
 dryrun=false
 
@@ -46,6 +47,15 @@ to absolute paths for link creation.
 
 Options:
 [all 'ln' options]
+    --abspath-func=<program call string> (default='${abspath_func}')
+        Program used to convert TARGET paths into absolute paths.
+        Program call is evaluated once for each TARGET path,
+        where the path is appended to the program call string.
+        Program options may be included in the program call string.
+-fp,--fullpath
+        Set --abspath-func='fullpath'.
+-dp,--derefpath=<int deref count>
+        Set --abspath-func='derefcount <int deref count>'.
 -dr,--dryrun
         Print 'ln' command used to create link, without executing.
 EOM
@@ -84,6 +94,18 @@ while (( "$#" )); do
         elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
             dryrun=true
+
+        elif [ "$arg_opt" = 'abspath-func' ]; then
+            arg_opt_nargs=1
+            abspath_func="$arg_val"
+
+        elif [ "$arg_opt" = 'fp' ] || [ "$arg_opt" = 'fullpath' ]; then
+            arg_opt_nargs=0
+            abspath_func="fullpath"
+
+        elif [ "$arg_opt" = 'dp' ] || [ "$arg_opt" = 'derefpath' ]; then
+            arg_opt_nargs=1
+            abspath_func="derefpath ${arg_val}"
 
         elif [ "$(itemOneOf "$arg_opt" 'suffix' 'target-directory' )" = true ]; then
             arg_opt_nargs=1
@@ -140,9 +162,14 @@ fi
 abspath_arg_arr=()
 
 for idx in "${!path_arg_arr[@]}"; do
-    path=$(abspath "${path_arg_arr[$idx]}")
+    path=$(${abspath_func} "${path_arg_arr[$idx]}")
+    cmd_status=$?
+    if (( cmd_status != 0 )); then
+        echo_e "--abspath-func='${abspath_func}' command failed with status ${cmd_status}"
+        exit_script_with_status 1
+    fi
     if (( idx <= last_target_idx )); then
-        abspath_arg_arr+=( "$(abspath "$path")" )
+        abspath_arg_arr+=( "$(${abspath_func} "$path")" )
     else
         abspath_arg_arr+=( "$path" )
     fi

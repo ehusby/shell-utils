@@ -45,8 +45,9 @@ line2space() {
 }
 space2line() { tr ' ' '\n'; }
 
-strrep() { sed -r "s|${1}|${2}|g"; }
-strcat() { sed -r "s|(.*)|\1${1}|"; }
+string_replace() { sed -r "s|${1}|${2}|g"; }
+string_prepend() { sed -r "s|(.*)|${1}\1|"; }
+string_append() { sed -r "s|(.*)|\1${1}|"; }
 
 
 ## Command-line argument manipulation
@@ -540,6 +541,25 @@ find_missing_suffix() {
 
 ## Git
 
+git_remote() {
+    git config --get remote.origin.url
+}
+
+git_webpage() {
+    local get_url_cmd="git config --get remote.origin.url"
+    local url=$(eval "$get_url_cmd")
+    if [ -z "$url" ]; then
+        echo "Repo lookup command returned nothing: '${get_url_cmd}'"
+        return
+    fi
+    url="${url##*@}"
+    url="${url//://}"
+    if ! echo "$url" | grep -q '^http'; then
+        url="https://${url}"
+    fi
+    open -a "Google Chrome" "$url"
+}
+
 git_drop_all_changes() {
     git checkout -- .
 }
@@ -551,6 +571,10 @@ git_reset_keep_changes() {
 git_stash_apply_no_merge() {
     git read-tree stash^{tree}
     git checkout-index -af
+}
+
+git_apply_force() {
+    git apply --reject --whitespace=fix "$@"
 }
 
 git_make_exec() {

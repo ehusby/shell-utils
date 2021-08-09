@@ -63,7 +63,7 @@ Options:
         Number of decimal places in reported disk usage.
  -r,--round={$(string_join '|' "${round_choices_arr[@]}")} (default=${round_mode})
         Rounding method used in reported disk usage.
- -n,--name
+ -n,--name=<pattern>
         Include files that match this pattern.
         This option can be provided multiple times to include
         multiple file patterns.

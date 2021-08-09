@@ -29,6 +29,7 @@ src_path_arr=()
 zipfile=''
 force_glob=false
 zip_on_ext=false
+zip_ext='.zip'
 fwd_args_arr=()
 dryrun=false
 
@@ -67,13 +68,16 @@ provided, and --junk-paths (-j) is not advised.
 Options:
  -o,--zipfile
         Location of output zipfile.
+ -e,--zip-ext=<extension> (default='${zip_ext}')
+        File extension for automatically-determined output zipfile(s).
+        Cannot be used with --zipfile option.
+ -x,--zip-on-ext
+        Automatically group SRC_PATH arguments that have the same
+        base filename with different dot extensions.
  -g,--glob
         When SRC_PATH is the full path to an existing file/folder,
         force treating all SRC_PATH arguments as prefixes matching
         additional files/folders in the same directories.
- -e,--zip-on-ext
-        Automatically group SRC_PATH arguments that have the same
-        base filename with different dot extensions.
 -dr,--dryrun
         Print command(s) used to zip files/folders, without executing.
 EOM
@@ -138,13 +142,17 @@ while (( "$#" )); do
             arg_opt_nargs=1
             zipfile="$arg_val"
 
+        elif [ "$arg_opt" = 'e' ] || [ "$arg_opt" = 'zip-ext' ]; then
+            arg_opt_nargs=1
+            zip_ext="$arg_val"
+
+        elif [ "$arg_opt" = 'x' ] || [ "$arg_opt" = 'zip-on-ext' ]; then
+            arg_opt_nargs=0
+            zip_on_ext=true
+
         elif [ "$arg_opt" = 'g' ] || [ "$arg_opt" = 'glob' ]; then
             arg_opt_nargs=0
             force_glob=true
-
-        elif [ "$arg_opt" = 'e' ] || [ "$arg_opt" = 'zip-on-ext' ]; then
-            arg_opt_nargs=0
-            zip_on_ext=true
 
         elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
@@ -241,12 +249,12 @@ for src_path in "${src_fullpath_arr[@]}"; do
 
     if [ -n "$zipfile" ]; then
         if [ -d "$zipfile" ]; then
-            dst_zipfile="${zipfile}/$(string_rstrip "$(basename "$src_path")" '.').zip"
+            dst_zipfile="${zipfile}/$(string_rstrip "$(basename "$src_path")" '.')${zip_ext}"
         else
             dst_zipfile="$zipfile"
         fi
     else
-        dst_zipfile="$(fullpath "$(string_rstrip "$src_path" '.')").zip"
+        dst_zipfile="$(fullpath "$(string_rstrip "$src_path" '.')")${zip_ext}"
     fi
 
     if [ "$(string_endswith "$src_path" '/')" = true ]; then

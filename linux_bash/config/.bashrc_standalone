@@ -148,8 +148,9 @@ line2space() {
 }
 space2line() { tr ' ' '\n'; }
 
-strrep() { sed -r "s|${1}|${2}|g"; }
-strcat() { sed -r "s|(.*)|\1${1}|"; }
+string_replace() { sed -r "s|${1}|${2}|g"; }
+string_prepend() { sed -r "s|(.*)|${1}\1|"; }
+string_append() { sed -r "s|(.*)|\1${1}|"; }
 
 
 ## Command-line argument manipulation
@@ -350,6 +351,9 @@ rsync_alias() {
             if [ "$arg_opt" == 'dryrun' ]; then
                 dryrun=true
                 continue
+            elif [ "$arg_opt" == 'to-host' ] || [ "$arg_opt" == 'from-host' ]; then
+                direction="$arg_opt"
+                continue
             fi
         fi
         if [[ $arg == *"*"* ]] || [[ $arg == *" "* ]]; then
@@ -363,7 +367,7 @@ rsync_alias() {
     if [ "$(itemOneOf "$direction" "${direction_choices_arr[@]}")" = false ]; then
         echo_e "ERROR: rsync_alias DIRECTION must be one of the following: ${direction_choices_arr[*]}"
         return 1
-    elif [ -z "$remote_host" ] || [ -z "$src_path" ] || [ -z "$dst_path" ]; then
+    elif [ -z "$remote_host" ] || [ -z "$src_path" ] || [ -z "$dst_path" ] || [[ $src_path == -* ]] || [[ $dst_path == -* ]]; then
         echo_e "ERROR: rsync_alias required postional arguments: DIRECTION HOST SRC DEST"
         return 1
     fi
@@ -391,6 +395,11 @@ rsync_alias() {
     if [ "$dryrun" = false ]; then
         eval "$cmd"
     fi
+}
+
+rsync_alias_defopt() {
+    local remote_host="$1"; shift
+    rsync_alias auto "$remote_host" -rtLv --partial-dir='.rsync-partial' --progress --exclude '.DS_Store' "$@"
 }
 
 
@@ -635,6 +644,25 @@ find_missing_suffix() {
 
 ## Git
 
+git_remote() {
+    git config --get remote.origin.url
+}
+
+git_webpage() {
+    local get_url_cmd="git config --get remote.origin.url"
+    local url=$(eval "$get_url_cmd")
+    if [ -z "$url" ]; then
+        echo "Repo lookup command returned nothing: '${get_url_cmd}'"
+        return
+    fi
+    url="${url##*@}"
+    url="${url//://}"
+    if ! echo "$url" | grep -q '^http'; then
+        url="https://${url}"
+    fi
+    open -a "Google Chrome" "$url"
+}
+
 git_drop_all_changes() {
     git checkout -- .
 }
@@ -646,6 +674,10 @@ git_reset_keep_changes() {
 git_stash_apply_no_merge() {
     git read-tree stash^{tree}
     git checkout-index -af
+}
+
+git_apply_force() {
+    git apply --reject --whitespace=fix "$@"
 }
 
 git_make_exec() {
@@ -840,6 +872,5 @@ git_clone_replace() {
 ## Other
 
 ssh_alias() {
-    local hostname="$1"
-    set -x; ssh "$hostname" -t "bash --rcfile ~/.bashrc_from_ssh"; set +x
+    set -x; ssh "$@" -t "bash --rcfile ~/.bashrc_from_ssh"; set +x
 }
