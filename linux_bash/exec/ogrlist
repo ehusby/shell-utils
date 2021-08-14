@@ -27,7 +27,7 @@ source "$bash_functions_script"
 ## Arguments
 dbase_path=''
 layer_name=''
-field_name=''
+field_list=''
 sql_where=''
 delimiter=','
 list_layers=false
@@ -133,7 +133,7 @@ while (( "$#" )); do
 
         elif [ "$arg_opt" = 'f' ] || [ "$arg_opt" = 'field' ]; then
             arg_opt_nargs=1
-            field_name="$arg_val"
+            field_list="$arg_val"
 
         elif [ "$arg_opt" = 'w' ] || [ "$arg_opt" = 'where' ]; then
             arg_opt_nargs=1
@@ -234,9 +234,17 @@ if [ "$list_geometry" = false ]; then
     ogrinfo_opt_arr+=( '-nogeomtype' )
 fi
 
-if [ "$list_csv" = true ]; then
+if [ "$field_list" = '*' ] && [ "$print_header" = true ]; then
+    header_all_fields=true
+    header_line="\${header_line}"
+else
+    header_all_fields=false
+    header_line="${field_list//,/${delimiter}}"
+fi
+
+if [ "$list_csv" = true ] || [ "$field_list" = '*' ]; then
     list_trim=true
-    list_csv_cmd=" | tr '\n' ',' | sed 's|,$|\n|'"
+    list_csv_cmd=" | grep -v '^ogc_fid$' | tr '\n' '${delimiter}' | sed 's|${delimiter}$|\n|'"
 else
     list_csv_cmd=''
 fi
@@ -244,6 +252,8 @@ fi
 
 ## Main program
 
+cmd=''
+get_fields_cmd=''
 if [ -z "$layer_name" ] || [ "$list_layers" = true ]; then
     ogrinfo_cmd="ogrinfo ${ogrinfo_opt_arr[*]} '${dbase_path}'"
     if [ "$list_trim" = true ]; then
@@ -252,7 +262,7 @@ if [ -z "$layer_name" ] || [ "$list_layers" = true ]; then
         awk_cmd=''
     fi
     cmd="${ogrinfo_cmd} | grep -E '^[0-9]+\:' ${awk_cmd} ${list_csv_cmd}"
-elif [ -z "$field_name" ] || [ "$list_fields" = true ]; then
+elif [ -z "$field_list" ] || [ "$list_fields" = true ] || [ "$header_all_fields" = true ]; then
     ogrinfo_cmd="ogrinfo ${ogrinfo_opt_arr[*]} '${dbase_path}' '${layer_name}'"
     if [ "$list_trim" = true ]; then
         awk_cmd=" | awk -F':' '{print \$1}'"
@@ -260,12 +270,20 @@ elif [ -z "$field_name" ] || [ "$list_fields" = true ]; then
         awk_cmd=''
     fi
     cmd="${ogrinfo_cmd} | grep -E '^[^[:space:]]+\: [^[:space:]]+ \([0-9]+\.?[0-9]*\)$' ${awk_cmd} ${list_csv_cmd}"
-else
-    ogrinfo_cmd="ogrinfo -dialect sqlite -sql \"SELECT ${field_name} FROM '${layer_name}' ${sql_where}\" \"${dbase_path}\""
+    if [ "$header_all_fields" = true ]; then
+        get_fields_cmd="header_line=\$(${cmd}); all_fields_csv=\$(echo \"\${header_line}\" | sed 's|${delimiter}|,|g')"
+        field_list="\${all_fields_csv}"
+    fi
+fi
+if [ -z "$cmd" ] || [ "$header_all_fields" = true ]; then
+    ogrinfo_cmd="ogrinfo -dialect sqlite -sql \"SELECT ${field_list} FROM '${layer_name}' ${sql_where}\" \"${dbase_path}\""
     awk_cmd='BEGIN { csv="" } { val=$0; if (val=="") { if (csv!="") print csv; csv=""; } else if (csv=="") { csv=val; } else { csv=sprintf("%s'"${delimiter}"'%s", csv, val); } } END { if (csv!="") print csv; }'
-    cmd="${ogrinfo_cmd} | sed -e '1,/OGRFeature(SELECT):0/d' | grep -E '(^$| = )' | cut -d'=' -f2- | cut -d' ' -f2- | awk '${awk_cmd}'"
+    cmd="${ogrinfo_cmd} | sed -n '/OGRFeature(SELECT):/,\$p' | grep -E '(^$| = )' | cut -d'=' -f2- | cut -d' ' -f2- | awk '${awk_cmd}'"
     if [ "$print_header" = true ]; then
-        cmd="echo '${field_name//,/${delimiter}}' ; ${cmd}"
+        cmd="echo \"${header_line}\" ; ${cmd}"
+    fi
+    if [ -n "$get_fields_cmd" ]; then
+        cmd="${get_fields_cmd} ; ${cmd}"
     fi
 fi
 
@@ -274,7 +292,9 @@ if [ "$debug" = true ]; then
 else
     eval "$cmd"
     cmd_status=$?
-    if (( cmd_status != 0 )); then
+    # Skip error code 141 (SIGPIPE), which can be triggered
+    # when piping the output of this program to 'head'.
+    if (( cmd_status != 0 )) && (( cmd_status != 141 )); then
         echo_e -e "\nReceived non-zero exit status (${cmd_status}) from main command"
         echo_e -e "Rerunning ogrinfo command and redirecting stdout to stderr...\n"
         eval "$ogrinfo_cmd" 1>/dev/stderr
