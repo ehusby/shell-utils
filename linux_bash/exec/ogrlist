@@ -29,6 +29,7 @@ dbase_path=''
 layer_name=''
 field_list=''
 sql_where=''
+sql_query=''
 delimiter=','
 list_layers=false
 list_fields=false
@@ -68,6 +69,11 @@ Options:
         a comma-separated string of field names.
  -w,--where
         Quoted SQL WHERE expression to filter features.
+ -q,--query
+        Quoted SQL query expression to proceed base command
+        'SELECT <field> FROM <layer>' and WHERE expression
+        (if --where option is provided).
+        Example: 'limit 10'
  -H,--header
         Print header line listing delimited field name(s)
         before printing list of field values.
@@ -138,6 +144,10 @@ while (( "$#" )); do
         elif [ "$arg_opt" = 'w' ] || [ "$arg_opt" = 'where' ]; then
             arg_opt_nargs=1
             sql_where="$arg_val"
+
+        elif [ "$arg_opt" = 'q' ] || [ "$arg_opt" = 'query' ]; then
+            arg_opt_nargs=1
+            sql_query="$arg_val"
 
         elif [ "$arg_opt" = 'H' ] || [ "$arg_opt" = 'header' ]; then
             arg_opt_nargs=0
@@ -227,6 +237,9 @@ fi
 if [ -n "$sql_where" ]; then
     sql_where="WHERE $(echo "$sql_where" | sed -r "s|\"|\'|g")"
 fi
+if [ -n "$sql_query" ]; then
+    sql_query=$(echo "$sql_query" | sed -r "s|\"|\'|g")
+fi
 
 ogrinfo_opt_arr=( '-ro' '-so' '-nomd' '-nocount' '-noextent' )
 
@@ -276,7 +289,7 @@ elif [ -z "$field_list" ] || [ "$list_fields" = true ] || [ "$header_all_fields"
     fi
 fi
 if [ -z "$cmd" ] || [ "$header_all_fields" = true ]; then
-    ogrinfo_cmd="ogrinfo -dialect sqlite -sql \"SELECT ${field_list} FROM '${layer_name}' ${sql_where}\" \"${dbase_path}\""
+    ogrinfo_cmd="ogrinfo -dialect sqlite -sql \"SELECT ${field_list} FROM '${layer_name}' ${sql_where} ${sql_query}\" \"${dbase_path}\""
     awk_cmd='BEGIN { csv="" } { val=$0; if (val=="") { if (csv!="") print csv; csv=""; } else if (csv=="") { csv=val; } else { csv=sprintf("%s'"${delimiter}"'%s", csv, val); } } END { if (csv!="") print csv; }'
     cmd="${ogrinfo_cmd} | sed -n '/OGRFeature(SELECT):/,\$p' | grep -E '(^$| = )' | cut -d'=' -f2- | cut -d' ' -f2- | awk '${awk_cmd}'"
     if [ "$print_header" = true ]; then
