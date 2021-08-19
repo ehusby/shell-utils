@@ -87,7 +87,7 @@ echo_oe() { echo "$@" | tee >(cat >&2); }
 base10() { print_string "$((10#$1))"; }
 
 escape_regex_special_chars() {
-    local special_chars_arr=( '^' '.' '+' '*' '?' '|' '\' '(' ')' '[' ']' '{' '}' '$' )
+    local special_chars_arr=( '^' '.' '+' '*' '?' '|' '\\' '(' ')' '[' ']' '{' '}' '$' )
     local str_in="$1"
     local str_out=''
     local i char
