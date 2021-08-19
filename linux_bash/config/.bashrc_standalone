@@ -97,14 +97,8 @@ export PATH="$(LANG=C perl -e 'print join(":", grep { not $seen{$_}++ } split(/:
 
 ### General purpose functions and aliases
 
-### Source general purpose shell functions from library script
-#if ! [ -z ${SHELL_UTILS_PATH+x} ] && [ -n "$SHELL_UTILS_PATH" ]; then
-#    source "${SHELL_UTILS_PATH}/linux_bash/lib/bash_shell_func.sh"
-#fi
-
-
 ## Source base functions
-source "$(dirname "${BASH_SOURCE[0]}")/bash_script_func.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/bash_base_func.sh"
 
 
 ## Bash prompts
@@ -165,46 +159,6 @@ echoeval() {
     eval "echo ${echo_args}"
 }
 
-process_items() {
-    local process_func="$1"; shift
-    local pipe_in_items="$1"; shift
-    local cwd_glob_if_no_items_provided="$1"; shift
-    local processed_items=false
-    local item
-    if (( $# > 0 )); then
-        if [ "$pipe_in_items" = true ]; then
-            eval "printf '%s\n' \"$@\" | ${process_func}"
-            while (( $# > 0 )); do shift; done
-        else
-            while (( $# > 0 )); do
-                item="$1"
-                eval "${process_func} \"${item}\""
-                shift
-            done
-        fi
-        processed_items=true
-    fi
-    if [[ -p /dev/stdin ]]; then
-        if [ "$pipe_in_items" = true ]; then
-            eval "$process_func"
-        else
-            while IFS= read -r item; do
-                eval "${process_func} \"${item}\""
-            done
-        fi
-        processed_items=true
-    fi
-    if [ "$processed_items" = false ] && [ "$cwd_glob_if_no_items_provided" = true ]; then
-        if [ "$pipe_in_items" = true ]; then
-            eval "printf '%s\n' * | ${process_func}"
-        else
-            for item in *; do
-                eval "${process_func} \"${item}\""
-            done
-        fi
-    fi
-}
-
 tokentx() {
     local tx="$1"
     local token_arr=()
@@ -262,42 +216,6 @@ layz() {
 }
 
 
-## Path representation
-
-abspath_all() {
-    process_items 'abspath' false true "$@"
-}
-fullpath_all() {
-    process_items 'fullpath' false true "$@"
-}
-basename_all() {
-    process_items 'basename' false true "$@"
-}
-dirname_all() {
-    process_items 'dirname' false true "$@"
-}
-
-pathfromend() {
-    local start_idx end_idx
-    if [[ $1 == *-* ]]; then
-        start_idx=$(echo "$1" | cut -d'-' -f1)
-        end_idx=$(echo "$1" | cut -d'-' -f2)
-        shift
-    else
-        start_idx="$1"; shift
-        end_idx="$1"; shift
-    fi
-    if (( start_idx < end_idx )); then
-        local temp_idx="$start_idx"
-        start_idx="$end_idx"
-        end_idx="$temp_idx"
-    fi
-    start_idx="-${start_idx}"
-    cmd="rev | cut -d'/' -f${end_idx}${start_idx} | rev"
-    process_items "$cmd" true false "$@"
-}
-
-
 ## File operations
 
 link_or_copy() {
@@ -333,73 +251,6 @@ touch_all() {
         shift
     done
     echo "Done!"
-}
-
-#alias rsync_example='rsync_alias auto user@hostname -rtLPv'
-rsync_alias() {
-    local direction_choices_arr=( 'to-host' 'from-host' 'auto' )
-    local direction="$1"; shift
-    local remote_host="$1"; shift
-    local opt_arg_arr=()
-    local dryrun=false
-
-    local arg arg_opt
-    while (( $# > 2 )); do
-        arg="$1"; shift
-        if [[ $arg == -* ]]; then
-            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
-            if [ "$arg_opt" == 'dryrun' ]; then
-                dryrun=true
-                continue
-            elif [ "$arg_opt" == 'to-host' ] || [ "$arg_opt" == 'from-host' ]; then
-                direction="$arg_opt"
-                continue
-            fi
-        fi
-        if [[ $arg == *"*"* ]] || [[ $arg == *" "* ]]; then
-            arg="'${arg}'"
-        fi
-        opt_arg_arr+=( "$arg" )
-    done
-    local src_path="$1"
-    local dst_path="$2"
-
-    if [ "$(itemOneOf "$direction" "${direction_choices_arr[@]}")" = false ]; then
-        echo_e "ERROR: rsync_alias DIRECTION must be one of the following: ${direction_choices_arr[*]}"
-        return 1
-    elif [ -z "$remote_host" ] || [ -z "$src_path" ] || [ -z "$dst_path" ] || [[ $src_path == -* ]] || [[ $dst_path == -* ]]; then
-        echo_e "ERROR: rsync_alias required postional arguments: DIRECTION HOST SRC DEST"
-        return 1
-    fi
-
-    if [ "$direction" = 'to-host' ]; then
-        dst_path="${remote_host}:${dst_path}"
-    elif [ "$direction" = 'from-host' ]; then
-        src_path="${remote_host}:${src_path}"
-    elif [ "$direction" = 'auto' ]; then
-        if [ -e "$src_path" ] && [ -e "$dst_path" ]; then
-            echo_e "ERROR: rsync_alias cannot automatically determine DIRECTION when both SRC and DEST paths exist locally"
-            return 1
-        elif [ -e "$src_path" ]; then
-            dst_path="${remote_host}:${dst_path}"
-        elif [ -e "$dst_path" ]; then
-            src_path="${remote_host}:${src_path}"
-        else
-            echo_e "ERROR: rsync_alias neither SRC nor DEST paths exist locally (DIRECTION='auto')"
-            return 1
-        fi
-    fi
-
-    cmd="rsync ${opt_arg_arr[*]} \"${src_path}\" \"${dst_path}\""
-    echo "$cmd"
-    if [ "$dryrun" = false ]; then
-        eval "$cmd"
-    fi
-}
-
-rsync_alias_defopt() {
-    local remote_host="$1"; shift
-    rsync_alias auto "$remote_host" -rtLv --partial-dir='.rsync-partial' --progress --exclude '.DS_Store' "$@"
 }
 
 
@@ -873,4 +724,71 @@ git_clone_replace() {
 
 ssh_alias() {
     set -x; ssh "$@" -t "bash --rcfile ~/.bashrc_from_ssh"; set +x
+}
+
+#alias rsync_example='rsync_alias auto user@hostname -rtLPv'
+rsync_alias() {
+    local direction_choices_arr=( 'to-host' 'from-host' 'auto' )
+    local direction="$1"; shift
+    local remote_host="$1"; shift
+    local opt_arg_arr=()
+    local dryrun=false
+
+    local arg arg_opt
+    while (( $# > 2 )); do
+        arg="$1"; shift
+        if [[ $arg == -* ]]; then
+            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+            if [ "$arg_opt" == 'dryrun' ]; then
+                dryrun=true
+                continue
+            elif [ "$arg_opt" == 'to-host' ] || [ "$arg_opt" == 'from-host' ]; then
+                direction="$arg_opt"
+                continue
+            fi
+        fi
+        if [[ $arg == *"*"* ]] || [[ $arg == *" "* ]]; then
+            arg="'${arg}'"
+        fi
+        opt_arg_arr+=( "$arg" )
+    done
+    local src_path="$1"
+    local dst_path="$2"
+
+    if [ "$(itemOneOf "$direction" "${direction_choices_arr[@]}")" = false ]; then
+        echo_e "ERROR: rsync_alias DIRECTION must be one of the following: ${direction_choices_arr[*]}"
+        return 1
+    elif [ -z "$remote_host" ] || [ -z "$src_path" ] || [ -z "$dst_path" ] || [[ $src_path == -* ]] || [[ $dst_path == -* ]]; then
+        echo_e "ERROR: rsync_alias required postional arguments: DIRECTION HOST SRC DEST"
+        return 1
+    fi
+
+    if [ "$direction" = 'to-host' ]; then
+        dst_path="${remote_host}:${dst_path}"
+    elif [ "$direction" = 'from-host' ]; then
+        src_path="${remote_host}:${src_path}"
+    elif [ "$direction" = 'auto' ]; then
+        if [ -e "$src_path" ] && [ -e "$dst_path" ]; then
+            echo_e "ERROR: rsync_alias cannot automatically determine DIRECTION when both SRC and DEST paths exist locally"
+            return 1
+        elif [ -e "$src_path" ]; then
+            dst_path="${remote_host}:${dst_path}"
+        elif [ -e "$dst_path" ]; then
+            src_path="${remote_host}:${src_path}"
+        else
+            echo_e "ERROR: rsync_alias neither SRC nor DEST paths exist locally (DIRECTION='auto')"
+            return 1
+        fi
+    fi
+
+    cmd="rsync ${opt_arg_arr[*]} \"${src_path}\" \"${dst_path}\""
+    echo "$cmd"
+    if [ "$dryrun" = false ]; then
+        eval "$cmd"
+    fi
+}
+
+rsync_alias_defopt() {
+    local remote_host="$1"; shift
+    rsync_alias auto "$remote_host" -rtLv --partial-dir='.rsync-partial' --progress --exclude '.DS_Store' "$@"
 }
