@@ -77,6 +77,14 @@ export PATH="${PATH}:${SHELL_UTILS_PATH}/linux_bash/exec"  # Easily call shell-u
 export PATH="$(LANG=C perl -e 'print join(":", grep { not $seen{$_}++ } split(/:/, $ENV{PATH}))')"
 
 
+## Source general purpose shell functions from library script
+if ! [ -z ${SHELL_UTILS_PATH+x} ] && [ -n "$SHELL_UTILS_PATH" ]; then
+    set -a
+    source "${SHELL_UTILS_PATH}/linux_bash/lib/bash_shell_func.sh"
+    set +a
+fi
+
+
 ## Aliases
 
 
@@ -88,12 +96,4 @@ export PATH="$(LANG=C perl -e 'print join(":", grep { not $seen{$_}++ } split(/:
 
 ################################
 ################################
-
-
-### General purpose functions and aliases
-
-## Source general purpose shell functions from library script
-if ! [ -z ${SHELL_UTILS_PATH+x} ] && [ -n "$SHELL_UTILS_PATH" ]; then
-    source "${SHELL_UTILS_PATH}/linux_bash/lib/bash_shell_func.sh"
-fi
 
