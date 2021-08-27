@@ -289,7 +289,7 @@ elif [ -z "$field_list" ] || [ "$list_fields" = true ] || [ "$header_all_fields"
     fi
 fi
 if [ -z "$cmd" ] || [ "$header_all_fields" = true ]; then
-    ogrinfo_cmd="ogrinfo -dialect sqlite -sql \"SELECT ${field_list} FROM '${layer_name}' ${sql_where} ${sql_query}\" \"${dbase_path}\""
+    ogrinfo_cmd="ogrinfo -ro -dialect sqlite -sql \"SELECT ${field_list} FROM '${layer_name}' ${sql_where} ${sql_query}\" \"${dbase_path}\""
     awk_cmd='BEGIN { csv="" } { val=$0; if (val=="") { if (csv!="") print csv; csv=""; } else if (csv=="") { csv=val; } else { csv=sprintf("%s'"${delimiter}"'%s", csv, val); } } END { if (csv!="") print csv; }'
     cmd="${ogrinfo_cmd} | sed -n '/OGRFeature(SELECT):/,\$p' | grep -E '(^$| = )' | cut -d'=' -f2- | cut -d' ' -f2- | awk '${awk_cmd}'"
     if [ "$print_header" = true ]; then
