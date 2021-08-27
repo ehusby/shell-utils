@@ -299,7 +299,7 @@ fi
 for srcpath in "${srcpath_arr[@]}"; do
 
     ## Sum file sizes, returning disk usage in KB
-    find_cmd="find \"${srcpath}\" -type f ${find_args} -print0 | xargs -r0 du -a | awk '{sum+=\$1} END {print sum}'"
+    find_cmd="find \"${srcpath}\" ${find_args} -type f -print0 | xargs -r0 du -a | awk '{sum+=\$1} END {print sum}'"
     if [ "$debug" = true ]; then
         echo "$find_cmd"
         continue

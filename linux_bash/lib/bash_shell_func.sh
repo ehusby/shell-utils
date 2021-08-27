@@ -91,7 +91,7 @@ layz() {
     debug=false
     if [[ $1 == -* ]]; then
         arg_opt=$(echo "$1" | sed -r 's|\-+(.*)|\1|')
-        if [ "$arg_opt" = 'dryrun' ] || [ "$arg_opt" = 'debug' ]; then
+        if [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ] || [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             debug=true
             shift
         fi
@@ -140,6 +140,67 @@ absymlink_defunct() {
         shift
     done
     ln -s "${arg_arr[@]}"
+}
+
+mv_and_absymlink() {
+    local src_arr=()
+    local dst=''
+    local mv_args_arr=()
+    local dst_dir_exists
+    local dryrun=false
+    if (( $# == 2 )); then
+        src_arr+=( "$1" )
+        dst="$2"
+        if [ -d "$dst" ]; then
+            dst_dir_exists=true
+        else
+            dst_dir_exists=false
+        fi
+    else
+        dst_dir_exists=true
+        local arg arg_opt
+        while (( $# )); do
+            arg="$1"
+            if [ "$(string_startswith "$arg" '-')" = true ]; then
+                arg_opt=$(string_lstrip "$arg" '-')
+                if [ "$(itemOneOf "$arg_opt" 'dr' 'dryrun' 'db' 'debug')" = true ]; then
+                    dryrun=true
+                    shift; continue
+                elif [ "$arg" == '-t' ]; then
+                    dst="$2"; shift
+                else
+                    mv_args_arr+=( "$arg" )
+                fi
+            elif (( $# == 1 )) && [ -z "$dst" ]; then
+                dst="$arg"
+            else
+                src_arr+=( "$arg" )
+            fi
+            shift
+        done
+    fi
+    local mv_opt_args="${mv_args_arr[*]+${mv_args_arr[*]}}"
+    local dryrun_arg
+    if [ "$dryrun" = true ]; then
+        dryrun_arg='-dryrun'
+    else
+        dryrun_arg=''
+    fi
+    local src dst_path
+    for src in "${src_arr[@]}"; do
+        mv_cmd="mv ${mv_opt_args} \"${src}\" \"${dst}\""
+        if [ "$dryrun" = true ]; then
+            echo "$mv_cmd"
+        else
+            eval "$mv_cmd"
+        fi
+        if [ "$dst_dir_exists" = false ]; then
+            dst_path="$dst"
+        else
+            dst_path="${dst%/}/$(basename "$src")"
+        fi
+        absymlink ${dryrun_arg} "$dst_path" "${src%/}"
+    done
 }
 
 touch_all() {
@@ -292,7 +353,7 @@ find_alias() {
         if [[ $arg == -* ]] || [ "$arg" == '!' ]; then
             parsing_opt_args=true
             arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
-            if [ "$arg_opt" = 'debug' ]; then
+            if [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ] || [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
                 debug=true
                 shift; continue
             elif [ "$arg_opt" = 'mindepth' ]; then
@@ -693,5 +754,5 @@ rsync_alias() {
 
 rsync_alias_defopt() {
     local remote_host="$1"; shift
-    rsync_alias auto "$remote_host" -rtLv --partial-dir='.rsync-partial' --progress --exclude '.DS_Store' "$@"
+    rsync_alias auto "$remote_host" -rtlv --partial-dir='.rsync-partial' --progress --exclude '.DS_Store' "$@"
 }
