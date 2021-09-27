@@ -486,6 +486,10 @@ git_reset_keep_changes() {
     git reset HEAD^
 }
 
+git_reset_drop_changes() {
+    git reset --hard HEAD
+}
+
 git_stash_apply_no_merge() {
     git read-tree stash^{tree}
     git checkout-index -af
@@ -493,6 +497,10 @@ git_stash_apply_no_merge() {
 
 git_apply_force() {
     git apply --reject --whitespace=fix "$@"
+}
+
+git_remove_local_branches() {
+  git branch | grep -v '\*' | xargs git branch -D
 }
 
 git_make_exec() {
