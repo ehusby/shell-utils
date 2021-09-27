@@ -35,16 +35,23 @@ round_choices_arr=( 'on' 'off' 'up' 'down' )
 round_mode='up'
 namepat_arr=()
 sum_all=false
+identify=false
 debug=false
-fwd_args_arr=()
+fwd_args_arr_1=()
+fwd_args_arr_2=()
 srcpath_arr=()
+find_depth_provided=false
+find_name_provided=false
+find_type_d=false
+find_type_f=false
+find_prune=false
 
 ## Custom globals
 
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage: ${script_name} [OPTION]... PATH... ['find' OPTION]...
+Usage: ${script_name} [OPTION]... [PATH...] ['find' OPTION]...
 
   Summarize disk usage of each file/directory PATH, recursively
 for directories.
@@ -71,14 +78,14 @@ Options:
         Report only the summed disk usage of all PATHS.
     --si
         Use powers of 1000 instead of 1024 between units.
+ -i,--identify
+        Print file/directory paths identified by 'find'
+        commands that would be included in disk usage summary
+        in a normal non-identify run.
 -db,--debug
         Print 'find' command(s) used to gather file sizes,
         without executing.
 EOM
-if (( $# < 1 )); then
-    echo_e "$script_usage"
-    exit_script_with_status 1
-fi
 
 
 ## Parse arguments
@@ -86,6 +93,13 @@ set +u
 parsing_fwd_args=false
 while (( "$#" )); do
     arg="$1"
+
+    if [ "$arg" == '!' ]; then
+        parsing_fwd_args=true
+    elif [[ $arg == [\(\)\;] ]]; then
+        parsing_fwd_args=true
+        arg="\\${arg}"
+    fi
 
     if [ "$parsing_fwd_args" = true ]; then
         # Accept critical script optional arguments
@@ -102,13 +116,31 @@ while (( "$#" )); do
                 debug=true
             else
                 is_fwd_arg=true
+                if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+                    arg_val="${arg_opt#*=}"
+                    arg_opt="${arg_opt%%=*}"
+                else
+                    arg_val="$2"
+                fi
+                if [ "$arg_opt" = 'mindepth' ] || [ "$arg_opt" = 'maxdepth' ]; then
+                    find_depth_provided=true
+                elif [ "$arg_opt" = 'type' ] && [ "$arg_val" = 'd' ]; then
+                    find_type_d=true
+                elif [ "$arg_opt" = 'type' ] && [ "$arg_val" = 'f' ]; then
+                    find_type_f=true
+                elif [ "$arg_opt" = 'prune' ]; then
+                    find_prune=true
+                fi
             fi
         fi
         if [ "$is_fwd_arg" = true ]; then
             if [ "$(string_contains "$arg" '*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
                 arg="'${arg}'"
             fi
-            fwd_args_arr+=( "$arg" )
+            fwd_args_arr_2+=( "$arg" )
+            if [ "$(string_contains "$arg" '-name')" = true ]; then
+                find_name_provided=true
+            fi
         fi
 
     elif [ "$(string_startswith "$arg" '-')" = false ]; then
@@ -152,9 +184,25 @@ while (( "$#" )); do
             arg_opt_nargs=0
             sum_all=true
 
+        elif [ "$arg_opt" = 'i' ] || [ "$arg_opt" = 'identify' ]; then
+            arg_opt_nargs=0
+            identify=true
+
         elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
             arg_opt_nargs=0
             debug=true
+
+        elif [ "$arg_opt" = 'H' ] || [ "$arg_opt" = 'L' ] || [ "$arg_opt" = 'P' ]; then
+            fwd_args_arr_1+=( "$arg" )
+            arg_opt_nargs=0
+
+        elif [ "$arg_opt" = 'D' ] || [ "$arg_opt" = 'Olevel' ]; then
+            arg_opt_nargs=1
+            if [ "$(string_contains "$arg" '=')" = true ]; then
+                fwd_args_arr_1+=( "$arg" )
+            else
+                fwd_args_arr_1+=( "$arg_opt" "$arg_val" )
+            fi
 
         else
             arg_opt_nargs=0
@@ -166,16 +214,8 @@ while (( "$#" )); do
                 unit_name="$arg_opt"
 
             else
-                if (( ${#srcpath_arr} >= 1 )); then
-                    if [ "$(string_contains "$arg" '*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
-                        arg="'${arg}'"
-                    fi
-                    fwd_args_arr+=( "$arg" )
-                    parsing_fwd_args=true
-                else
-                    echo_e "Unexpected argument: ${arg}"
-                    exit_script_with_status 1
-                fi
+                parsing_fwd_args=true
+                continue
             fi
         fi
 
@@ -207,12 +247,15 @@ set -u
 ## Validate arguments
 
 if (( ${#srcpath_arr[@]} == 0 )); then
-    echo_e "At least one source path argument must be provided"
-    exit_script_with_status 1
+    # Use the current working directory
+    srcpath_arr+=( '.' )
 fi
 for srcpath in "${srcpath_arr[@]}"; do
     if [ ! -e "$srcpath" ]; then
         echo_e "Source path does not exist: ${srcpath}"
+        exit_script_with_status 1
+    elif [ "$find_type_d" = true ] && [ ! -d "$srcpath" ]; then
+        echo_e "Source path arguments must all be directories when 'find' argument 'type -d' is provided"
         exit_script_with_status 1
     fi
 done
@@ -284,8 +327,11 @@ if (( ${#namepat_arr[@]} > 0 )); then
     done
     find_name_args="${find_name_args} \)"
 fi
-find_args="${fwd_args_arr[*]+${fwd_args_arr[*]}} ${find_name_args}"
-find_args=$(string_strip "$find_args" ' ')
+
+# Assemble 'find' optional arguments
+find_args_1="${fwd_args_arr_1[*]+${fwd_args_arr_1[*]}}"
+find_args_2="${fwd_args_arr_2[*]+${fwd_args_arr_2[*]}} ${find_name_args}"
+find_args_2=$(string_strip "$find_args_2" ' ')
 
 
 ## Main program
@@ -298,13 +344,41 @@ else
 fi
 for srcpath in "${srcpath_arr[@]}"; do
 
-    ## Sum file sizes, returning disk usage in KB
-    find_cmd="find \"${srcpath}\" ${find_args} -type f -print0 | xargs -r0 du -a | awk '{sum+=\$1} END {print sum}'"
-    if [ "$debug" = true ]; then
-        echo "$find_cmd"
-        continue
+    find_args_2_inst="$find_args_2"
+    if [ "$find_type_d" = true ] || { [ -d "$srcpath" ] && [ "$find_type_f" = false ] && [ -z "$find_name_args" ] && [ "$find_depth_provided" = false ] && [ "$find_name_provided" = false ]; }; then
+        if [ "$find_type_d" = false ]; then
+            find_args_2_inst="${find_args_2_inst} -type d"
+        fi
+        if [ "$find_prune" = false ]; then
+            find_args_2_inst="${find_args_2_inst} -prune"
+        fi
+        du_cmd="du -s"
+    else
+        if [ "$find_type_f" = false ]; then
+            find_args_2_inst="${find_args_2_inst} -type f"
+        fi
+        du_cmd="du -a"
     fi
-    sum_kb=$(eval "$find_cmd")
+
+    find_cmd="find ${find_args_1} \"${srcpath}\" ${find_args_2_inst}"
+    full_cmd="${find_cmd} -print0 | xargs -r0 ${du_cmd} | awk '{sum+=\$1} END {print sum}'"
+    if [ "$identify" = true ]; then
+        run_cmd="$find_cmd"
+    else
+        run_cmd="$full_cmd"
+    fi
+
+    if [ "$debug" = true ]; then
+        echo "$run_cmd"
+        continue
+    elif [ "$identify" = true ]; then
+        eval "$run_cmd"
+        continue
+    else
+        ## Sum file sizes, returning disk usage in KB
+        sum_kb=$(eval "$run_cmd")
+    fi
+
     sum_kb=$(printf '%f' "${sum_kb}")  # Sum could be returned in scientific notation, so use 'printf' to fix it
     if [ "$unit_si" = true ]; then
         sum_kb=$(printf "%.${decimals}f\n" "$(bc -l <<< "${sum_kb} * 1024 / 1000")")  # Convert KB sum to SI if required
