@@ -395,7 +395,7 @@ pathfromend() {
         echo_e "pathfromend: first one or two arguments must be nonzero indices from end, like '2-1' or '2 1'"
         return 1
     fi
-    if (( $# == 0 )); then
+    if ! [[ -p /dev/stdin ]] && (( $# == 0 )); then
         echo_e "pathfromend: expected one or more path operand after index arguments"
         return 1
     fi
