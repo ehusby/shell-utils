@@ -231,7 +231,7 @@ if (( ${#srcfile_arr[@]} == 0 )); then
     exit_script_with_status 1
 fi
 for srcfile in "${srcfile_arr[@]}"; do
-    if (( $(indexOf "$srcfile" "${outfile_provided_arr[@]}") != -1 )); then
+    if [ "$(itemOneOf "$srcfile" "${outfile_provided_arr[@]}")" = true ]; then
         echo_e "Source file cannot also provided as an output file argument: ${srcfile}"
         exit_script_with_status 1
     fi
