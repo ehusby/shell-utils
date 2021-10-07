@@ -31,7 +31,7 @@ unit_abrev_arr=( 'K' 'M' 'G' 'T' )
 unit_order_arr=(  0   1   2   3  )
 unit_si=false
 decimals=2
-round_choices_arr=( 'on' 'off' 'up' 'down' )
+round_choices=( 'on' 'off' 'up' 'down' )
 round_mode='up'
 namepat_arr=()
 sum_all=false
@@ -68,7 +68,7 @@ Options:
         usage value less than 1000 is automatically selected.
  -d,--decimals=<int> (default=${decimals})
         Number of decimal places in reported disk usage.
- -r,--round={$(string_join '|' "${round_choices_arr[@]}")} (default=${round_mode})
+ -r,--round={$(string_join '|' "${round_choices[@]}")} (default=${round_mode})
         Rounding method used in reported disk usage.
  -n,--name=<pattern>
         Include files that match this pattern.
@@ -252,10 +252,10 @@ if (( ${#srcpath_arr[@]} == 0 )); then
 fi
 for srcpath in "${srcpath_arr[@]}"; do
     if [ ! -e "$srcpath" ]; then
-        echo_e "Source path does not exist: ${srcpath}"
+        echo_e "Source PATH does not exist: ${srcpath}"
         exit_script_with_status 1
     elif [ "$find_type_d" = true ] && [ ! -d "$srcpath" ]; then
-        echo_e "Source path arguments must all be directories when 'find' argument 'type -d' is provided"
+        echo_e "Source PATH arguments must all be directories when 'find' argument 'type -d' is provided"
         exit_script_with_status 1
     fi
 done
@@ -297,12 +297,12 @@ if [ -n "$unit_name" ]; then
 fi
 
 if [ "$(string_is_posint_or_zero "$decimals")" = false ]; then
-    echo_e "Decimals argument must be a positive/zero integer"
+    echo_e "--decimals argument must be a positive/zero integer"
     exit_script_with_status 1
 fi
 
-if [ "$(itemOneOf "$round_mode" "${round_choices_arr[@]}")" = false ]; then
-    echo_e "Rounding mode must be one of the following: ${round_choices_arr[*]}"
+if [ "$(itemOneOf "$round_mode" "${round_choices[@]}")" = false ]; then
+    echo_e "--round mode must be one of the following: ${round_choices[*]}"
     exit_script_with_status 1
 fi
 

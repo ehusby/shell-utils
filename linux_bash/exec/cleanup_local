@@ -25,7 +25,7 @@ source "$bash_functions_script"
 
 
 ## Arguments
-method_choices_arr=( 'pbs' 'ssh' )
+method_choices=( 'pbs' 'ssh' )
 method=''
 cleanup_dir="/local"
 ssh_passphrase=''
@@ -170,8 +170,8 @@ set -u
 
 ## Validate arguments
 
-if [ "$(itemOneOf "$method" "${method_choices_arr[@]}")" = false ]; then
-    echo_e "METHOD must be one of the following: ${method_choices_arr[*]}"
+if [ "$(itemOneOf "$method" "${method_choices[@]}")" = false ]; then
+    echo_e "METHOD must be one of the following: ${method_choices[*]}"
     exit_script_with_status 1
 fi
 

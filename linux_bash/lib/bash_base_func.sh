@@ -104,8 +104,40 @@ escape_regex_special_chars() {
 string_to_uppercase() { print_string "$@" | tr '[:lower:]' '[:upper:]'; }
 string_to_lowercase() { print_string "$@" | tr '[:upper:]' '[:lower:]'; }
 
-string_lstrip() { print_string "$1" | sed -r "s|^($(escape_regex_special_chars "$2"))+||"; }
-string_rstrip() { print_string "$1" | sed -r "s|($(escape_regex_special_chars "$2"))+$||"; }
+#string_lstrip() { print_string "$1" | sed -r "s|^($(escape_regex_special_chars "$2"))+||"; }
+#string_rstrip() { print_string "$1" | sed -r "s|($(escape_regex_special_chars "$2"))+$||"; }
+
+string_lstrip() {
+    local string_in="$1"
+    local strip_substr=''
+    local string_stripped=''
+
+    if (( $# >= 2 )); then
+        strip_substr="$2"
+    else
+        strip_substr='[[:space:]]'
+    fi
+
+    string_stripped=$(print_string "$string_in" | sed -r "s|^($(escape_regex_special_chars "$strip_substr"))+||")
+
+    print_string "$string_stripped"
+}
+
+string_rstrip() {
+    local string_in="$1"
+    local strip_substr=''
+    local string_stripped=''
+
+    if (( $# >= 2 )); then
+        strip_substr="$2"
+    else
+        strip_substr='[[:space:]]'
+    fi
+
+    string_stripped=$(print_string "$string_in" | sed -r "s|($(escape_regex_special_chars "$strip_substr"))+$||")
+
+    print_string "$string_stripped"
+}
 
 string_strip() {
     local string_in="$1"
