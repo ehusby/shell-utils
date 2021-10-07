@@ -26,11 +26,13 @@ source "$bash_functions_script"
 
 ## Arguments
 path_arg_arr=()
+target_mkdir=false
 abspath_func='abspath'
 fwd_args_arr=()
 dryrun=false
 
 ## Custom globals
+target_dir_provided=false
 
 
 ## Script usage
@@ -47,6 +49,9 @@ to absolute paths for link creation.
 
 Options:
 [all 'ln' options]
+    --mkdir
+        Create directory where TARGET path(s) should exist before
+        creating symbolic link.
     --abspath-func=<program call string> (default='${abspath_func}')
         Program used to convert TARGET paths into absolute paths.
         Program call is evaluated once for each TARGET path,
@@ -54,7 +59,7 @@ Options:
         Program options may be included in the program call string.
 -fp,--fullpath
         Set --abspath-func='fullpath'.
--dp,--derefpath=<int deref count>
+-dp,--derefpath=<int deref-count>
         Set --abspath-func='derefcount <int deref count>'.
 -dr,--dryrun
         Print 'ln' command used to create link, without executing.
@@ -79,9 +84,11 @@ while (( "$#" )); do
         if [ "$(string_contains "$arg_opt" '=')" = true ]; then
             arg_val="${arg_opt#*=}"
             arg_opt="${arg_opt%%=*}"
+            arg_opt_raw="${arg%%=*}"
             arg_opt_nargs_do_shift=false
         else
             arg_val="$2"
+            arg_opt_raw="$arg"
             arg_opt_nargs_do_shift=true
         fi
         arg_val_can_start_with_dash=false
@@ -91,9 +98,9 @@ while (( "$#" )); do
             echo "$script_usage"
             exit 0
 
-        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+        elif [ "$arg_opt" = 'mkdir' ]; then
             arg_opt_nargs=0
-            dryrun=true
+            target_mkdir=true
 
         elif [ "$arg_opt" = 'abspath-func' ]; then
             arg_opt_nargs=1
@@ -107,19 +114,33 @@ while (( "$#" )); do
             arg_opt_nargs=1
             abspath_func="derefpath ${arg_val}"
 
-        elif [ "$(itemOneOf "$arg_opt" 'suffix' 'target-directory' )" = true ]; then
-            arg_opt_nargs=1
-            if [ "$(string_contains "$arg_val" '*')" = true ] || [ "$(string_contains "$arg_val" ' ')" = true ]; then
-                arg_val="'${arg_val}'"
-            fi
-            fwd_args_arr+=( "$arg_opt" "$arg_val" )
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
 
         else
-            arg_opt_nargs=0
-            if [ "$(string_contains "$arg" '*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
-                arg="'${arg}'"
+            if [ "$(itemOneOf "$arg_opt" 't' 'target-directory' )" = true ]; then
+                target_dir_provided=true
             fi
-            fwd_args_arr+=( "$arg" )
+
+            if [ "$(itemOneOf "$arg_opt" 'S' 'suffix' 't' 'target-directory' )" = true ]; then
+                arg_opt_nargs=1
+                if [ "$(string_contains "$arg_val" '*')" = true ] || [ "$(string_contains "$arg_val" ' ')" = true ]; then
+                    arg_val="\"${arg_val}\""
+                fi
+                fwd_args_arr+=( "$arg_opt_raw" "$arg_val" )
+
+            else
+                arg_opt_nargs=0
+                if [ "$(string_contains "$arg" '*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
+                    arg="\"${arg}\""
+                fi
+                fwd_args_arr+=( "$arg" )
+            fi
         fi
 
         if [ -z "$arg_opt_nargs" ]; then
@@ -153,8 +174,8 @@ num_path_args="${#path_arg_arr[@]}"
 if (( num_path_args == 0 )); then
     echo_e "At least one TARGET argument must be provided"
     exit_script_with_status 1
-elif (( num_path_args == 1 )); then
-    last_target_idx=0
+elif (( num_path_args == 1 )) || [ "$target_dir_provided" = true ]; then
+    last_target_idx=$(( num_path_args - 1 ))
 else
     last_target_idx=$(( num_path_args - 2 ))
 fi
@@ -162,25 +183,50 @@ fi
 abspath_arg_arr=()
 
 for idx in "${!path_arg_arr[@]}"; do
-    path=$(${abspath_func} "${path_arg_arr[$idx]}")
-    cmd_status=$?
-    if (( cmd_status != 0 )); then
-        echo_e "--abspath-func='${abspath_func}' command failed with status ${cmd_status}"
-        exit_script_with_status 1
-    fi
+    path="${path_arg_arr[$idx]}"
+
     if (( idx <= last_target_idx )); then
-        abspath_arg_arr+=( "$(${abspath_func} "$path")" )
-    else
-        abspath_arg_arr+=( "$path" )
+        path=$(${abspath_func} "$path")
+        cmd_status=$?
+        if (( cmd_status != 0 )); then
+            echo_e "--abspath-func='${abspath_func}' command failed with status ${cmd_status}"
+            exit_script_with_status 1
+        fi
+    fi
+
+    abspath_arg_arr+=( "$path" )
+
+    if (( idx == last_target_idx )) && [ "$target_mkdir" = true ]; then
+        for path in "${abspath_arg_arr[@]}"; do
+            if ! { [ -d "$path" ] || [ ! -e "$path" ]; }; then
+                echo_e "TARGET argument is an existing file: ${path}"
+                echo_e "All TARGET arguments cannot be existing files when --target-mkdir option is provided"
+                exit_script_with_status 1
+            fi
+        done
+        for path in "${abspath_arg_arr[@]}"; do
+            if [ "$dryrun" = true ]; then
+                echo "Creating directory: ${path}"
+                continue
+            fi
+            mkdir -p "$path"
+            cmd_status=$?
+            if (( cmd_status != 0 )); then
+                echo_e "Received non-zero exit status (${cmd_status}) from mkdir command:"
+                echo_e "mkdir -p ${path}"
+                echo_e "Exiting before creating symbolic links"
+                exit_script_with_status 1
+            fi
+        done
     fi
 done
 
-ln_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
+ln_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
 
 
 ## Perform linking
 
-cmd="ln -s ${ln_opt_args} $(printf ' "%s"' "${abspath_arg_arr[@]}")"
+cmd="ln -s ${ln_args} $(printf ' "%s"' "${abspath_arg_arr[@]}")"
 
 if [ "$dryrun" = true ]; then
     echo "$cmd"
