@@ -27,7 +27,7 @@ source "$bash_functions_script"
 ## Arguments
 octal_perms=''
 files_x=false
-chmod_mode_choices_arr=(  'add' 'set' 'remove' )
+chmod_mode_choices=(  'add' 'set' 'remove' )
 chmod_mode_operator_arr=(  '+'   '='    '-'    )
 chmod_mode='set'
 namepat_arr=()
@@ -57,7 +57,7 @@ Options:
     --files-x
         Allow files to be given execute permissions.
         By default, only folders are given execute perms.
- -m,--mode={$(string_join '|' "${chmod_mode_choices_arr[@]}")} (default=${chmod_mode})
+ -m,--mode={$(string_join '|' "${chmod_mode_choices[@]}")} (default=${chmod_mode})
         How 'chmod' should apply permission changes.
  -n,--name
         Include files/dirs that match this pattern.
@@ -190,8 +190,8 @@ else
     exit_script_with_status 1
 fi
 
-if [ "$(itemOneOf "$chmod_mode" "${chmod_mode_choices_arr[@]}")" = false ]; then
-    echo_e "--mode must be one of the following: ${chmod_mode_choices_arr[*]}"
+if [ "$(itemOneOf "$chmod_mode" "${chmod_mode_choices[@]}")" = false ]; then
+    echo_e "--mode must be one of the following: ${chmod_mode_choices[*]}"
     exit_script_with_status 1
 fi
 
@@ -226,7 +226,7 @@ find_args=$(string_strip "$find_args")
 
 # Convert octal permission setting to RWX format
 chmod_perms_setting=''
-i_chmod_mode=$(indexOf "$chmod_mode" "${chmod_mode_choices_arr[@]}")
+i_chmod_mode=$(indexOf "$chmod_mode" "${chmod_mode_choices[@]}")
 chmod_mode_operator="${chmod_mode_operator_arr[$i_chmod_mode]}"
 for (( i=0; i<${#octal_perms}; i++ )); do
     octal_digit="${octal_perms:$i:1}"

@@ -45,6 +45,12 @@ line2space() {
 }
 space2line() { tr ' ' '\n'; }
 
+line2csstring() {
+    local result=$(xargs printf "'%s',")
+    result=$(string_rstrip "$result" ',')
+    echo "$result"
+}
+
 string_replace() { sed -r "s|${1}|${2}|g"; }
 string_prepend() { sed -r "s|(.*)|${1}\1|"; }
 string_append() { sed -r "s|(.*)|\1${1}|"; }
@@ -519,7 +525,7 @@ git_cmd_in() {
     local ssh_passphrase=''
 
     ## Custom globals
-    local git_cmd_choices_arr=( 'clone' 'branch' 'stash' 'apply' 'stash apply' 'pull' 'plush' )
+    local git_cmd_choices=( 'clone' 'branch' 'stash' 'apply' 'stash apply' 'pull' 'push' )
     local git_cmd_need_ssh_arr=( 'clone' 'pull' 'push' )
     local start_dir repo_dir_arr repo_dir repo_name
 
@@ -541,7 +547,7 @@ EOM
         arg="$1"
 
         if [ "$(string_startswith "$arg" '-')" = false ]; then
-            if [ "$(itemOneOf "$arg" "${git_cmd_choices_arr[@]}")" = true ]; then
+            if [ "$(itemOneOf "$arg" "${git_cmd_choices[@]}")" = true ]; then
                 git_cmd_arr+=( "$arg" )
             else
                 repo_dir_arr+=( "$(fullpath "$arg")" )
@@ -700,7 +706,7 @@ ssh_alias() {
 
 #alias rsync_example='rsync_alias auto user@hostname -rtLPv'
 rsync_alias() {
-    local direction_choices_arr=( 'to-host' 'from-host' 'auto' )
+    local direction_choices=( 'to-host' 'from-host' 'auto' )
     local direction="$1"; shift
     local remote_host="$1"; shift
     local opt_arg_arr=()
@@ -727,8 +733,8 @@ rsync_alias() {
     local src_path="$1"
     local dst_path="$2"
 
-    if [ "$(itemOneOf "$direction" "${direction_choices_arr[@]}")" = false ]; then
-        echo_e "ERROR: rsync_alias DIRECTION must be one of the following: ${direction_choices_arr[*]}"
+    if [ "$(itemOneOf "$direction" "${direction_choices[@]}")" = false ]; then
+        echo_e "ERROR: rsync_alias DIRECTION must be one of the following: ${direction_choices[*]}"
         return 1
     elif [ -z "$remote_host" ] || [ -z "$src_path" ] || [ -z "$dst_path" ] || [[ $src_path == -* ]] || [[ $dst_path == -* ]]; then
         echo_e "ERROR: rsync_alias required postional arguments: DIRECTION HOST SRC DEST"

@@ -142,6 +142,12 @@ line2space() {
 }
 space2line() { tr ' ' '\n'; }
 
+line2csstring() {
+    local result=$(xargs printf "'%s',")
+    result=$(string_rstrip "$result" ',')
+    echo "$result"
+}
+
 string_replace() { sed -r "s|${1}|${2}|g"; }
 string_prepend() { sed -r "s|(.*)|${1}\1|"; }
 string_append() { sed -r "s|(.*)|\1${1}|"; }
@@ -188,7 +194,7 @@ layz() {
     debug=false
     if [[ $1 == -* ]]; then
         arg_opt=$(echo "$1" | sed -r 's|\-+(.*)|\1|')
-        if [ "$arg_opt" = 'dryrun' ] || [ "$arg_opt" = 'debug' ]; then
+        if [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ] || [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             debug=true
             shift
         fi
@@ -239,6 +245,67 @@ absymlink_defunct() {
     ln -s "${arg_arr[@]}"
 }
 
+mv_and_absymlink() {
+    local src_arr=()
+    local dst=''
+    local mv_args_arr=()
+    local dst_dir_exists
+    local dryrun=false
+    if (( $# == 2 )); then
+        src_arr+=( "$1" )
+        dst="$2"
+        if [ -d "$dst" ]; then
+            dst_dir_exists=true
+        else
+            dst_dir_exists=false
+        fi
+    else
+        dst_dir_exists=true
+        local arg arg_opt
+        while (( $# )); do
+            arg="$1"
+            if [ "$(string_startswith "$arg" '-')" = true ]; then
+                arg_opt=$(string_lstrip "$arg" '-')
+                if [ "$(itemOneOf "$arg_opt" 'dr' 'dryrun' 'db' 'debug')" = true ]; then
+                    dryrun=true
+                    shift; continue
+                elif [ "$arg" == '-t' ]; then
+                    dst="$2"; shift
+                else
+                    mv_args_arr+=( "$arg" )
+                fi
+            elif (( $# == 1 )) && [ -z "$dst" ]; then
+                dst="$arg"
+            else
+                src_arr+=( "$arg" )
+            fi
+            shift
+        done
+    fi
+    local mv_opt_args="${mv_args_arr[*]+${mv_args_arr[*]}}"
+    local dryrun_arg
+    if [ "$dryrun" = true ]; then
+        dryrun_arg='-dryrun'
+    else
+        dryrun_arg=''
+    fi
+    local src dst_path
+    for src in "${src_arr[@]}"; do
+        mv_cmd="mv ${mv_opt_args} \"${src}\" \"${dst}\""
+        if [ "$dryrun" = true ]; then
+            echo "$mv_cmd"
+        else
+            eval "$mv_cmd"
+        fi
+        if [ "$dst_dir_exists" = false ]; then
+            dst_path="$dst"
+        else
+            dst_path="${dst%/}/$(basename "$src")"
+        fi
+        absymlink ${dryrun_arg} "$dst_path" "${src%/}"
+    done
+}
+
 touch_all() {
     echo "Will recursively search through argument directories and touch all files within"
     if (( $# == 0 )); then
@@ -255,6 +322,10 @@ touch_all() {
 
 
 ## Read inputs
+
+get_csv_cols() {
+    :
+}
 
 SHELL_UTILS_READ_CSV_IP=false
 read_csv() {
@@ -389,7 +460,7 @@ find_alias() {
         if [[ $arg == -* ]] || [ "$arg" == '!' ]; then
             parsing_opt_args=true
             arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
-            if [ "$arg_opt" = 'debug' ]; then
+            if [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ] || [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
                 debug=true
                 shift; continue
             elif [ "$arg_opt" = 'mindepth' ]; then
@@ -522,6 +593,10 @@ git_reset_keep_changes() {
     git reset HEAD^
 }
 
+git_reset_drop_changes() {
+    git reset --hard HEAD
+}
+
 git_stash_apply_no_merge() {
     git read-tree stash^{tree}
     git checkout-index -af
@@ -529,6 +604,10 @@ git_stash_apply_no_merge() {
 
 git_apply_force() {
     git apply --reject --whitespace=fix "$@"
+}
+
+git_remove_local_branches() {
+  git branch | grep -v '\*' | xargs git branch -D
 }
 
 git_make_exec() {
@@ -547,7 +626,7 @@ git_cmd_in() {
     local ssh_passphrase=''
 
     ## Custom globals
-    local git_cmd_choices_arr=( 'clone' 'branch' 'stash' 'apply' 'stash apply' 'pull' 'plush' )
+    local git_cmd_choices=( 'clone' 'branch' 'stash' 'apply' 'stash apply' 'pull' 'push' )
     local git_cmd_need_ssh_arr=( 'clone' 'pull' 'push' )
     local start_dir repo_dir_arr repo_dir repo_name
 
@@ -569,7 +648,7 @@ EOM
         arg="$1"
 
         if [ "$(string_startswith "$arg" '-')" = false ]; then
-            if [ "$(itemOneOf "$arg" "${git_cmd_choices_arr[@]}")" = true ]; then
+            if [ "$(itemOneOf "$arg" "${git_cmd_choices[@]}")" = true ]; then
                 git_cmd_arr+=( "$arg" )
             else
                 repo_dir_arr+=( "$(fullpath "$arg")" )
@@ -728,7 +807,7 @@ ssh_alias() {
 
 #alias rsync_example='rsync_alias auto user@hostname -rtLPv'
 rsync_alias() {
-    local direction_choices_arr=( 'to-host' 'from-host' 'auto' )
+    local direction_choices=( 'to-host' 'from-host' 'auto' )
     local direction="$1"; shift
     local remote_host="$1"; shift
     local opt_arg_arr=()
@@ -755,8 +834,8 @@ rsync_alias() {
     local src_path="$1"
     local dst_path="$2"
 
-    if [ "$(itemOneOf "$direction" "${direction_choices_arr[@]}")" = false ]; then
-        echo_e "ERROR: rsync_alias DIRECTION must be one of the following: ${direction_choices_arr[*]}"
+    if [ "$(itemOneOf "$direction" "${direction_choices[@]}")" = false ]; then
+        echo_e "ERROR: rsync_alias DIRECTION must be one of the following: ${direction_choices[*]}"
         return 1
     elif [ -z "$remote_host" ] || [ -z "$src_path" ] || [ -z "$dst_path" ] || [[ $src_path == -* ]] || [[ $dst_path == -* ]]; then
         echo_e "ERROR: rsync_alias required postional arguments: DIRECTION HOST SRC DEST"
@@ -790,5 +869,5 @@ rsync_alias() {
 
 rsync_alias_defopt() {
     local remote_host="$1"; shift
-    rsync_alias auto "$remote_host" -rtLv --partial-dir='.rsync-partial' --progress --exclude '.DS_Store' "$@"
+    rsync_alias auto "$remote_host" -rtlv --partial-dir='.rsync-partial' --progress --exclude '.DS_Store' "$@"
 }

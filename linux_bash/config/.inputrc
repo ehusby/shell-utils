@@ -1,5 +1,9 @@
 # From http://www.linuxfromscratch.org/blfs/view/5.1/postlfs/inputrc.html
 
+# Include system-wide inputrc, which is ignored by default when
+# a user has their own .inputrc file.
+$include /etc/inputrc
+
 # Begin /etc/inputrc
 
 # Make sure we don't output everything on the 1 line
@@ -22,8 +26,8 @@ set bell-style none
 # value contained inside the 1st argument to the
 # readline specific functions
 
-"\eOd": backward-word
-"\eOc": forward-word
+"\eOC": forward-word
+"\eOD": backward-word
 
 # for linux console
 "\e[1~": beginning-of-line
