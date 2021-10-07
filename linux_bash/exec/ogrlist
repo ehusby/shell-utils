@@ -30,6 +30,11 @@ layer_name=''
 field_list=''
 sql_where=''
 sql_query=''
+export_path=''
+export_fields='*'
+export_mode_choices=( 'overwrite' 'append' 'update' )
+export_mode=''
+export_geometry=true
 delimiter=','
 list_layers=false
 list_fields=false
@@ -57,28 +62,45 @@ are listed.
 all records for that field in that layer are listed.
 
 Options:
- -l,--layer
+ -l,--layer=<layer-name>
         Name of feature class layer in DBASE.
         (Most Shapefiles only have one layer, and the script
          will assume the layer name is the same as the
          Shapefile name if this option is not provided.)
- -f,--field
+ -f,--field=<field-name,...>
         Name of field(s) in feature class (indicated by --layer
         option) from which values are listed.
         Values from multiple fields can be listed by providing
         a comma-separated string of field names.
- -w,--where
+ -w,--where=<expression>
         Quoted SQL WHERE expression to filter features.
- -q,--query
+ -q,--query=<expression>
         Quoted SQL query expression to proceed base command
         'SELECT <field> FROM <layer>' and WHERE expression
         (if --where option is provided).
         Example: 'limit 10'
+ -e,--export=<output-path>
+        Export features selected by --where/--query options
+        to the provided output path.
+        Leverages the 'ogr2ogr' command.
+-ef,--export-fields=<field-name,...>
+        Name of field(s) in source feature class to include in
+        exported dataset.
+        Values from multiple fields can be listed by providing
+        a comma-separated string of field names.
+        By default, all fields and geometry information are
+        exported.
+-em,--export-mode={$(string_join '|' "${export_mode_choices[@]}")}
+        ogr2ogr option for writing to existing output dataset.
+    --export-no-geom
+        Geometry information is automatically included in
+        exported features by default. Provide this argument
+        to disable automatic inclusion.
  -H,--header
         Print header line listing delimited field name(s)
         before printing list of field values.
         Useful when redirecting output to a CSV file.
- -d,--delim (default='${delimiter}')
+ -d,--delim=<character> (default='${delimiter}')
         Delimiting character (or string) separating returned
         values when multiple fields are listed.
 -ll,--list-layers
@@ -149,6 +171,22 @@ while (( "$#" )); do
             arg_opt_nargs=1
             sql_query="$arg_val"
 
+        elif [ "$arg_opt" = 'e' ] || [ "$arg_opt" = 'export' ]; then
+            arg_opt_nargs=1
+            export_path="$arg_val"
+
+        elif [ "$arg_opt" = 'ef' ] || [ "$arg_opt" = 'export-fields' ]; then
+            arg_opt_nargs=1
+            export_fields="$arg_val"
+
+        elif [ "$arg_opt" = 'em' ] || [ "$arg_opt" = 'export-mode' ]; then
+            arg_opt_nargs=1
+            export_mode="$arg_val"
+
+        elif [ "$arg_opt" = 'export-no-geom' ]; then
+            arg_opt_nargs=0
+            export_geometry=false
+
         elif [ "$arg_opt" = 'H' ] || [ "$arg_opt" = 'header' ]; then
             arg_opt_nargs=0
             print_header=true
@@ -178,6 +216,10 @@ while (( "$#" )); do
             list_csv=true
 
         elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+            arg_opt_nargs=0
+            debug=true
+
+        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
             debug=true
 
@@ -224,21 +266,52 @@ if [ -z "$dbase_path" ]; then
     echo_e "DBASE argument must be provided"
     exit_script_with_status 1
 fi
-
-
-## Adjust arguments
-
-if [ -z "$layer_name" ] && [ "$(string_endswith "$dbase_path" '.shp')" = true ]; then
+if [ -z "$layer_name" ] && [ "$(string_endswith "$(string_to_lowercase "$dbase_path")" '.shp')" = true ]; then
     # Assume layer name is the same as the filename (works for most shapefiles)
     layer_name=$(basename "$dbase_path")
     layer_name="${layer_name%.*}"
 fi
+if [ -n "$export_path" ]; then
+    if [ -z "$layer_name" ]; then
+        echo_e "--layer argument must be provided with --export option"
+        exit_script_with_status 1
+    fi
+    if [ "$(string_endswith "$(string_to_lowercase "$export_path")" '.csv')" = true ]; then
+        :
+    elif [ -e "$export_path" ] && [ -z "$export_mode" ]; then
+        echo_e "--export path already exists, so --export-mode option must be provided"
+        exit_script_with_status 1
+    fi
+fi
+if [ -z "$export_fields" ]; then
+    echo_e "--export-fields cannot be an empty string"
+fi
+if [ -n "$export_mode" ] && [ "$(itemOneOf "$export_mode" "${export_mode_choices[@]}")" = false ]; then
+    echo_e "--export-mode must be one of the following: ${export_mode_choices[*]}"
+    exit_script_with_status 1
+fi
+
+
+## Adjust arguments
 
 if [ -n "$sql_where" ]; then
     sql_where="WHERE $(echo "$sql_where" | sed -r "s|\"|\'|g")"
 fi
 if [ -n "$sql_query" ]; then
     sql_query=$(echo "$sql_query" | sed -r "s|\"|\'|g")
+fi
+
+if [ -n "$export_path" ]; then
+    if [ "$export_geometry" = false ] && [ "$(string_endswith "$(string_to_lowercase "$export_path")" '.shp')" = true ]; then
+        export_path_out="${export_path%.*}.dbf"
+    else
+        export_path_out="$export_path"
+    fi
+    if [ "$(string_endswith "$(string_to_lowercase "$export_path")" '.csv')" = true ]; then
+        export_mode=''
+    elif [ -n "$export_mode" ]; then
+        export_mode="-${export_mode}"
+    fi
 fi
 
 ogrinfo_opt_arr=( '-ro' '-so' '-nomd' '-nocount' '-noextent' )
@@ -263,7 +336,55 @@ else
 fi
 
 
-## Main program
+### Main program
+
+if [ -n "$export_path" ]; then
+    ## Export features and exit
+
+    if [ "$export_geometry" = false ] || [ "$(string_endswith "$(string_to_lowercase "$export_path")" '.csv')" = true ]; then
+        if [ "$export_fields" = '*' ]; then
+            cmd="bash \"${script_file}\" \"${dbase_path}\" --layer \"${layer_name}\" --list-csv"
+            if [ "$debug" = true ]; then
+                echo "Re-calling ${script_name} to get list of all field names for CSV/no-geom export:"
+                echo "$cmd"
+                echo
+            fi
+            export_fields=$(eval "$cmd")
+            cmd_status=$?
+            if (( cmd_status != 0 )); then
+                echo_e "Received non-zero exit status (${cmd_status}) from child ${script_name} command:"
+                echo_e "$cmd"
+                exit_script_with_status 1
+            fi
+        fi
+    elif [ "$export_geometry" = true ] && [ "$export_fields" != '*' ]; then
+        if [ "$(string_contains "$export_fields" 'geometry')" = false ]; then
+            export_fields="${export_fields},geometry"
+        fi
+    fi
+
+    cmd="ogr2ogr ${export_mode} -dialect sqlite -sql \"SELECT ${export_fields} FROM '${layer_name}' ${sql_where} ${sql_query}\" \"${export_path}\" \"${dbase_path}\""
+
+    if [ "$debug" = true ]; then
+        echo "$cmd"
+    else
+        eval "$cmd"
+        cmd_status=$?
+        if (( cmd_status != 0 )); then
+            echo_e "Received non-zero exit status (${cmd_status}) from ogr2ogr command:"
+            echo_e "$cmd"
+        fi
+        if (( cmd_status == 0 )) && [ -e "$export_path_out" ]; then
+            echo "Successfully exported features"
+        else
+            echo "Failed to export features"
+        fi
+    fi
+    exit 0
+fi
+
+
+## Print database information
 
 cmd=''
 get_fields_cmd=''
