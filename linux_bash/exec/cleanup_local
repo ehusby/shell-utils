@@ -120,7 +120,7 @@ while (( "$#" )); do
 
         elif [ "$arg_opt" = 'ssh-pw' ]; then
             arg_opt_nargs=1
-            ssh_passphrase="$2"
+            ssh_passphrase="$arg_val"
 
         elif [ "$arg_opt" = 'all' ]; then
             arg_opt_nargs=0
@@ -128,7 +128,7 @@ while (( "$#" )); do
 
         elif [ "$arg_opt" = 'find-args' ]; then
             arg_opt_nargs=1
-            find_args="$2"
+            find_args="$arg_val"
             arg_val_can_start_with_dash=true
 
         elif [ "$arg_opt" = 'ssh-dryrun' ]; then
