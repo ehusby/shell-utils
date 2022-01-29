@@ -67,7 +67,7 @@ while (( "$#" )); do
         arg_opt="$(string_lstrip "$arg" '-')"
         arg_opt_nargs=''
         if [ "$(string_contains "$arg_opt" '=')" = true ]; then
-            arg_val="${arg_opt#*=}"
+            arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
             arg_opt="${arg_opt%%=*}"
             arg_opt_nargs_do_shift=false
         else
