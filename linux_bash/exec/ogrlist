@@ -115,6 +115,7 @@ Options:
     --list-csv
         Convert layer or field list to CSV string.
 -db,--debug
+-dr,--dryrun
         Print 'ogrinfo' command used to extract information,
         without executing.
 EOM

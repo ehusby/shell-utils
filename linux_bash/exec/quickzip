@@ -78,6 +78,7 @@ Options:
         When SRC_PATH is the full path to an existing file/folder,
         force treating all SRC_PATH arguments as prefixes matching
         additional files/folders in the same directories.
+-db,--debug
 -dr,--dryrun
         Print command(s) used to zip files/folders, without executing.
 EOM
@@ -104,6 +105,8 @@ while (( "$#" )); do
                 arg_opt_nargs=0
                 echo "$script_usage"
                 exit 0
+            elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+                dryrun=true
             elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
                 dryrun=true
             else
@@ -153,6 +156,10 @@ while (( "$#" )); do
         elif [ "$arg_opt" = 'g' ] || [ "$arg_opt" = 'glob' ]; then
             arg_opt_nargs=0
             force_glob=true
+
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+            arg_opt_nargs=0
+            dryrun=true
 
         elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0

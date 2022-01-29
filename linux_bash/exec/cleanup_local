@@ -77,6 +77,7 @@ Options:
     --ssh-dryrun
         If METHOD is 'ssh', run serial SSH connections to cluster nodes
         to generate the list of files to be removed.
+-db,--debug
 -dr,--dryrun
         Print commands used to perform cleanup, without executing.
 EOM
@@ -133,6 +134,10 @@ while (( "$#" )); do
         elif [ "$arg_opt" = 'ssh-dryrun' ]; then
             arg_opt_nargs=0
             ssh_dryrun=true
+
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+            arg_opt_nargs=0
+            dryrun=true
 
         elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0

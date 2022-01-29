@@ -59,6 +59,7 @@ Options:
         When SRC_PATH is the full path to an existing file/folder,
         force treating SRC_PATH as a prefix matching additional
         files/folders in the same directory.
+-db,--debug
 -dr,--dryrun
         Print 'mv' command(s) used to rename files/folders,
         without executing.
@@ -87,6 +88,8 @@ while (( "$#" )); do
                 echo "$script_usage"
                 exit 0
             elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+                dryrun=true
+            elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
                 dryrun=true
             else
                 is_fwd_arg=true
@@ -132,6 +135,10 @@ while (( "$#" )); do
             force_glob=true
 
         elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
             arg_opt_nargs=0
             dryrun=true
 

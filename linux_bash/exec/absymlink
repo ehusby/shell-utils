@@ -61,6 +61,7 @@ Options:
         Set --abspath-func='fullpath'.
 -dp,--derefpath=<int deref-count>
         Set --abspath-func='derefcount <int deref count>'.
+-db,--debug
 -dr,--dryrun
         Print 'ln' command used to create link, without executing.
 EOM

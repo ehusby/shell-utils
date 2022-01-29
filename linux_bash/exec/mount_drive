@@ -41,6 +41,7 @@ additions to the /etc/fstab file. Primarily useful for setup of
 the Windows Subsystem for Linux Bash terminal.
 
 Options:
+-db,--debug
 -dr,--dryrun
         Print commands used to mount drive(s), without executing.
 EOM
@@ -80,6 +81,10 @@ while (( "$#" )); do
             arg_opt_nargs=0
             echo "$script_usage"
             exit 0
+
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+            arg_opt_nargs=0
+            dryrun=true
 
         elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
