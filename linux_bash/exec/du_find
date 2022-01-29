@@ -45,6 +45,7 @@ find_name_provided=false
 find_type_d=false
 find_type_f=false
 find_prune=false
+follow_links=false
 
 ## Custom globals
 
@@ -193,6 +194,9 @@ while (( "$#" )); do
             debug=true
 
         elif [ "$arg_opt" = 'H' ] || [ "$arg_opt" = 'L' ] || [ "$arg_opt" = 'P' ]; then
+            if [ "$arg_opt" = 'L' ]; then
+                follow_links=true
+            fi
             fwd_args_arr_1+=( "$arg" )
             arg_opt_nargs=0
 
@@ -346,6 +350,12 @@ else
 fi
 for srcpath in "${srcpath_arr[@]}"; do
 
+    du_cmd="du"
+
+    if [ "$follow_links" = true ]; then
+        du_cmd="${du_cmd} -L"
+    fi
+
     find_args_2_inst="$find_args_2"
     if [ "$find_type_d" = true ] || { [ -d "$srcpath" ] && [ "$find_type_f" = false ] && [ -z "$find_name_args" ] && [ "$find_depth_provided" = false ] && [ "$find_name_provided" = false ]; }; then
         if [ "$find_type_d" = false ]; then
@@ -354,12 +364,12 @@ for srcpath in "${srcpath_arr[@]}"; do
         if [ "$find_prune" = false ]; then
             find_args_2_inst="${find_args_2_inst} -prune"
         fi
-        du_cmd="du -s"
+        du_cmd="${du_cmd} -s"
     else
         if [ "$find_type_f" = false ]; then
             find_args_2_inst="${find_args_2_inst} -type f"
         fi
-        du_cmd="du -a"
+        du_cmd="${du_cmd} -a"
     fi
 
     if [ "$quote_srcpath" = true ]; then
