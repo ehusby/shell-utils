@@ -37,6 +37,9 @@ if [ -e "${config_dir}/.ssh" ] && [ ! -e "${HOME}/.ssh" ] && [ ! -L "${HOME}/.ss
 fi
 
 
+echo "Restricting permissions of config files to read/write/execute only by owner..."
+chmod -R u=rwX,g=,o= "$config_dir"
+
 echo
 while IFS= read -r config_file_new; do
     config_fname=$(basename "$config_file_new")
