@@ -165,6 +165,5 @@ cmd="sudo mount -a"
 echo -e "Mounting all drives with command:\n    ${cmd}"
 if [ "$dryrun" = false ]; then
     eval "$cmd"
+    echo -e "\nDone!"
 fi
-
-echo -e "\nDone!"

@@ -275,4 +275,7 @@ for srcpath in "${srcpath_arr[@]}"; do
     fi
 done
 
-echo "Done!"
+
+if [ "$dryrun" = false ]; then
+    echo "Done!"
+fi
