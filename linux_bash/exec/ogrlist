@@ -72,10 +72,10 @@ Options:
         option) from which values are listed.
         Values from multiple fields can be listed by providing
         a comma-separated string of field names.
- -w,--where=<expression>
+ -w,--where=<string-expression>
         Quoted SQL WHERE expression to filter features.
- -q,--query=<expression>
-        Quoted SQL query expression to proceed base command
+ -q,--query=<string-expression>
+        Quoted SQL query expression to proceed base expression
         'SELECT <field> FROM <layer>' and WHERE expression
         (if --where option is provided).
         Example: 'limit 10'
@@ -267,10 +267,13 @@ if [ -z "$dbase_path" ]; then
     echo_e "DBASE argument must be provided"
     exit_script_with_status 1
 fi
-if [ -z "$layer_name" ] && [ "$(string_endswith "$(string_to_lowercase "$dbase_path")" '.shp')" = true ]; then
-    # Assume layer name is the same as the filename (works for most shapefiles)
-    layer_name=$(basename "$dbase_path")
-    layer_name="${layer_name%.*}"
+if [ -z "$layer_name" ]; then
+    dbase_fname=$(basename "$dbase_path")
+    dbase_path_ext=$(string_to_lowercase "$(string_rstrip "${dbase_fname##*.}" '/')")
+    if [ "$(itemOneOf "$dbase_path_ext" 'shp' 'csv')" = true ]; then
+        # Assume layer name is the same as the filename
+        layer_name="${dbase_fname%.*}"
+    fi
 fi
 if [ -n "$export_path" ]; then
     if [ -z "$layer_name" ]; then
@@ -404,7 +407,7 @@ elif [ -z "$field_list" ] || [ "$list_fields" = true ] || [ "$header_all_fields"
     else
         awk_cmd=''
     fi
-    cmd="${ogrinfo_cmd} | grep -E '^[^[:space:]]+\: [^[:space:]]+ \([0-9]+\.?[0-9]*\)$' ${awk_cmd} ${list_csv_cmd}"
+    cmd="${ogrinfo_cmd} | grep -E '^[^[:space:]]+\: [^[:space:]]+ \([0-9]+\.?[0-9]*\) ?' ${awk_cmd} ${list_csv_cmd}"
     if [ "$header_all_fields" = true ]; then
         get_fields_cmd="header_line=\$(${cmd}); all_fields_csv=\$(echo \"\${header_line}\" | sed 's|${delimiter}|,|g')"
         field_list="\${all_fields_csv}"
