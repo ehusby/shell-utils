@@ -1,0 +1,502 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_name=$(basename "${BASH_SOURCE[0]}")
+script_dir=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd)
+script_dir_abs=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd -P)
+script_file="${script_dir}/${script_name}"
+if [ -L "${BASH_SOURCE[0]}" ]; then
+    script_file_abs=$(readlink "${BASH_SOURCE[0]}")
+else
+    script_file_abs="${script_dir_abs}/${script_name}"
+fi
+export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+source "$bash_functions_script"
+
+
+## Arguments
+catid_arr=()
+return_type_choices=( 'mono' 'stereo' 'both' 'pairname' )
+return_type='both'
+filt_field='avoffnadir'
+filt_field_mode_choices=( 'off' 'min' 'max' )
+filt_field_mode='min'
+include_missing_pairs=false
+dbase_in=''
+dbase_in_layer=''
+dbase_out=''
+out_added_query=''
+fwd_args_arr=()
+debug=false
+
+## Custom globals
+danco_footprint_stereo_layer='sde.dg_stereo_catalogids_with_pairname'
+danco_stereo_layer="footprint.${danco_footprint_stereo_layer}"
+re_catalogid='[0-9A-F]{16}'
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+Usage:
+    ${script_name} [OPTION]... CATALOG_ID... (can be piped in, each on separate line)  (1st form)
+    ${script_name} (--mfp-in) DBASE_IN [(--mfp-out) DBASE_OUT] [OPTION]...             (2nd form)
+
+Filter a list of DigitalGlobe/Maxar Catalog IDs, primarily to reduce them
+to the collection of mono and minimum off-nadir angle stereo Catalog IDs.
+
+  If argument Catalog IDs are provided, the filtered results are printed to
+the stdout stream in the current terminal window.
+  A selection from the PGC imagery MFP can be provided instead of a list of
+Catalog IDs, and the user has the option to export the filtered selection
+of scene records to an output database, or otherwise simply source the list
+of input Catalog IDs from the MFP selection and print the output list of
+filtered Catalog ID results to the terminal window.
+
+The shell-utils 'ogrlist' script is used in conjunction with a connection
+to PGC's Danco ${danco_stereo_layer} layer to
+perform the filtering of Catalog IDs. This script assumes the 'ogrlist'
+script is on the PATH and the following function is in your ~/.bashrc file:
+
+danco() {
+    local dbase_choices_arr=( 'footprint' )
+    local dbase="\$1"; shift
+    if [ "$(itemOneOf "\$dbase" "\${dbase_choices_arr[@]}")" = false ]; then
+        echo >&2 "dbase must be one of the following: \${dbase_choices_arr[*]}"
+        return
+    fi
+    ogrlist PG:"host=danco.pgc.umn.edu user=USER password=PASS dbname=\${dbase}" "\$@"
+}
+
+Options:
+[When DBASE_IN and DBASE_OUT are provided (2nd form),
+ all 'ogrlist' export arguments are accepted]
+    --return-type={$(string_join '|' "${return_type_choices[@]}")} (default=${return_type})
+        Primary mono/stereo filter applied to result list or MFP selection export.
+        If 'pairname', an a MFP selection export cannot be made.
+    --filt-field=<field-name-string> (default='${filt_field}')
+        Numerical field of Danco ${danco_stereo_layer} used as a secondary filter
+        for result list or MFP selection export. The --filt-field-mode option
+        determines which Catalog ID of stereo pairs pass through the filter by
+        comparing the values of this field.
+    --filt-field-mode={$(string_join '|' "${filt_field_mode_choices[@]}")} (default=${filt_field_mode})
+        Determines which value wins in comparison of --filt-field values
+        between two Catalog IDs in stereo pairs.
+        If 'off', the --filt-field secondary filter is not applied.
+    --include-missing-pairs
+    --mfp-in=<dbase-path>
+        Path to Shapefile/CSV or FileGDB database containing PGC imagery
+        MFP selection to be the source for input Catalog IDs, or the source
+        of scene records to be filtered for exporting reduced scene records
+        to output database.
+    --mfp-in-layer=<layer-name>
+        If the --mfp-in input MFP selection database is a FileGDB,
+        this is the name of the FileGDB layer to be read.
+    --mfp-out=<dbase-path>
+        Path to output database for export of filtered image scene records
+        from the --mfp-in input MFP selection.
+    --out-added-query=<string-expression>
+        Quoted SQL query expression to proceed base expression
+        'WHERE catalog_id in (<filtered-catid-list>)' in export of
+        --mfp-out output filtered MFP selection.
+        Example: "AND spec_type = 'Panchromatic'"
+-db,--debug
+-dr,--dryrun
+        Print commands used to query/export databases, without executing.
+EOM
+
+
+## Parse arguments
+if [[ -p /dev/stdin ]]; then
+    while IFS= read -r catid; do
+        catid_arr+=( "$catid" )
+    done
+fi
+set +u
+parsing_fwd_args=false
+while (( "$#" )); do
+    arg="$1"
+
+    if [ "$parsing_fwd_args" = true ]; then
+        # Accept critical script optional arguments
+        # specified at end of command.
+        is_fwd_arg=true
+        if [ "$(string_startswith "$arg" '-')" = true ]; then
+            arg_opt="$(string_lstrip "$arg" '-')"
+            is_fwd_arg=false
+            if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
+                arg_opt_nargs=0
+                echo "$script_usage"
+                exit 0
+            elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+                debug=true
+            elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+                debug=true
+            else
+                is_fwd_arg=true
+            fi
+        fi
+        if [ "$is_fwd_arg" = true ]; then
+            if [ "$(string_contains "$arg" '*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
+                arg="'${arg}'"
+            fi
+            fwd_args_arr+=( "$arg" )
+        fi
+
+    elif [ "$(string_startswith "$arg" '-')" = false ]; then
+        if [ -e "$arg" ] && [ -z "$dbase_in" ]; then
+            dbase_in="$arg"
+        elif [ -n "$dbase_in" ] && [ -z "$dbase_out" ]; then
+            dbase_out="$arg"
+        elif [ "$(re_test "$re_catalogid" "$arg")" = true ]; then
+            catid_arr+=( "$arg" )
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+    else
+        arg_opt="$(string_lstrip "$arg" '-')"
+        arg_opt_nargs=''
+        if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+            arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
+            arg_opt="${arg_opt%%=*}"
+            arg_opt_nargs_do_shift=false
+        else
+            arg_val="$2"
+            arg_opt_nargs_do_shift=true
+        fi
+        arg_val_can_start_with_dash=false
+
+        if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
+            arg_opt_nargs=0
+            echo "$script_usage"
+            exit 0
+
+        elif [ "$arg_opt" = 'return-type' ]; then
+            arg_opt_nargs=1
+            return_type="$arg_val"
+
+        elif [ "$arg_opt" = 'filt-field' ]; then
+            arg_opt_nargs=1
+            filt_field="$arg_val"
+
+        elif [ "$arg_opt" = 'filt-field-mode' ]; then
+            arg_opt_nargs=1
+            filt_field_mode="$arg_val"
+
+        elif [ "$arg_opt" = 'include-missing-pairs' ]; then
+            arg_opt_nargs=0
+            include_missing_pairs=true
+
+        elif [ "$arg_opt" = 'mfp-in' ]; then
+            arg_opt_nargs=1
+            dbase_in="$arg_val"
+
+        elif [ "$arg_opt" = 'mfp-in-layer' ]; then
+            arg_opt_nargs=1
+            dbase_in_layer="$arg_val"
+
+        elif [ "$arg_opt" = 'mfp-out' ]; then
+            arg_opt_nargs=1
+            dbase_out="$arg_val"
+
+        elif [ "$arg_opt" = 'out-added-query' ]; then
+             arg_opt_nargs=1
+             out_added_query="$arg_val"
+
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+            arg_opt_nargs=0
+            debug=true
+
+        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+            arg_opt_nargs=0
+            debug=true
+
+        else
+            arg_opt_nargs=0
+            parsing_fwd_args=true
+            continue
+        fi
+
+        if [ -z "$arg_opt_nargs" ]; then
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ "$arg_opt_nargs_do_shift" = true ] && (( arg_opt_nargs >= 1 )); then
+            for arg_num in $(seq 1 $arg_opt_nargs); do
+                shift
+                arg_val="$1"
+                if [ -z "$arg_val" ]; then
+                    echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                    exit_script_with_status 1
+                elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                    exit_script_with_status 1
+                fi
+            done
+        fi
+    fi
+
+    shift
+done
+set -u
+
+
+## Validate arguments
+
+ogrlist_export_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
+echo "The following provided optional arguments are assumed to be 'ogrlist' optional args for (--mfp-out) DBASE_OUT export: ${ogrlist_export_opt_args}"
+
+if (( ${#catid_arr[@]} == 0 )) && [ -z "$dbase_in" ]; then
+    echo_e "At least one Catalog ID argument must be provided, or (--mfp-in) DBASE_IN"
+    exit_script_with_status 1
+fi
+if (( ${#catid_arr[@]} > 0 )) && [ -n "$ogrlist_opt_args" ]; then
+    echo_e "Provided Catalog ID arguments are incompatible with provided 'ogrlist' optional args"
+    exit_script_with_status 1
+fi
+if [ "$(itemOneOf "$return_type" "${return_type_choices[@]}")" = false ]; then
+    echo_e "--return-type argument must be one of the following: ${return_type_choices[*]}"
+    exit_script_with_status 1
+fi
+if [ -z "$filt_field" ]; then
+    echo_e "Stereo --filt-field argument must not be an empty string"
+    exit_script_with_status 1
+fi
+if [ "$(itemOneOf "$filt_field_mode" "${filt_field_mode_choices[@]}")" = false ]; then
+    echo_e "Stereo --filt-field-mode argument must be one of the following: ${filt_field_mode_choices[*]}"
+    exit_script_with_status 1
+fi
+if [ -n "$dbase_in" ]; then
+    if [ ! -e "$dbase_in" ]; then
+        echo_e "--mfp-in database path does not exist: ${dbase_in}"
+        exit_script_with_status 1
+    fi
+    if (( ${#catid_arr[@]} > 0 )); then
+        echo_e "Cannot provide both input MFP selection database and argument Catalog ID list"
+        exit_script_with_status 1
+    fi
+    if [ -z "$dbase_in_layer" ]; then
+        dbase_fname=$(basename "$dbase_in")
+        dbase_path_ext=$(string_to_lowercase "$(string_rstrip "${dbase_fname##*.}" '/')")
+        if [ "$(itemOneOf "$dbase_path_ext" 'shp' 'csv')" = true ]; then
+#            # Assume layer name is the same as the filename
+#            dbase_in_layer="${dbase_fname%.*}"
+            :
+        else
+            echo_e "--mfp-in-layer name must be provided along with non-Shapefile/CSV --mfp-in input database"
+            exit_script_with_status 1
+        fi
+    fi
+fi
+if [ -z "$dbase_in" ] && [ -n "$dbase_in_layer" ]; then
+    echo_e "--mfp-in-layer argument can only be provided along with --mfp-in argument"
+    exit_script_with_status 1
+fi
+if [ -n "$dbase_out" ]; then
+    if [ -z "$dbase_in" ]; then
+        echo_e "--mfp-in input database path must be provided with --mfp-out output database path"
+        exit_script_with_status 1
+    fi
+    if [ "$return_type" = 'pairname' ]; then
+        echo_e "--mfp-out argument and --return-type='pairname' are mutually exclusive"
+        exit_script_with_status 1
+    fi
+    if [ "$include_missing_pairs" = true ]; then
+        echo_e "Cannot write output shapefile when --include-missing-pairs option is provided"
+        exit_script_with_status 1
+    fi
+fi
+
+
+## Adjust arguments
+
+if [ -n "$out_added_query" ]; then
+    out_added_query=$(echo "$out_added_query" | sed -r "s|\"|\'|g")
+fi
+if [ -n "$dbase_in_layer" ]; then
+    dbase_in_ogrlist_layer_arg="--layer '${dbase_in_layer}'"
+else
+    dbase_in_ogrlist_layer_arg=''
+fi
+if [ -z "$ogrlist_export_opt_args" ]; then
+    ogrlist_export_opt_args="--export-fields '*' --export-mode overwrite"
+fi
+
+
+## Source input list of Catalog IDs from provided database
+
+if [ -n "$dbase_in" ]; then
+    cmd="ogrlist \"${dbase_in}\" ${dbase_in_ogrlist_layer_arg} --field catalog_id | sort -u"
+    if [ "$debug" = true ]; then
+        echo "Sourcing Catalog IDs using ogrlist command:"
+        echo "$cmd"
+    fi
+    arg_catid_list=$(eval "$cmd")
+    cmd_status=$?
+    if (( cmd_status != 0 )); then
+        echo_e -e "\nReceived non-zero exit status (${cmd_status}) from ogrlist command:"
+        echo_e "$cmd"
+        echo_e "No results will be returned"
+        exit_script_with_status 1
+    fi
+    if [ -z "$arg_catid_list" ]; then
+        echo_e "No records found in input --mfp-in database"
+        exit_script_with_status 1
+    fi
+else
+    arg_catid_list=$(printf '%s\n' "${catid_arr[@]}" | sort -u)
+fi
+if [ "$debug" = true ]; then
+    echo -e "\nInput Catalog IDs:"
+    echo "$arg_catid_list"
+    echo
+fi
+
+
+## Lookup input Catalog IDs in Danco stereo footprint
+
+query_field='catalogid'
+while true; do
+    if [ "$query_field" = 'catalogid' ]; then
+        query_css=$(echo "$arg_catid_list" | xargs printf "'%s',")
+    elif [ "$query_field" = 'pairname' ]; then
+        query_css=$(echo "$stereo_pnames" | xargs printf "'%s',")
+    fi
+    query_css=$(string_rstrip "$query_css" ',')
+
+    cmd="danco footprint --layer ${danco_footprint_stereo_layer} --field pairname,catalogid,${filt_field} -w \"${query_field} in (${query_css})\""
+
+    if [ "$debug" = true ]; then
+        echo "Running stereo Catalog ID lookup ogrlist command:"
+        echo "$cmd"
+    fi
+    stereo_records=$(eval "$cmd")
+    cmd_status=$?
+    if (( cmd_status != 0 )); then
+        echo_e -e "Received non-zero exit status (${cmd_status}) from ogrlist command:"
+        echo_e "$cmd"
+        echo_e "No results will be returned"
+        exit_script_with_status 1
+    fi
+    if [ "$debug" = true ]; then
+        echo -e "\nogrlist results:"
+        echo "$stereo_records"
+        echo
+    fi
+
+    if [ "$query_field" = 'catalogid' ]; then
+        stereo_pnames=$(echo "$stereo_records" | cut -d',' -f1 | sort -u)
+        if [ "$include_missing_pairs" = true ]; then
+            query_field='pairname'
+            continue
+        else
+            break
+        fi
+    elif [ "$query_field" = 'pairname' ]; then
+        break
+    fi
+done
+stereo_catids=$(echo "$stereo_records" | cut -d',' -f2 | sort -u)
+mono_catids=$(comm -2 -3 <(echo "$arg_catid_list") <(echo "$stereo_catids"))
+
+
+if [ "$return_type" = 'mono' ]; then
+    return_list="$mono_catids"
+elif [ "$return_type" = 'pairname' ]; then
+    return_list="$stereo_pnames"
+elif [ "$return_type" = 'stereo' ] || [ "$return_type" = 'both' ]; then
+    if [ "$filt_field_mode" = 'off' ]; then
+        stereo_catids_filt="$stereo_catids"
+    else
+        ## Apply secondary filter to stereo records
+        
+        if [ "$filt_field_mode" = 'min' ]; then
+            compare_op='<'
+        elif [ "$filt_field_mode" = 'max' ]; then
+            compare_op='>'
+        fi
+
+        cmd='{ pname=$1; catid=$2; val=$3; if (pname_filt_val[pname]=="" || val'"${compare_op}"'pname_filt_val[pname]) { pname_filt_val[pname]=val; pname_filt_catid[pname]=catid; }; } END { for (pname in pname_filt_catid) print pname_filt_catid[pname]; }'
+
+        stereo_catids_filt=$(echo "$stereo_records" | awk -F',' "$cmd")
+        cmd_status=$?
+        if (( cmd_status != 0 )); then
+            echo_e "Received non-zero exit status (${cmd_status}) from awk command"
+            echo_e "No results will be returned"
+            exit_script_with_status 1
+        fi
+    fi
+
+    if [ "$return_type" = 'stereo' ]; then
+        return_list="$stereo_catids_filt"
+    elif [ "$return_type" = 'both' ]; then
+        return_list=$(printf '%s\n%s' "${mono_catids}" "${stereo_catids_filt}")
+        return_list=$(string_strip "$return_list")
+    fi
+fi
+
+
+if [ -z "$dbase_out" ]; then
+    if [ "$debug" = true ]; then
+        echo "Filtered results:"
+    fi
+    echo "$return_list"
+else
+    ## Export features from input MFP selection belonging to filtered Catalog IDs
+    
+    if [ "$debug" = true ]; then
+        echo -e "\nFiltered Catalog ID results:"
+        echo "$return_list"
+        echo
+    fi
+
+    catid_css=$(echo "$return_list" | xargs printf "'%s',")
+    catid_css=$(string_rstrip "$catid_css" ',')
+
+    if [ -n "$out_added_query" ]; then
+        added_query="AND ${out_added_query}"
+    else
+        added_query=''
+    fi
+
+#    cmd="ogr2ogr -overwrite -dialect sqlite -sql \"SELECT * FROM '${dbase_in_layer}' WHERE catalog_id in (${catid_css}) ${added_query}\" \"${dbase_out}\" \"${dbase_in}\""
+    cmd="ogrlist \"${dbase_in}\" ${dbase_in_ogrlist_layer_arg} --where \"catalog_id in (${catid_css}) ${added_query}\" --export \"${dbase_out}\" ${ogrlist_export_opt_args}"
+
+    if [ "$debug" = true ]; then
+        echo "Running ogrlist command to export features:"
+        cmd="${cmd} --debug"
+        echo "$cmd"
+        echo
+    fi
+#    if [ "$debug" = true ]; then
+#        echo -e "\nDebug mode exiting"
+#        exit 0
+#    fi
+    eval "$cmd"
+    cmd_status=$?
+    if (( cmd_status != 0 )); then
+        echo_e "Received non-zero exit status (${cmd_status}) from ogrlist command to export features:"
+        echo_e "$cmd"
+    fi
+
+#    if [ "$debug" = false ]; then
+#        echo
+#        if (( cmd_status == 0 )) && [ -f "$dbase_out" ]; then
+#            echo "Successfully exported features"
+#        else
+#            echo "Failed to export features"
+#        fi
+#    fi
+fi
