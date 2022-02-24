@@ -412,18 +412,30 @@ fullpath_alias() {
         fullpath_fn="pwd"
     fi
     pushd . >/dev/null
-    if [ -d "$path" ]; then
-        cd "$path" || { echo "Failed to access path" ; return; }
-        eval "$fullpath_fn"
-    else
-        cd "$(dirname "$path")" || { echo "Failed to access path" ; return; }
-        local path_parent_dir=$(eval "$fullpath_fn")
-        local path_basename=$(basename "$path")
-        if [ "$path_parent_dir" = '/' ]; then
-            echo "${path_parent_dir}${path_basename}"
+    local path_prefix="$path"
+    local path_suffix=''
+    while true; do
+        if [ -d "$path_prefix" ]; then
+            break
+        elif [ "$path_prefix" = '/' ] || [ "$path_prefix" = '.' ]; then
+            break
         else
-            echo "${path_parent_dir}/${path_basename}"
+            if [ -z "$path_suffix" ]; then
+                path_suffix=$(basename "$path_prefix")
+            else
+                path_suffix="$(basename "$path_prefix")/${path_suffix}"
+            fi
+            path_prefix=$(dirname "$path_prefix")
         fi
+    done
+    cd "$path_prefix" || { echo_e "Failed to access path: ${path_prefix}" ; return; }
+    path_prefix=$(eval "$fullpath_fn")
+    if [ -z "$path_suffix" ]; then
+        echo "$path_prefix"
+    elif [ "$path_prefix" = '/' ]; then
+        echo "${path_prefix}${path_suffix}"
+    else
+        echo "${path_prefix}/${path_suffix}"
     fi
     popd >/dev/null
 }
@@ -442,11 +454,39 @@ abspath() {
         return 1
     fi
     local path="$1"
+    local readlink_status=1
     if [ "$READLINK_F_AVAILABLE" = true ]; then
         readlink -f "$path"
-    else
+        readlink_status=$?
+    fi
+    if (( readlink_status != 0 )); then
         fullpath_alias "$path" true
     fi
+}
+
+fullpath_e() {
+    if (( $# != 1 )); then
+        echo_e "fullpath_e: expected one path operand"
+        return 1
+    fi
+    local path="$1"
+    if [ ! -e "$path" ]; then
+        echo_e "fullpath_e: path does not exist: ${path}"
+        return 1
+    fi
+    fullpath "$path"
+}
+abspath_e() {
+    if (( $# != 1 )); then
+        echo_e "abspath_e: expected one path operand"
+        return 1
+    fi
+    local path="$1"
+    if [ ! -e "$path" ]; then
+        echo_e "abspath_e: path does not exist: ${path}"
+        return 1
+    fi
+    abspath "$path"
 }
 
 preserve_trailing_slash_alias() {
@@ -513,6 +553,12 @@ abspath_all() {
 }
 fullpath_all() {
     process_items 'fullpath' false true "$@"
+}
+abspath_all_e() {
+    process_items 'abspath_e' false true "$@"
+}
+fullpath_all_e() {
+    process_items 'fullpath_e' false true "$@"
 }
 basename_all() {
     process_items 'basename' false true "$@"
