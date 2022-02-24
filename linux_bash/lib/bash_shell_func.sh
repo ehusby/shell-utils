@@ -508,7 +508,7 @@ findlsh() {
     find_alias findlsh "$@"
 }
 findst() {
-    find_alias findls "$1" -mindepth 0 -maxdepth 0
+    find_alias findls "$@" -mindepth 0 -maxdepth 0
 }
 find_missing_suffix() {
     local search_dir base_suffix check_suffix_arr
