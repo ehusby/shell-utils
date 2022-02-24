@@ -272,49 +272,127 @@ parse_xml_value() {
 
 ## Filesystem path testing
 
-parent_dir_exists() {
+parent_dir_exists_0() {
     local dirent="$(string_rstrip "$1" '/')"
     local parent_dir="${dirent%/*}"
-    if [ -d "$parent_dir" ]; then
+    [ -d "$parent_dir" ];
+}
+dirent_is_empty_0() {
+    find 2>/dev/null -L "$1" -prune -empty | grep -q '.'
+#    { [ -e "$1" ] && [ ! -s "$1" ]; };
+}
+dir_is_empty_0() {
+    find 2>/dev/null -L "$1" -type d -prune -empty | grep -q '.'
+#    { [ -d "$1" ] && [ ! -s "$1" ]; };
+}
+file_is_empty_0() {
+#    find 2>/dev/null -L "$1" -type f -prune -empty | grep -q '.'
+    { [ -f "$1" ] && [ ! -s "$1" ]; };
+}
+dirent_not_empty_0() {
+    find 2>/dev/null -L "$1" -prune ! -empty | grep -q '.'
+#    { [ -e "$1" ] && [ -s "$1" ]; };
+}
+dir_not_empty_0() {
+    find 2>/dev/null -L "$1" -type d -prune ! -empty | grep -q '.'
+#    { [ -d "$1" ] && [ -s "$1" ]; };
+}
+file_not_empty_0() {
+#    find 2>/dev/null -L "$1" -type f -prune ! -empty | grep -q '.'
+    { [ -f "$1" ] && [ -s "$1" ]; };
+}
+
+parent_dir_exists() {
+    if parent_dir_exists_0 "$1"; then
         echo true
     else
         echo false
     fi
 }
-
 dirent_is_empty() {
     local dirent="$1"
     if [ ! -e "$dirent" ]; then
-        echo_e "Path does not exist: ${dirent}"
+        echo_e "dirent_is_empty: file/directory does not exist: ${dirent}"
         echo false
-    elif [ -n "$(find "$1" -prune -empty)" ]; then
+        return 1
+    elif dirent_is_empty_0 "$dirent"; then
         echo true
+        return 0
     else
         echo false
-    fi
-}
-file_is_empty() {
-    local file="$1"
-    if [ ! -f "$file" ]; then
-        echo_e "Invalid file path: ${file}"
-        echo false
-    else
-        dirent_is_empty "$file"
+        return 1
     fi
 }
 dir_is_empty() {
-    local dir="$1"
-    if [ ! -d "$dir" ]; then
-        echo_e "Invalid directory path: ${dir}"
+    local dirent="$1"
+    if [ ! -d "$dirent" ]; then
+        echo_e "dir_is_empty: invalid directory path: ${dirent}"
         echo false
+        return 1
+    elif dir_is_empty_0 "$dirent"; then
+        echo true
+        return 0
     else
-        dirent_is_empty "$dir"
+        echo false
+        return 1
     fi
 }
-
-dirent_is_empty_0() { [ "$(dirent_is_empty "$@")" = true ]; }
-file_is_empty_0() { [ "$(file_is_empty "$@")" = true ]; }
-dir_is_empty_0() { [ "$(dir_is_empty "$@")" = true ]; }
+file_is_empty() {
+    local dirent="$1"
+    if [ ! -f "$dirent" ]; then
+        echo_e "file_is_empty: invalid file path: ${dirent}"
+        echo false
+        return 1
+    elif file_is_empty_0 "$dirent"; then
+        echo true
+        return 0
+    else
+        echo false
+        return 1
+    fi
+}
+dirent_not_empty() {
+    local dirent="$1"
+    if [ ! -e "$dirent" ]; then
+        echo_e "dirent_not_empty: file/directory does not exist: ${dirent}"
+        echo false
+        return 1
+    elif dirent_not_empty_0 "$dirent"; then
+        echo true
+        return 0
+    else
+        echo false
+        return 1
+    fi
+}
+dir_not_empty() {
+    local dirent="$1"
+    if [ ! -d "$dirent" ]; then
+        echo_e "dir_not_empty: invalid directory path: ${dirent}"
+        echo false
+        return 1
+    elif dir_not_empty_0 "$dirent"; then
+        echo true
+        return 0
+    else
+        echo false
+        return 1
+    fi
+}
+file_not_empty() {
+    local dirent="$1"
+    if [ ! -f "$dirent" ]; then
+        echo_e "file_not_empty: invalid file path: ${dirent}"
+        echo false
+        return 1
+    elif file_not_empty_0 "$dirent"; then
+        echo true
+        return 0
+    else
+        echo false
+        return 1
+    fi
+}
 
 
 ## Path representation
