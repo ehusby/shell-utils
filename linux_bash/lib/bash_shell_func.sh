@@ -376,14 +376,18 @@ get_stats() {
 find_alias() {
     local find_func_name="$1"; shift
 
-    local opt_args_1 pos_args opt_args_2 debug depth_arg_provided stock_depth_args find_cmd_suffix
+    local opt_args_1 path_args opt_args_2 debug depth_arg_provided stock_depth_args find_cmd_suffix
     opt_args_1=()
-    pos_args=()
+    path_args=()
     opt_args_2=()
     debug=false
     depth_arg_provided=false
     stock_depth_args=''
     find_cmd_suffix=''
+
+    local findup_direct=false
+    local findup_minheight=''
+    local findup_maxheight=''
 
     local parsing_opt_args arg arg_opt argval
     parsing_opt_args=false
@@ -395,10 +399,21 @@ find_alias() {
             if [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ] || [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
                 debug=true
                 shift; continue
-            elif [ "$arg_opt" = 'mindepth' ]; then
+            elif [ "$find_func_name" = 'findup' ] && [ "$arg_opt" = 'direct' ]; then
+                findup_direct=true
+                shift; continue
+            elif [ "$find_func_name" = 'findup' ] && [ "$arg_opt" = 'minheight' ]; then
+                findup_minheight="$2"
+                shift; shift; continue
+            elif [ "$find_func_name" = 'findup' ] && [ "$arg_opt" = 'maxheight' ]; then
+                findup_maxheight="$2"
+                shift; shift; continue
+            elif [ "$arg_opt" = 'mindepth' ] || [ "$arg_opt" = 'maxdepth' ]; then
                 depth_arg_provided=true
-            elif [ "$arg_opt" = 'maxdepth' ]; then
-                depth_arg_provided=true
+                if [ "$find_func_name" = 'findup' ]; then
+                    echo_e "findup: mindepth/maxdepth options are not supported, use minheight/maxheight instead"
+                    return
+                fi
             elif [ "$arg_opt" = 'H' ] || [ "$arg_opt" = 'L' ] || [ "$arg_opt" = 'P' ]; then
                 opt_args_1+=( "$arg" )
                 shift; parsing_opt_args=false; continue
@@ -417,30 +432,71 @@ find_alias() {
             fi
             opt_args_2+=( "$arg" )
         else
-            pos_args+=( "$arg" )
+            path_args+=( "$arg" )
         fi
         shift
     done
 
-    local stock_depth_funcs=( 'findl' 'findls' 'findlsh' )
-    if [ "$(itemOneOf "$find_func_name" "${stock_depth_funcs[@]}")" = true ] && [ "$depth_arg_provided" = false ]; then
-        stock_depth_args='-mindepth 1 -maxdepth 1'
-    fi
+    if [ "$find_func_name" = 'findup' ]; then
+        local path_src path_tmp depth_args
+        if (( ${#path_args[@]} == 0 )); then
+            path_args+=( '.' )
+        fi
+        for path_src in "${path_args[@]}"; do
+            path_tmp=$(fullpath "$path_src")
+            depth=0
+            while true; do
+                if [ -n "$findup_maxheight" ] && (( depth > findup_maxheight )); then
+                    break
+                fi
+                if [ "$findup_direct" = true ] || (( depth == 0 )) || [ "$path_tmp" = '/' ]; then
+                    depth_args="-mindepth 0 -maxdepth 0"
+                else
+                    depth_args="-mindepth 1 -maxdepth 1"
+                fi
+                if [ -z "$findup_minheight" ] || (( depth >= findup_minheight )); then
+                    cmd="find ${opt_args_1[*]} \"${path_tmp}\" ${depth_args} ${opt_args_2[*]} ${find_cmd_suffix}"
+                    if [ "$debug" = true ]; then
+                        echo "$cmd"
+                    else
+                        eval "$cmd"
+                    fi
+                fi
+                if [ "$path_tmp" = '/' ]; then
+                    break
+                fi
+                path_tmp=$(dirname "$path_tmp")
+                if [ "$findup_direct" = false ] && (( depth == 0 )); then
+                    path_tmp=$(dirname "$path_tmp")
+                fi
+                ((depth++))
+            done
+        done
 
-    if [ "$find_func_name" = 'findl' ]; then
-        find_cmd_suffix=''
-    elif [ "$find_func_name" = 'findls' ]; then
-        find_cmd_suffix="-ls | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
-    elif [ "$find_func_name" = 'findlsh' ]; then
-        find_cmd_suffix=" -type f -exec ls -lh {} \; | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
-    fi
-
-    cmd="find ${opt_args_1[*]} ${pos_args[*]} ${stock_depth_args} ${opt_args_2[*]} ${find_cmd_suffix}"
-    if [ "$debug" = true ]; then
-        echo "$cmd"
     else
-        eval "$cmd"
+        local stock_depth_funcs=( 'findl' 'findls' 'findlsh' )
+        if [ "$(itemOneOf "$find_func_name" "${stock_depth_funcs[@]}")" = true ] && [ "$depth_arg_provided" = false ]; then
+            stock_depth_args="-mindepth 1 -maxdepth 1"
+        fi
+
+        if [ "$find_func_name" = 'findl' ]; then
+            find_cmd_suffix=''
+        elif [ "$find_func_name" = 'findls' ]; then
+            find_cmd_suffix="-ls | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+        elif [ "$find_func_name" = 'findlsh' ]; then
+            find_cmd_suffix=" -type f -exec ls -lh {} \; | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+        fi
+
+        cmd="find ${opt_args_1[*]} ${path_args[*]} ${stock_depth_args} ${opt_args_2[*]} ${find_cmd_suffix}"
+        if [ "$debug" = true ]; then
+            echo "$cmd"
+        else
+            eval "$cmd"
+        fi
     fi
+}
+findup() {
+    find_alias findup "$@"
 }
 findl() {
     find_alias findl "$@"
