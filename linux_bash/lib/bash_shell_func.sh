@@ -511,11 +511,12 @@ findst() {
     find_alias findls "$@" -mindepth 0 -maxdepth 0
 }
 find_missing_suffix() {
-    local search_dir base_suffix check_suffix_arr
+    local search_dir base_suffix check_suffix_arr suffix_exist_cond debug
     search_dir="$1"; shift
     base_suffix="$1"; shift
-    suffix_exist_cond='all'
     check_suffix_arr=()
+    suffix_exist_cond='all'
+    debug=false
 
     local arg
     while (( "$#" )); do
@@ -524,7 +525,9 @@ find_missing_suffix() {
             check_suffix_arr+=( "$arg" )
         else
             arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
-            if [ "$arg_opt" = 'any' ]; then
+            if [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ] || [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+                debug=true
+            elif [ "$arg_opt" = 'any' ]; then
                 suffix_exist_cond='any'
             elif [ "$arg_opt" = 'all' ]; then
                 suffix_exist_cond='all'
@@ -541,14 +544,41 @@ find_missing_suffix() {
         require_all_suffix_exist=false
     fi
 
-    suffix_list=$(printf '"%s" ' "${check_suffix_arr[@]}")
-    if [ -n "$base_suffix" ]; then
-        suffix_sub_expr='${base_dirent/'"${base_suffix}"'/${suffix}}'
-    else
-        suffix_sub_expr='${base_dirent}${suffix}'
-    fi
+    if [ "$debug" = true ]; then
+        find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -print0 -debug
 
-    find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -exec bash -c 'base_dirent={}; require_all_suffix_exist='"$require_all_suffix_exist"'; all_exist=true; some_exist=false; for suffix in '"$suffix_list"'; do check_dirent="'"$suffix_sub_expr"'"; if [ -e "$check_dirent" ]; then some_exist=true; else all_exist=false; fi; if [ "$require_all_suffix_exist" = true ]; then if [ "$all_exist" = false ]; then echo "$base_dirent"; exit; fi; elif [ "$some_exist" = true ]; then exit; fi; done; if [ "$some_exist" = false ]; then echo "$base_dirent"; fi;' \;
+    elif [ "$require_all_suffix_exist" = true ]; then
+        while IFS= read -r -d '' base_dirent; do
+            base_dirent_nosuff="${base_dirent%"${base_suffix}"}"
+            all_exist=true
+            for suffix in "${check_suffix_arr[@]}"; do
+                check_dirent="${base_dirent_nosuff}${suffix}"
+                if [ ! -e "$check_dirent" ]; then
+                    all_exist=false
+                    break
+                fi
+            done
+            if [ "$all_exist" = false ]; then
+                echo "$base_dirent"
+            fi
+        done < <(find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -print0)
+
+    elif [ "$require_all_suffix_exist" = false ]; then
+        while IFS= read -r -d '' base_dirent; do
+            base_dirent_nosuff="${base_dirent%"${base_suffix}"}"
+            some_exist=false
+            for suffix in "${check_suffix_arr[@]}"; do
+                check_dirent="${base_dirent_nosuff}${suffix}"
+                if [ -e "$check_dirent" ]; then
+                    some_exist=true
+                    break
+                fi
+            done
+            if [ "$some_exist" = false ]; then
+                echo "$base_dirent"
+            fi
+        done < <(find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -print0)
+    fi
 }
 
 
