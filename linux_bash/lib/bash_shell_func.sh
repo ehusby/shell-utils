@@ -234,6 +234,8 @@ read_csv() {
     fi
 
     local read_status IFS
+    local csv_line csv_line_arr
+    csv_line=''
 
     if [ "$SHELL_UTILS_READ_CSV_IP" = false ]; then
         SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR=()
@@ -244,38 +246,62 @@ read_csv() {
         if (( read_status != 0 )); then return "$read_status"; fi
         IFS="$csv_delim" read -ra get_fields_arr <<< "$get_fields"
         IFS="$csv_delim" read -ra header_fields_arr <<< "$header_line"
-        local field_name field_idx
-        for field_name in "${get_fields_arr[@]}"; do
+        local get_field_idx field_name field_idx
+        local get_field_in_header=false
+        local first_missing_get_field=''
+        for get_field_idx in "${!get_fields_arr[@]}"; do
+            field_name="${get_fields_arr[${get_field_idx}]}"
             eval "unset ${field_name}"
             field_idx=$(indexOf "$field_name" "${header_fields_arr[@]}")
-            if (( field_idx == -1 )); then
-                echo "ERROR: Cannot find field name '${field_name}' in CSV header" >&2
+            if (( field_idx == -1 )) && [ -z "$first_missing_get_field" ]; then
+                first_missing_get_field="$field_name"
+            fi
+            if (( field_idx == -1 )) && [ "$get_field_in_header" = false ]; then
+                field_idx="$get_field_idx"
+            elif (( field_idx == -1 )) || [ -n "$first_missing_get_field" ]; then
+                echo "ERROR: Cannot find field name '${first_missing_get_field}' in CSV header" >&2
                 unset SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR
                 unset SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR
                 return 1
+            else
+                get_field_in_header=true
             fi
             SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR+=( "$field_name" )
             SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR+=( "$field_idx" )
         done
+        if [ -n "$first_missing_get_field" ]; then
+            # No 'get fields' match strings in first row of CSV,
+            # so assume the CSV has no header and match order of
+            # 'get fields' to the order of CSV columns.
+            csv_line="$header_line"
+            csv_line_arr=("${header_fields_arr[@]}")
+        fi
         SHELL_UTILS_READ_CSV_IP=true
     fi
 
-    local csv_line csv_line_arr
-
-    IFS= read -r csv_line
-    read_status=$?
-    if (( read_status != 0 )); then
-        SHELL_UTILS_READ_CSV_IP=false
-        unset SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR
-        unset SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR
-        local field_name
-        for field_name in "${SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR[@]}"; do
-            eval "unset ${field_name}"
-        done
-        return "$read_status"
+    if [ -z "$csv_line" ]; then
+        IFS= read -r csv_line
+        read_status=$?
+        if (( read_status != 0 )); then
+            if [ -n "$csv_line" ]; then
+                # This is likely the case where we're reading
+                # the last line of input and it doesn't have
+                # a trailing newline so 'read' has a nonzero
+                # exit status. We still want to parse this line.
+                read_status=0
+            else
+                SHELL_UTILS_READ_CSV_IP=false
+                unset SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR
+                unset SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR
+                local field_name
+                for field_name in "${SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR[@]}"; do
+                    eval "unset ${field_name}"
+                done
+                return "$read_status"
+            fi
+        fi
+        IFS="$csv_delim" read -ra csv_line_arr <<< "$csv_line"
     fi
-
-    IFS="$csv_delim" read -ra csv_line_arr <<< "$csv_line"
 
     local i field_name field_idx field_val
     for i in "${!SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR[@]}"; do
