@@ -41,7 +41,7 @@ process_items() {
     local item
     if (( $# > 0 )); then
         if [ "$pipe_in_items" = true ]; then
-            eval "printf '%s\n' \"$@\" | ${process_func}"
+            eval "printf '%s\n' \"\$@\" | ${process_func}"
             while (( $# > 0 )); do shift; done
         else
             while (( $# > 0 )); do
