@@ -87,7 +87,7 @@ echo_oe() { echo "$@" | tee >(cat >&2); }
 base10() { print_string "$((10#$1))"; }
 
 escape_regex_special_chars() {
-    local special_chars_arr=( '^' '.' '+' '*' '?' '|' '\\' '(' ')' '[' ']' '{' '}' '$' )
+    local special_chars_arr=( '^' '.' '+' '*' '?' '|' '/' '\\' '(' ')' '[' ']' '{' '}' '$' )
     local str_in="$1"
     local str_out=''
     local i char
@@ -104,21 +104,21 @@ escape_regex_special_chars() {
 string_to_uppercase() { print_string "$@" | tr '[:lower:]' '[:upper:]'; }
 string_to_lowercase() { print_string "$@" | tr '[:upper:]' '[:lower:]'; }
 
-#string_lstrip() { print_string "$1" | sed -r "s|^($(escape_regex_special_chars "$2"))+||"; }
-#string_rstrip() { print_string "$1" | sed -r "s|($(escape_regex_special_chars "$2"))+$||"; }
+#string_lstrip() { print_string "$1" | sed -r "s/^($(escape_regex_special_chars "$2"))+//"; }
+#string_rstrip() { print_string "$1" | sed -r "s/($(escape_regex_special_chars "$2"))+$//"; }
 
 string_lstrip() {
     local string_in="$1"
     local strip_substr=''
     local string_stripped=''
 
-    if (( $# >= 2 )); then
-        strip_substr="$2"
+    if (( $# >= 2 )) && [ -n "$2" ]; then
+        strip_substr="$(escape_regex_special_chars "$2")"
     else
         strip_substr='[[:space:]]'
     fi
 
-    string_stripped=$(print_string "$string_in" | sed -r "s|^($(escape_regex_special_chars "$strip_substr"))+||")
+    string_stripped=$(print_string "$string_in" | sed -r "s/^($(print_string "$strip_substr"))+//")
 
     print_string "$string_stripped"
 }
@@ -128,13 +128,13 @@ string_rstrip() {
     local strip_substr=''
     local string_stripped=''
 
-    if (( $# >= 2 )); then
-        strip_substr="$2"
+    if (( $# >= 2 )) && [ -n "$2" ]; then
+        strip_substr="$(escape_regex_special_chars "$2")"
     else
         strip_substr='[[:space:]]'
     fi
 
-    string_stripped=$(print_string "$string_in" | sed -r "s|($(escape_regex_special_chars "$strip_substr"))+$||")
+    string_stripped=$(print_string "$string_in" | sed -r "s/($(print_string "$strip_substr"))+$//")
 
     print_string "$string_stripped"
 }
@@ -147,7 +147,7 @@ string_strip() {
     if (( $# >= 2 )); then
         strip_substr="$2"
     else
-        strip_substr='[[:space:]]'
+        strip_substr=''
     fi
 
     string_stripped=$(string_lstrip "$string_in" "$strip_substr")
@@ -158,7 +158,7 @@ string_strip() {
 
 string_rstrip_decimal_zeros() { print_string "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
 
-collapse_repeated_substring() { print_string "$1" | sed -r "s|($(escape_regex_special_chars "$2"))+|\1|g"; }
+collapse_repeated_substring() { print_string "$1" | sed -r "s/($(escape_regex_special_chars "$2"))+/\1/g"; }
 
 string_join() { local IFS="$1"; shift; print_string "$*"; }
 
@@ -231,8 +231,8 @@ string_common_prefix() {
 }
 
 parse_xml_value() {
-    local xml_tag="$1"
-    grep -Po "<${xml_tag}>(.*?)</${xml_tag}>" | sed -r "s|<${xml_tag}>(.*?)</${xml_tag}>|\1|"
+    local xml_tag=$(escape_regex_special_chars "$1")
+    grep -Po "<${xml_tag}>(.*?)</${xml_tag}>" | sed -r "s/<${xml_tag}>(.*?)</${xml_tag}>/\1/"
 }
 
 
