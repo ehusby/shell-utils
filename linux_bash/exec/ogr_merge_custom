@@ -1,0 +1,129 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_dir=$(dirname "$script_file")
+script_name=$(basename "$script_file")
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+source "$bash_functions_script"
+
+
+## Arguments
+dst_shp=''
+src_layer_arr=()
+dryrun=false
+
+## Custom globals
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+Usage: ${script_name} [--dryrun] DST_SHP SRC_LAYER...
+EOM
+if (( $# < 1 )); then
+    echo_e -e "$script_usage"
+    exit_script_with_status 1
+fi
+
+
+## Parse arguments
+set +u
+while (( "$#" )); do
+    arg="$1"
+
+    if ! [[ $arg == -* ]]; then
+        if [ -z "$dst_shp" ]; then
+            dst_shp="$arg"
+        else
+            src_layer_arr+=( "$arg" )
+        fi
+
+    else
+        arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+        arg_opt_nargs=''
+        arg_val_can_start_with_dash=false
+
+        if [ "$arg_opt" == 'h' ] || [ "$arg_opt" == 'help' ]; then
+            arg_opt_nargs=0
+            echo "$script_usage"
+            exit 0
+
+        elif [ "$arg_opt" == 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ -z "$arg_opt_nargs" ]; then
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        for i in $(seq 1 $arg_opt_nargs); do
+            shift
+            arg_val="$1"
+            if [ "$arg_val_can_start_with_dash" == "false" ] && [[ $arg_val == -* ]]; then
+                echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                exit_script_with_status 1
+            fi
+        done
+    fi
+
+    shift
+done
+set -u
+
+
+## Validate arguments
+
+if [ -z "$dst_shp" ] || (( ${#src_layer_arr[@]} == 0 )); then
+    echo_e "Both DST_SHP and SRC_LAYER arguments must be provided"
+    exit_script_with_status 1
+fi
+src_layer_dne=false
+for src_layer in "${src_layer_arr[@]}"; do
+    if [ ! -e "$src_layer" ]; then
+        echo_e "SRC_LAYER does not exist: ${src_layer}"
+        src_layer_dne=true
+    fi
+done
+if [ "$src_layer_dne" == "true" ]; then
+    exit_script_with_status 1
+fi
+
+
+## Main program
+
+for src_layer_idx in "${!src_layer_arr[@]}"; do
+    src_layer="${src_layer_arr[$src_layer_idx]}"
+    if (( src_layer_idx == 0 )); then
+        echo "Creating output shapefile '${dst_shp}' with source layer: ${src_layer}"
+        cmd="ogr2ogr -f 'ESRI Shapefile' ${dst_shp} ${src_layer}"
+    else
+        echo "Appending source layer: ${src_layer}"
+        cmd="ogr2ogr -f 'ESRI Shapefile' -update -append ${dst_shp} ${src_layer}"
+    fi
+    if [ "$dryrun" == "true" ]; then
+        echo "$cmd"
+    else
+        eval "$cmd"
+    fi
+done
+
+if [ -f "$dst_shp" ]; then
+    echo "Generated output shapefile: ${dst_shp}"
+elif [ "$dryrun" == "false" ]; then
+    echo "Failed to generate output shapefile: ${dst_shp}"
+fi

@@ -45,6 +45,7 @@ find_name_provided=false
 find_type_d=false
 find_type_f=false
 find_prune=false
+follow_links=false
 
 ## Custom globals
 
@@ -117,7 +118,7 @@ while (( "$#" )); do
             else
                 is_fwd_arg=true
                 if [ "$(string_contains "$arg_opt" '=')" = true ]; then
-                    arg_val="${arg_opt#*=}"
+                    arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
                     arg_opt="${arg_opt%%=*}"
                 else
                     arg_val="$2"
@@ -150,7 +151,7 @@ while (( "$#" )); do
         arg_opt="$(string_lstrip "$arg" '-')"
         arg_opt_nargs=''
         if [ "$(string_contains "$arg_opt" '=')" = true ]; then
-            arg_val="${arg_opt#*=}"
+            arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
             arg_opt="${arg_opt%%=*}"
             arg_opt_nargs_do_shift=false
         else
@@ -193,6 +194,9 @@ while (( "$#" )); do
             debug=true
 
         elif [ "$arg_opt" = 'H' ] || [ "$arg_opt" = 'L' ] || [ "$arg_opt" = 'P' ]; then
+            if [ "$arg_opt" = 'L' ]; then
+                follow_links=true
+            fi
             fwd_args_arr_1+=( "$arg" )
             arg_opt_nargs=0
 
@@ -337,12 +341,20 @@ find_args_2=$(string_strip "$find_args_2" ' ')
 ## Main program
 
 if [ "$sum_all" = true ]; then
-    srcpath_arr=( "${srcpath_arr[*]}" )
+    srcpath_arr=( "$(printf '"%s" ' "${srcpath_arr[@]}" )" )
+    quote_srcpath=false
     report_srcpath=false
 else
+    quote_srcpath=true
     report_srcpath=true
 fi
 for srcpath in "${srcpath_arr[@]}"; do
+
+    du_cmd="du"
+
+    if [ "$follow_links" = true ]; then
+        du_cmd="${du_cmd} -L"
+    fi
 
     find_args_2_inst="$find_args_2"
     if [ "$find_type_d" = true ] || { [ -d "$srcpath" ] && [ "$find_type_f" = false ] && [ -z "$find_name_args" ] && [ "$find_depth_provided" = false ] && [ "$find_name_provided" = false ]; }; then
@@ -352,15 +364,19 @@ for srcpath in "${srcpath_arr[@]}"; do
         if [ "$find_prune" = false ]; then
             find_args_2_inst="${find_args_2_inst} -prune"
         fi
-        du_cmd="du -s"
+        du_cmd="${du_cmd} -s"
     else
         if [ "$find_type_f" = false ]; then
             find_args_2_inst="${find_args_2_inst} -type f"
         fi
-        du_cmd="du -a"
+        du_cmd="${du_cmd} -a"
     fi
 
-    find_cmd="find ${find_args_1} \"${srcpath}\" ${find_args_2_inst}"
+    if [ "$quote_srcpath" = true ]; then
+        find_cmd="find ${find_args_1} \"${srcpath}\" ${find_args_2_inst}"
+    else
+        find_cmd="find ${find_args_1} ${srcpath} ${find_args_2_inst}"
+    fi
     full_cmd="${find_cmd} -print0 | xargs -r0 ${du_cmd} | awk '{sum+=\$1} END {print sum}'"
     if [ "$identify" = true ]; then
         run_cmd="$find_cmd"

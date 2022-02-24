@@ -25,10 +25,11 @@ source "$bash_functions_script"
 
 
 ## Arguments
+force_glob=false
 src_path=''
 new_name=''
-force_glob=false
 fwd_args_arr=()
+symlink_file_arr=()
 dryrun=false
 
 ## Custom globals
@@ -36,7 +37,7 @@ dryrun=false
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage: ${script_name} [OPTION]... SRC_PATH NEW_NAME ['mv' OPTION]...
+Usage: ${script_name} [OPTION]... SRC_PATH NEW_NAME [--update-symlinks SYMLINK_PATH...] ['mv' OPTION]...
 
 Rename one or more files or folders.
 
@@ -59,9 +60,17 @@ Options:
         When SRC_PATH is the full path to an existing file/folder,
         force treating SRC_PATH as a prefix matching additional
         files/folders in the same directory.
+-db,--debug
 -dr,--dryrun
         Print 'mv' command(s) used to rename files/folders,
         without executing.
+
+Non-standard option:
+    --update-symlinks SYMLINK_PATH...
+        Modify the target path of provided symlinks.
+        It is assumed that symlink target paths are absolute,
+        so that the absolute SRC_PATH (prefix) is replaced with
+        the new absolute path (prefix) that comes with NEW_NAME.
 EOM
 if (( $# < 1 )); then
     echo_e -e "$script_usage"
@@ -74,6 +83,15 @@ set +u
 parsing_fwd_args=false
 while (( "$#" )); do
     arg="$1"
+
+    if [ "$parsing_symlinks" = true ]; then
+        if [ "$(string_startswith "$arg" '-')" = true ]; then
+            parsing_symlinks=false
+        else
+            symlink_file_arr+=( "$arg" )
+            shift; continue
+        fi
+    fi
 
     if [ "$parsing_fwd_args" = true ]; then
         # Accept critical script optional arguments
@@ -88,6 +106,11 @@ while (( "$#" )); do
                 exit 0
             elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
                 dryrun=true
+            elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+                dryrun=true
+            elif [ "$arg_opt" = 'update-symlinks' ]; then
+                parsing_symlinks=true
+                shift; continue
             else
                 is_fwd_arg=true
             fi
@@ -113,7 +136,7 @@ while (( "$#" )); do
         arg_opt="$(string_lstrip "$arg" '-')"
         arg_opt_nargs=''
         if [ "$(string_contains "$arg_opt" '=')" = true ]; then
-            arg_val="${arg_opt#*=}"
+            arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
             arg_opt="${arg_opt%%=*}"
             arg_opt_nargs_do_shift=false
         else
@@ -132,6 +155,10 @@ while (( "$#" )); do
             force_glob=true
 
         elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
             arg_opt_nargs=0
             dryrun=true
 
@@ -179,21 +206,36 @@ if [ -z "$src_path" ] || [ -z "$new_name" ]; then
     exit_script_with_status 1
 fi
 
-if [ ! -e "$src_path" ] || { [ "$(string_endswith "$src_path" '/')" = false ] && [ "$force_glob" = true ]; }; then
-    src_dirent_arr=( "$src_path"* )
+old_prefix_full=$(fullpath "$src_path")
+old_prefix_abs=$(abspath "$src_path")
+
+if [ ! -e "$old_prefix_full" ] || { [ "$(string_endswith "$old_prefix_full" '/')" = false ] && [ "$force_glob" = true ]; }; then
+    shopt -u | grep -q nullglob && nullglob_set=true && shopt -s nullglob
+    src_dirent_arr=( "$old_prefix_full"* )
+    [ "$nullglob_set" = true ] && shopt -u nullglob; unset nullglob_set
     if (( ${#src_dirent_arr[@]} == 0 )); then
-        echo_e "Cannot find any files/dirs matching SRC_PATH argument: ${src_path}*"
+        echo_e "Cannot find any files/dirs matching SRC_PATH argument: ${old_prefix_full}*"
         exit_script_with_status 1
     fi
 else
-    src_dirent_arr=( "$src_path" )
+    src_dirent_arr=( "$old_prefix_full" )
 fi
 
-src_dir=$(dirname "$src_path")
+for symlink_file in "${symlink_file_arr[@]+${symlink_file_arr[@]}}"; do
+    if [ ! -L "$symlink_file" ]; then
+        echo_e "--update-symlink provided file is not a symbolic link: ${symlink_file}"
+        exit_script_with_status 1
+    fi
+done
+
 if [ "$(string_startswith "$new_name" '/')" = true ]; then
-    new_name_prefix="$new_name"
+    new_prefix_full=$(fullpath "$new_name")
+    new_prefix_abs=$(abspath "$new_name")
 else
-    new_name_prefix="${src_dir}/${new_name}"
+    src_dir_full=$(dirname "$old_prefix_full")
+    src_dir_abs=$(dirname "$old_prefix_abs")
+    new_prefix_full="${src_dir_full}/${new_name}"
+    new_prefix_abs="${src_dir_abs}/${new_name}"
 fi
 
 mv_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
@@ -203,9 +245,19 @@ mv_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
 
 for src_dirent in "${src_dirent_arr[@]}"; do
 
-    new_name_suffix="${src_dirent/${src_path}/}"
+    cmd="mv ${mv_opt_args} \"${src_dirent}\" \"${src_dirent/${old_prefix_full}/${new_prefix_full}}\""
 
-    cmd="mv ${mv_opt_args} \"${src_dirent}\" \"${new_name_prefix}${new_name_suffix}\""
+    if [ "$dryrun" = true ]; then
+        echo "$cmd"
+    else
+        eval "$cmd"
+    fi
+done
+
+for symlink_file in "${symlink_file_arr[@]+${symlink_file_arr[@]}}"; do
+    link_orig=$(readlink "$symlink_file")
+
+    cmd="ln -s -f \"${link_orig/${old_prefix_abs}/${new_prefix_abs}}\" \"${symlink_file}\""
 
     if [ "$dryrun" = true ]; then
         echo "$cmd"

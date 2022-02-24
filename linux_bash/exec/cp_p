@@ -25,28 +25,31 @@ source "$bash_functions_script"
 
 
 ## Arguments
-drive_arr=()
+path_arg_arr=()
+fwd_args_arr=()
 dryrun=false
 
 ## Custom globals
-re_drive_letter='[a-zA-Z]'
+target_dir_arg_provided=false
+dst_dir=''
 
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage: ${script_name} DRIVE_LETTER...
+Usage:
+    cp [OPTION]... [-T] SOURCE DEST
+    cp [OPTION]... SOURCE... DIRECTORY
+    cp [OPTION]... -t DIRECTORY SOURCE...
+    (see 'man cp' for further details)
 
-Permanently mount Windows network/removable drive(s) by making
-additions to the /etc/fstab file. Primarily useful for setup of
-the Windows Subsystem for Linux Bash terminal.
+  Copy file(s) with 'cp', first creating destination directory
+with 'mkdir -p' if the destination directory does not exist.
 
 Options:
--db,--debug
--dr,--dryrun
-        Print commands used to mount drive(s), without executing.
+[all 'cp' options]
 EOM
 if (( $# < 1 )); then
-    echo_e "$script_usage"
+    echo_e -e "$script_usage"
     exit_script_with_status 1
 fi
 
@@ -57,12 +60,7 @@ while (( "$#" )); do
     arg="$1"
 
     if [ "$(string_startswith "$arg" '-')" = false ]; then
-        if [ "$(re_test "$re_drive_letter" "$arg")" = true ]; then
-            drive_arr+=( "$arg" )
-        else
-            echo_e "Unexpected argument: ${arg}"
-            exit_script_with_status 1
-        fi
+        path_arg_arr+=( "$arg" )
 
     else
         arg_opt="$(string_lstrip "$arg" '-')"
@@ -70,9 +68,11 @@ while (( "$#" )); do
         if [ "$(string_contains "$arg_opt" '=')" = true ]; then
             arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
             arg_opt="${arg_opt%%=*}"
+            arg_opt_raw="${arg%%=*}"
             arg_opt_nargs_do_shift=false
         else
             arg_val="$2"
+            arg_opt_raw="$arg"
             arg_opt_nargs_do_shift=true
         fi
         arg_val_can_start_with_dash=false
@@ -82,17 +82,20 @@ while (( "$#" )); do
             echo "$script_usage"
             exit 0
 
-        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
-            arg_opt_nargs=0
-            dryrun=true
-
-        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
-            arg_opt_nargs=0
-            dryrun=true
-
         else
-            echo_e "Unexpected argument: ${arg}"
-            exit_script_with_status 1
+            if [ "$(itemOneOf "$arg_opt" 't' 'target-directory' )" = true ]; then
+                target_dir_arg_provided=true
+                dst_dir="$arg_val"
+            fi
+
+            if [ "$(itemOneOf "$arg_opt" 'S' 'suffix' 't' 'target-directory' )" = true ]; then
+                arg_opt_nargs=1
+                if [ "$(string_contains "$arg_val" '*')" = true ] || [ "$(string_contains "$arg_val" ' ')" = true ]; then
+                    arg_val="\"${arg_val}\""
+                fi
+            else
+                arg_opt_nargs=0
+            fi
         fi
 
         if [ -z "$arg_opt_nargs" ]; then
@@ -122,48 +125,38 @@ set -u
 
 ## Validate arguments
 
-if (( ${#drive_arr[@]} == 0 )); then
-    echo_e "At least one drive letter argument must be provided"
-    exit_script_with_status 1
+num_path_args="${#path_arg_arr[@]}"
+if (( num_path_args == 0 )); then
+    # Allow 'cp' to report error
+    :
+elif (( num_path_args == 1 )) || [ "$target_dir_arg_provided" = true ]; then
+    # Allow 'cp' to report error if target dir is not provided
+    :
+else
+    dst_idx=$(( num_path_args - 1 ))
+    destination="${path_arg_arr[$dst_idx]}"
+    if (( num_path_args > 2 )) || [ "$(string_endswith "$destination" '/')" = true ]; then
+        dst_dir="$destination"
+    else
+        dst_dir=$(dirname "$destination")
+    fi
 fi
 
 
-## Mount drives
+## Create destination directory if needed
 
-for drive in "${drive_arr[@]}"; do
-    drive_lower=$(string_to_lowercase "$drive")
-    drive_upper=$(string_to_uppercase "$drive")
-    echo -e "\nConfiguring ${drive_upper} drive"
-
-    drive_path="/mnt/${drive_lower}"
-
-    if [ -d "$drive_path" ]; then
-        cmd="sudo chmod 777 ${drive_path}"
-    else
-        cmd="sudo mkdir -m 777 ${drive_path}"
+if [ -n "$dst_dir" ] && [ ! -d "$dst_dir" ]; then
+    mkdir -p "$dst_dir"
+    cmd_status=$?
+    if (( cmd_status != 0 )); then
+        echo_e "Received non-zero exit status (${cmd_status}) from mkdir command"
+        echo_e "mkdir -p ${dst_dir}"
+        echo_e "Exiting before copying file(s)"
+        exit_script_with_status 1
     fi
-    echo -e "-> Initializing drive path with command:\n    ${cmd}"
-    if [ "$dryrun" = false ]; then
-        eval "$cmd"
-    fi
-
-    fstab_drive_line="${drive_upper}: /mnt/${drive_lower} drvfs defaults 0 0"
-    fstab_line_exists=$(grep "$fstab_drive_line" "/etc/fstab")
-    if [ -n "$fstab_line_exists" ]; then
-        echo -e "-> Drive setting already exists in /etc/fstab:\n    ${fstab_drive_line}"
-    else
-        cmd="sudo bash -c 'echo ${drive_upper}: /mnt/${drive_lower} drvfs defaults 0 0 >> /etc/fstab'"
-        echo -e "-> Adding drive setting to /etc/fstab with command:\n    ${cmd}"
-        if [ "$dryrun" = false ]; then
-            eval "$cmd"
-        fi
-    fi
-done
-echo
-
-cmd="sudo mount -a"
-echo -e "Mounting all drives with command:\n    ${cmd}"
-if [ "$dryrun" = false ]; then
-    eval "$cmd"
-    echo -e "\nDone!"
 fi
+
+
+## Perform copying
+
+cp "${script_args[@]}"

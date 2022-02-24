@@ -41,7 +41,7 @@ process_items() {
     local item
     if (( $# > 0 )); then
         if [ "$pipe_in_items" = true ]; then
-            eval "printf '%s\n' \"$@\" | ${process_func}"
+            eval "printf '%s\n' \"\$@\" | ${process_func}"
             while (( $# > 0 )); do shift; done
         else
             while (( $# > 0 )); do
@@ -87,7 +87,7 @@ echo_oe() { echo "$@" | tee >(cat >&2); }
 base10() { print_string "$((10#$1))"; }
 
 escape_regex_special_chars() {
-    local special_chars_arr=( '^' '.' '+' '*' '?' '|' '\\' '(' ')' '[' ']' '{' '}' '$' )
+    local special_chars_arr=( '^' '.' '+' '*' '?' '|' '/' '\\' '(' ')' '[' ']' '{' '}' '$' )
     local str_in="$1"
     local str_out=''
     local i char
@@ -104,21 +104,21 @@ escape_regex_special_chars() {
 string_to_uppercase() { print_string "$@" | tr '[:lower:]' '[:upper:]'; }
 string_to_lowercase() { print_string "$@" | tr '[:upper:]' '[:lower:]'; }
 
-#string_lstrip() { print_string "$1" | sed -r "s|^($(escape_regex_special_chars "$2"))+||"; }
-#string_rstrip() { print_string "$1" | sed -r "s|($(escape_regex_special_chars "$2"))+$||"; }
+#string_lstrip() { print_string "$1" | sed -r "s/^($(escape_regex_special_chars "$2"))+//"; }
+#string_rstrip() { print_string "$1" | sed -r "s/($(escape_regex_special_chars "$2"))+$//"; }
 
 string_lstrip() {
     local string_in="$1"
     local strip_substr=''
     local string_stripped=''
 
-    if (( $# >= 2 )); then
-        strip_substr="$2"
+    if (( $# >= 2 )) && [ -n "$2" ]; then
+        strip_substr="$(escape_regex_special_chars "$2")"
     else
         strip_substr='[[:space:]]'
     fi
 
-    string_stripped=$(print_string "$string_in" | sed -r "s|^($(escape_regex_special_chars "$strip_substr"))+||")
+    string_stripped=$(print_string "$string_in" | sed -r "s/^($(print_string "$strip_substr"))+//")
 
     print_string "$string_stripped"
 }
@@ -128,13 +128,13 @@ string_rstrip() {
     local strip_substr=''
     local string_stripped=''
 
-    if (( $# >= 2 )); then
-        strip_substr="$2"
+    if (( $# >= 2 )) && [ -n "$2" ]; then
+        strip_substr="$(escape_regex_special_chars "$2")"
     else
         strip_substr='[[:space:]]'
     fi
 
-    string_stripped=$(print_string "$string_in" | sed -r "s|($(escape_regex_special_chars "$strip_substr"))+$||")
+    string_stripped=$(print_string "$string_in" | sed -r "s/($(print_string "$strip_substr"))+$//")
 
     print_string "$string_stripped"
 }
@@ -147,7 +147,7 @@ string_strip() {
     if (( $# >= 2 )); then
         strip_substr="$2"
     else
-        strip_substr='[[:space:]]'
+        strip_substr=''
     fi
 
     string_stripped=$(string_lstrip "$string_in" "$strip_substr")
@@ -156,9 +156,43 @@ string_strip() {
     print_string "$string_stripped"
 }
 
+string_strip_around_delim() {
+    local string_in delim strip_substr
+
+    strip_substr=''
+
+    if [[ -p /dev/stdin ]]; then
+        delim="$1"
+        if (( $# >= 2 )); then
+            strip_substr="$2"
+        fi
+    else
+        string_in="$1"
+        delim="$2"
+        if (( $# >= 3 )); then
+            strip_substr="$3"
+        fi
+    fi
+
+    delim="$(escape_regex_special_chars "$delim")"
+    if [ -n "$strip_substr" ]; then
+        strip_substr="$(escape_regex_special_chars "$strip_substr")"
+    else
+        strip_substr='[[:space:]]'
+    fi
+
+    local sed_cmd="sed -r 's/^(${strip_substr})*//; s/(${strip_substr})*${delim}(${strip_substr})*/${delim}/g; s/(${strip_substr})*$//;'"
+
+    if [[ -p /dev/stdin ]]; then
+        eval "$sed_cmd"
+    else
+        eval "print_string \"${string_in}\" | ${sed_cmd}"
+    fi
+}
+
 string_rstrip_decimal_zeros() { print_string "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
 
-collapse_repeated_substring() { print_string "$1" | sed -r "s|($(escape_regex_special_chars "$2"))+|\1|g"; }
+collapse_repeated_substring() { print_string "$1" | sed -r "s/($(escape_regex_special_chars "$2"))+/\1/g"; }
 
 string_join() { local IFS="$1"; shift; print_string "$*"; }
 
@@ -231,56 +265,134 @@ string_common_prefix() {
 }
 
 parse_xml_value() {
-    local xml_tag="$1"
-    grep -Po "<${xml_tag}>(.*?)</${xml_tag}>" | sed -r "s|<${xml_tag}>(.*?)</${xml_tag}>|\1|"
+    local xml_tag=$(escape_regex_special_chars "$1")
+    grep -Po "<${xml_tag}>(.*?)</${xml_tag}>" | sed -r "s/<${xml_tag}>(.*?)</${xml_tag}>/\1/"
 }
 
 
 ## Filesystem path testing
 
-parent_dir_exists() {
+parent_dir_exists_0() {
     local dirent="$(string_rstrip "$1" '/')"
     local parent_dir="${dirent%/*}"
-    if [ -d "$parent_dir" ]; then
+    [ -d "$parent_dir" ];
+}
+dirent_is_empty_0() {
+    find 2>/dev/null -L "$1" -prune -empty | grep -q '.'
+#    { [ -e "$1" ] && [ ! -s "$1" ]; };
+}
+dir_is_empty_0() {
+    find 2>/dev/null -L "$1" -type d -prune -empty | grep -q '.'
+#    { [ -d "$1" ] && [ ! -s "$1" ]; };
+}
+file_is_empty_0() {
+#    find 2>/dev/null -L "$1" -type f -prune -empty | grep -q '.'
+    { [ -f "$1" ] && [ ! -s "$1" ]; };
+}
+dirent_not_empty_0() {
+    find 2>/dev/null -L "$1" -prune ! -empty | grep -q '.'
+#    { [ -e "$1" ] && [ -s "$1" ]; };
+}
+dir_not_empty_0() {
+    find 2>/dev/null -L "$1" -type d -prune ! -empty | grep -q '.'
+#    { [ -d "$1" ] && [ -s "$1" ]; };
+}
+file_not_empty_0() {
+#    find 2>/dev/null -L "$1" -type f -prune ! -empty | grep -q '.'
+    { [ -f "$1" ] && [ -s "$1" ]; };
+}
+
+parent_dir_exists() {
+    if parent_dir_exists_0 "$1"; then
         echo true
     else
         echo false
     fi
 }
-
 dirent_is_empty() {
     local dirent="$1"
     if [ ! -e "$dirent" ]; then
-        echo_e "Path does not exist: ${dirent}"
+        echo_e "dirent_is_empty: file/directory does not exist: ${dirent}"
         echo false
-    elif [ -n "$(find "$1" -prune -empty)" ]; then
+        return 1
+    elif dirent_is_empty_0 "$dirent"; then
         echo true
+        return 0
     else
         echo false
-    fi
-}
-file_is_empty() {
-    local file="$1"
-    if [ ! -f "$file" ]; then
-        echo_e "Invalid file path: ${file}"
-        echo false
-    else
-        dirent_is_empty "$file"
+        return 1
     fi
 }
 dir_is_empty() {
-    local dir="$1"
-    if [ ! -d "$dir" ]; then
-        echo_e "Invalid directory path: ${dir}"
+    local dirent="$1"
+    if [ ! -d "$dirent" ]; then
+        echo_e "dir_is_empty: invalid directory path: ${dirent}"
         echo false
+        return 1
+    elif dir_is_empty_0 "$dirent"; then
+        echo true
+        return 0
     else
-        dirent_is_empty "$dir"
+        echo false
+        return 1
     fi
 }
-
-dirent_is_empty_0() { [ "$(dirent_is_empty "$@")" = true ]; }
-file_is_empty_0() { [ "$(file_is_empty "$@")" = true ]; }
-dir_is_empty_0() { [ "$(dir_is_empty "$@")" = true ]; }
+file_is_empty() {
+    local dirent="$1"
+    if [ ! -f "$dirent" ]; then
+        echo_e "file_is_empty: invalid file path: ${dirent}"
+        echo false
+        return 1
+    elif file_is_empty_0 "$dirent"; then
+        echo true
+        return 0
+    else
+        echo false
+        return 1
+    fi
+}
+dirent_not_empty() {
+    local dirent="$1"
+    if [ ! -e "$dirent" ]; then
+        echo_e "dirent_not_empty: file/directory does not exist: ${dirent}"
+        echo false
+        return 1
+    elif dirent_not_empty_0 "$dirent"; then
+        echo true
+        return 0
+    else
+        echo false
+        return 1
+    fi
+}
+dir_not_empty() {
+    local dirent="$1"
+    if [ ! -d "$dirent" ]; then
+        echo_e "dir_not_empty: invalid directory path: ${dirent}"
+        echo false
+        return 1
+    elif dir_not_empty_0 "$dirent"; then
+        echo true
+        return 0
+    else
+        echo false
+        return 1
+    fi
+}
+file_not_empty() {
+    local dirent="$1"
+    if [ ! -f "$dirent" ]; then
+        echo_e "file_not_empty: invalid file path: ${dirent}"
+        echo false
+        return 1
+    elif file_not_empty_0 "$dirent"; then
+        echo true
+        return 0
+    else
+        echo false
+        return 1
+    fi
+}
 
 
 ## Path representation
@@ -300,18 +412,30 @@ fullpath_alias() {
         fullpath_fn="pwd"
     fi
     pushd . >/dev/null
-    if [ -d "$path" ]; then
-        cd "$path" || { echo "Failed to access path" ; return; }
-        eval "$fullpath_fn"
-    else
-        cd "$(dirname "$path")" || { echo "Failed to access path" ; return; }
-        local path_parent_dir=$(eval "$fullpath_fn")
-        local path_basename=$(basename "$path")
-        if [ "$path_parent_dir" = '/' ]; then
-            echo "${path_parent_dir}${path_basename}"
+    local path_prefix="$path"
+    local path_suffix=''
+    while true; do
+        if [ -d "$path_prefix" ]; then
+            break
+        elif [ "$path_prefix" = '/' ] || [ "$path_prefix" = '.' ]; then
+            break
         else
-            echo "${path_parent_dir}/${path_basename}"
+            if [ -z "$path_suffix" ]; then
+                path_suffix=$(basename "$path_prefix")
+            else
+                path_suffix="$(basename "$path_prefix")/${path_suffix}"
+            fi
+            path_prefix=$(dirname "$path_prefix")
         fi
+    done
+    cd "$path_prefix" || { echo_e "Failed to access path: ${path_prefix}" ; return; }
+    path_prefix=$(eval "$fullpath_fn")
+    if [ -z "$path_suffix" ]; then
+        echo "$path_prefix"
+    elif [ "$path_prefix" = '/' ]; then
+        echo "${path_prefix}${path_suffix}"
+    else
+        echo "${path_prefix}/${path_suffix}"
     fi
     popd >/dev/null
 }
@@ -330,11 +454,39 @@ abspath() {
         return 1
     fi
     local path="$1"
+    local readlink_status=1
     if [ "$READLINK_F_AVAILABLE" = true ]; then
         readlink -f "$path"
-    else
+        readlink_status=$?
+    fi
+    if (( readlink_status != 0 )); then
         fullpath_alias "$path" true
     fi
+}
+
+fullpath_e() {
+    if (( $# != 1 )); then
+        echo_e "fullpath_e: expected one path operand"
+        return 1
+    fi
+    local path="$1"
+    if [ ! -e "$path" ]; then
+        echo_e "fullpath_e: path does not exist: ${path}"
+        return 1
+    fi
+    fullpath "$path"
+}
+abspath_e() {
+    if (( $# != 1 )); then
+        echo_e "abspath_e: expected one path operand"
+        return 1
+    fi
+    local path="$1"
+    if [ ! -e "$path" ]; then
+        echo_e "abspath_e: path does not exist: ${path}"
+        return 1
+    fi
+    abspath "$path"
 }
 
 preserve_trailing_slash_alias() {
@@ -402,6 +554,12 @@ abspath_all() {
 fullpath_all() {
     process_items 'fullpath' false true "$@"
 }
+abspath_all_e() {
+    process_items 'abspath_e' false true "$@"
+}
+fullpath_all_e() {
+    process_items 'fullpath_e' false true "$@"
+}
 basename_all() {
     process_items 'basename' false true "$@"
 }
@@ -409,34 +567,56 @@ dirname_all() {
     process_items 'dirname' false true "$@"
 }
 
-pathfromend() {
+cut_slice_alias() {
+    local func_name="$1"; shift
+    local item_type="$1"; shift
+    local delimiter="$1"; shift
+    local reverse="$1"; shift
+    local idx_a idx_b
+    local idx_start idx_end
+
     if (( $# < 1 )); then
-        echo_e "fullpath_preserve_trailing_slash: expected one path operand"
+        echo_e "${func_name}: first one or two arguments must be nonzero indices from end, like '2-1' or '2 1', respectively"
         return 1
     fi
-    local start_idx end_idx
+
     if [[ $1 == *-* ]]; then
-        start_idx=$(echo "$1" | cut -d'-' -f1)
-        end_idx=$(echo "$1" | cut -d'-' -f2)
+        idx_a=$(echo "$1" | cut -d'-' -f1)
+        idx_b=$(echo "$1" | cut -d'-' -f2)
         shift
     elif (( $# >= 2 )); then
-        start_idx="$1"; shift
-        end_idx="$1"; shift
+        idx_a="$1"; shift
+        idx_b="$1"; shift
     fi
-    if [ "$(string_is_posint "$start_idx")" = false ] || [ "$(string_is_posint "$end_idx")" = false ]; then
-        echo_e "pathfromend: first one or two arguments must be nonzero indices from end, like '2-1' or '2 1'"
+
+    if [ "$(string_is_posint "$idx_a")" = false ] || [ "$(string_is_posint "$idx_b")" = false ]; then
+        echo_e "${func_name}: first one or two arguments must be nonzero indices from end, like '2-1' or '2 1'"
         return 1
     fi
     if ! [[ -p /dev/stdin ]] && (( $# == 0 )); then
-        echo_e "pathfromend: expected one or more path operand after index arguments"
+        echo_e "${func_name}: expected one or more ${item_type} operands after index arguments, or piped in on separate lines"
         return 1
     fi
-    if (( start_idx < end_idx )); then
-        local temp_idx="$start_idx"
-        start_idx="$end_idx"
-        end_idx="$temp_idx"
+
+    if (( idx_a < idx_b )); then
+        idx_start="$idx_a"
+        idx_end="$idx_b"
+    else
+        idx_start="$idx_b"
+        idx_end="$idx_a"
     fi
-    start_idx="-${start_idx}"
-    cmd="rev | cut -d'/' -f${end_idx}${start_idx} | rev"
+
+    cmd="cut -d'${delimiter}' -f${idx_start}-${idx_end}"
+
+    if [ "$reverse" = true ]; then
+        cmd="rev | ${cmd} | rev"
+    fi
+
     process_items "$cmd" true false "$@"
+}
+pathfrombegin() {
+    cut_slice_alias pathfrombegin 'path' '/' false "$@"
+}
+pathfromend() {
+    cut_slice_alias pathfromend 'path' '/' true "$@"
 }

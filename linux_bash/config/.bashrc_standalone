@@ -73,10 +73,10 @@ fi
 export SYSTEM_CLEAR_LOC=$(which clear 2>/dev/null)  # Used in .bashrc_over_ssh wrapper
 
 # >>> FILL OUT OR COMMENT OUT THE FOLLOWING LINES <<< #
-SHELL_UTILS_PATH="<path-to>/shell-utils"  # Necessary for sourcing general purpose shell functions
-export MY_EMAIL="<your-email-address>"  # Necessary for shell-utils 'email_me' script
+SHELL_UTILS_PATH="path-to/shell-utils"  # Necessary for sourcing general purpose shell functions
+export MY_EMAIL="your-email-address"  # Necessary for shell-utils 'email_me' script
 export PATH="${PATH}:${SHELL_UTILS_PATH}/linux_bash/exec"  # Easily call shell-utils executable scripts
-#export PATH="${PATH}:<path-to>/pyscript-utils"  # Easily call pyscript-utils executable scripts
+#export PATH="${PATH}:path-to/pyscript-utils"  # Easily call pyscript-utils executable scripts
 
 # Remove duplicate PATH entries, preserving order
 export PATH="$(LANG=C perl -e 'print join(":", grep { not $seen{$_}++ } split(/:/, $ENV{PATH}))')"
@@ -225,8 +225,7 @@ layz() {
 ## File operations
 
 link_or_copy() {
-    ln -f "$@"
-    if (( $? != 0 )); then
+    if ! ln -f "$@"; then
         cp "$@"
     fi
 }
@@ -336,6 +335,8 @@ read_csv() {
     fi
 
     local read_status IFS
+    local csv_line csv_line_arr
+    csv_line=''
 
     if [ "$SHELL_UTILS_READ_CSV_IP" = false ]; then
         SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR=()
@@ -346,38 +347,62 @@ read_csv() {
         if (( read_status != 0 )); then return "$read_status"; fi
         IFS="$csv_delim" read -ra get_fields_arr <<< "$get_fields"
         IFS="$csv_delim" read -ra header_fields_arr <<< "$header_line"
-        local field_name field_idx
-        for field_name in "${get_fields_arr[@]}"; do
+        local get_field_idx field_name field_idx
+        local get_field_in_header=false
+        local first_missing_get_field=''
+        for get_field_idx in "${!get_fields_arr[@]}"; do
+            field_name="${get_fields_arr[${get_field_idx}]}"
             eval "unset ${field_name}"
             field_idx=$(indexOf "$field_name" "${header_fields_arr[@]}")
-            if (( field_idx == -1 )); then
-                echo "ERROR: Cannot find field name '${field_name}' in CSV header" >&2
+            if (( field_idx == -1 )) && [ -z "$first_missing_get_field" ]; then
+                first_missing_get_field="$field_name"
+            fi
+            if (( field_idx == -1 )) && [ "$get_field_in_header" = false ]; then
+                field_idx="$get_field_idx"
+            elif (( field_idx == -1 )) || [ -n "$first_missing_get_field" ]; then
+                echo "ERROR: Cannot find field name '${first_missing_get_field}' in CSV header" >&2
                 unset SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR
                 unset SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR
                 return 1
+            else
+                get_field_in_header=true
             fi
             SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR+=( "$field_name" )
             SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR+=( "$field_idx" )
         done
+        if [ -n "$first_missing_get_field" ]; then
+            # No 'get fields' match strings in first row of CSV,
+            # so assume the CSV has no header and match order of
+            # 'get fields' to the order of CSV columns.
+            csv_line="$header_line"
+            csv_line_arr=("${header_fields_arr[@]}")
+        fi
         SHELL_UTILS_READ_CSV_IP=true
     fi
 
-    local csv_line csv_line_arr
-
-    IFS= read -r csv_line
-    read_status=$?
-    if (( read_status != 0 )); then
-        SHELL_UTILS_READ_CSV_IP=false
-        unset SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR
-        unset SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR
-        local field_name
-        for field_name in "${SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR[@]}"; do
-            eval "unset ${field_name}"
-        done
-        return "$read_status"
+    if [ -z "$csv_line" ]; then
+        IFS= read -r csv_line
+        read_status=$?
+        if (( read_status != 0 )); then
+            if [ -n "$csv_line" ]; then
+                # This is likely the case where we're reading
+                # the last line of input and it doesn't have
+                # a trailing newline so 'read' has a nonzero
+                # exit status. We still want to parse this line.
+                read_status=0
+            else
+                SHELL_UTILS_READ_CSV_IP=false
+                unset SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR
+                unset SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR
+                local field_name
+                for field_name in "${SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR[@]}"; do
+                    eval "unset ${field_name}"
+                done
+                return "$read_status"
+            fi
+        fi
+        IFS="$csv_delim" read -ra csv_line_arr <<< "$csv_line"
     fi
-
-    IFS="$csv_delim" read -ra csv_line_arr <<< "$csv_line"
 
     local i field_name field_idx field_val
     for i in "${!SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR[@]}"; do
@@ -392,6 +417,11 @@ read_csv() {
 
 
 ## Distill information
+
+du_k() { du --block-size=1K "$@" | awk '{print $1}'; }
+du_m() { du --block-size=1M "$@" | awk '{print $1}'; }
+du_g() { du --block-size=1G "$@" | awk '{print $1}'; }
+du_t() { du --block-size=1T "$@" | awk '{print $1}'; }
 
 wc_nlines() {
     process_items 'wc -l' false true "$@" | awk '{print $1}'
@@ -428,10 +458,13 @@ get_stats() {
     perl_cmd=''\
 'use List::Util qw(max min sum);'\
 '@num_list=(); while(<>){ $sqsum+=$_*$_; push(@num_list,$_); };'\
-'$nitems=@num_list; $sum=sum(@num_list); $avg=$sum/$nitems; $max=max(@num_list)+0; $min=min(@num_list)+0;'\
+'$nitems=@num_list;'\
+'if ($nitems == 0) { $sum=0; $min=0; $max=0; $med=0; $avg=0; $std=0; } else {'\
+'$sum=sum(@num_list); $avg=$sum/$nitems; $max=max(@num_list)+0; $min=min(@num_list)+0;'\
 '$std=sqrt($sqsum/$nitems-($sum/$nitems)*($sum/$nitems));'\
-'$mid=int $nitems/2; @srtd=sort @num_list; if($nitems%2){ $med=$srtd[$mid]+0; }else{ $med=($srtd[$mid-1]+$srtd[$mid])/2; };'\
-'print "cnt: ${nitems}\nsum: ${sum}\nmin: ${min}\nmax: ${max}\nmed: ${med}\navg: ${avg}\nstd: ${std}\n";'
+'$mid=int $nitems/2; @srtd=sort @num_list; if($nitems%2){ $med=$srtd[$mid]+0; }else{ $med=($srtd[$mid-1]+$srtd[$mid])/2; }; };'\
+'print "cnt: ${nitems}\nsum: ${sum}\nmin: ${min}\nmax: ${max}\nmed: ${med}\navg: ${avg}\nstd: ${std}\n";'\
+'if ($nitems == 0) { exit(1); } else { exit(0); };'
     perl -e "$perl_cmd"
 }
 
@@ -444,14 +477,18 @@ get_stats() {
 find_alias() {
     local find_func_name="$1"; shift
 
-    local opt_args_1 pos_args opt_args_2 debug depth_arg_provided stock_depth_args find_cmd_suffix
+    local opt_args_1 path_args opt_args_2 debug depth_arg_provided stock_depth_args find_cmd_suffix
     opt_args_1=()
-    pos_args=()
+    path_args=()
     opt_args_2=()
     debug=false
     depth_arg_provided=false
     stock_depth_args=''
     find_cmd_suffix=''
+
+    local findup_direct=false
+    local findup_minheight=''
+    local findup_maxheight=''
 
     local parsing_opt_args arg arg_opt argval
     parsing_opt_args=false
@@ -463,10 +500,21 @@ find_alias() {
             if [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ] || [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
                 debug=true
                 shift; continue
-            elif [ "$arg_opt" = 'mindepth' ]; then
+            elif [ "$find_func_name" = 'findup' ] && [ "$arg_opt" = 'direct' ]; then
+                findup_direct=true
+                shift; continue
+            elif [ "$find_func_name" = 'findup' ] && [ "$arg_opt" = 'minheight' ]; then
+                findup_minheight="$2"
+                shift; shift; continue
+            elif [ "$find_func_name" = 'findup' ] && [ "$arg_opt" = 'maxheight' ]; then
+                findup_maxheight="$2"
+                shift; shift; continue
+            elif [ "$arg_opt" = 'mindepth' ] || [ "$arg_opt" = 'maxdepth' ]; then
                 depth_arg_provided=true
-            elif [ "$arg_opt" = 'maxdepth' ]; then
-                depth_arg_provided=true
+                if [ "$find_func_name" = 'findup' ]; then
+                    echo_e "findup: mindepth/maxdepth options are not supported, use minheight/maxheight instead"
+                    return
+                fi
             elif [ "$arg_opt" = 'H' ] || [ "$arg_opt" = 'L' ] || [ "$arg_opt" = 'P' ]; then
                 opt_args_1+=( "$arg" )
                 shift; parsing_opt_args=false; continue
@@ -485,30 +533,71 @@ find_alias() {
             fi
             opt_args_2+=( "$arg" )
         else
-            pos_args+=( "$arg" )
+            path_args+=( "$arg" )
         fi
         shift
     done
 
-    local stock_depth_funcs=( 'findl' 'findls' 'findlsh' )
-    if [ "$(itemOneOf "$find_func_name" "${stock_depth_funcs[@]}")" = true ] && [ "$depth_arg_provided" = false ]; then
-        stock_depth_args='-mindepth 1 -maxdepth 1'
-    fi
+    if [ "$find_func_name" = 'findup' ]; then
+        local path_src path_tmp depth_args
+        if (( ${#path_args[@]} == 0 )); then
+            path_args+=( '.' )
+        fi
+        for path_src in "${path_args[@]}"; do
+            path_tmp=$(fullpath "$path_src")
+            depth=0
+            while true; do
+                if [ -n "$findup_maxheight" ] && (( depth > findup_maxheight )); then
+                    break
+                fi
+                if [ "$findup_direct" = true ] || (( depth == 0 )) || [ "$path_tmp" = '/' ]; then
+                    depth_args="-mindepth 0 -maxdepth 0"
+                else
+                    depth_args="-mindepth 1 -maxdepth 1"
+                fi
+                if [ -z "$findup_minheight" ] || (( depth >= findup_minheight )); then
+                    cmd="find ${opt_args_1[*]} \"${path_tmp}\" ${depth_args} ${opt_args_2[*]} ${find_cmd_suffix}"
+                    if [ "$debug" = true ]; then
+                        echo "$cmd"
+                    else
+                        eval "$cmd"
+                    fi
+                fi
+                if [ "$path_tmp" = '/' ]; then
+                    break
+                fi
+                path_tmp=$(dirname "$path_tmp")
+                if [ "$findup_direct" = false ] && (( depth == 0 )); then
+                    path_tmp=$(dirname "$path_tmp")
+                fi
+                ((depth++))
+            done
+        done
 
-    if [ "$find_func_name" = 'findl' ]; then
-        find_cmd_suffix=''
-    elif [ "$find_func_name" = 'findls' ]; then
-        find_cmd_suffix="-ls | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
-    elif [ "$find_func_name" = 'findlsh' ]; then
-        find_cmd_suffix=" -type f -exec ls -lh {} \; | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
-    fi
-
-    cmd="find ${opt_args_1[*]} ${pos_args[*]} ${stock_depth_args} ${opt_args_2[*]} ${find_cmd_suffix}"
-    if [ "$debug" = true ]; then
-        echo "$cmd"
     else
-        eval "$cmd"
+        local stock_depth_funcs=( 'findl' 'findls' 'findlsh' )
+        if [ "$(itemOneOf "$find_func_name" "${stock_depth_funcs[@]}")" = true ] && [ "$depth_arg_provided" = false ]; then
+            stock_depth_args="-mindepth 1 -maxdepth 1"
+        fi
+
+        if [ "$find_func_name" = 'findl' ]; then
+            find_cmd_suffix=''
+        elif [ "$find_func_name" = 'findls' ]; then
+            find_cmd_suffix="-ls | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+        elif [ "$find_func_name" = 'findlsh' ]; then
+            find_cmd_suffix=" -type f -exec ls -lh {} \; | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+        fi
+
+        cmd="find ${opt_args_1[*]} ${path_args[*]} ${stock_depth_args} ${opt_args_2[*]} ${find_cmd_suffix}"
+        if [ "$debug" = true ]; then
+            echo "$cmd"
+        else
+            eval "$cmd"
+        fi
     fi
+}
+findup() {
+    find_alias findup "$@"
 }
 findl() {
     find_alias findl "$@"
@@ -520,14 +609,15 @@ findlsh() {
     find_alias findlsh "$@"
 }
 findst() {
-    find_alias findls "$1" -mindepth 0 -maxdepth 0
+    find_alias findls "$@" -mindepth 0 -maxdepth 0
 }
 find_missing_suffix() {
-    local search_dir base_suffix check_suffix_arr
+    local search_dir base_suffix check_suffix_arr suffix_exist_cond debug
     search_dir="$1"; shift
     base_suffix="$1"; shift
-    suffix_exist_cond='all'
     check_suffix_arr=()
+    suffix_exist_cond='all'
+    debug=false
 
     local arg
     while (( "$#" )); do
@@ -536,7 +626,9 @@ find_missing_suffix() {
             check_suffix_arr+=( "$arg" )
         else
             arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
-            if [ "$arg_opt" = 'any' ]; then
+            if [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ] || [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+                debug=true
+            elif [ "$arg_opt" = 'any' ]; then
                 suffix_exist_cond='any'
             elif [ "$arg_opt" = 'all' ]; then
                 suffix_exist_cond='all'
@@ -553,14 +645,41 @@ find_missing_suffix() {
         require_all_suffix_exist=false
     fi
 
-    suffix_list=$(printf '"%s" ' "${check_suffix_arr[@]}")
-    if [ -n "$base_suffix" ]; then
-        suffix_sub_expr='${base_dirent/'"${base_suffix}"'/${suffix}}'
-    else
-        suffix_sub_expr='${base_dirent}${suffix}'
-    fi
+    if [ "$debug" = true ]; then
+        find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -print0 -debug
 
-    find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -exec bash -c 'base_dirent={}; require_all_suffix_exist='"$require_all_suffix_exist"'; all_exist=true; some_exist=false; for suffix in '"$suffix_list"'; do check_dirent="'"$suffix_sub_expr"'"; if [ -e "$check_dirent" ]; then some_exist=true; else all_exist=false; fi; if [ "$require_all_suffix_exist" = true ]; then if [ "$all_exist" = false ]; then echo "$base_dirent"; exit; fi; elif [ "$some_exist" = true ]; then exit; fi; done; if [ "$some_exist" = false ]; then echo "$base_dirent"; fi;' \;
+    elif [ "$require_all_suffix_exist" = true ]; then
+        while IFS= read -r -d '' base_dirent; do
+            base_dirent_nosuff="${base_dirent%"${base_suffix}"}"
+            all_exist=true
+            for suffix in "${check_suffix_arr[@]}"; do
+                check_dirent="${base_dirent_nosuff}${suffix}"
+                if [ ! -e "$check_dirent" ]; then
+                    all_exist=false
+                    break
+                fi
+            done
+            if [ "$all_exist" = false ]; then
+                echo "$base_dirent"
+            fi
+        done < <(find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -print0)
+
+    elif [ "$require_all_suffix_exist" = false ]; then
+        while IFS= read -r -d '' base_dirent; do
+            base_dirent_nosuff="${base_dirent%"${base_suffix}"}"
+            some_exist=false
+            for suffix in "${check_suffix_arr[@]}"; do
+                check_dirent="${base_dirent_nosuff}${suffix}"
+                if [ -e "$check_dirent" ]; then
+                    some_exist=true
+                    break
+                fi
+            done
+            if [ "$some_exist" = false ]; then
+                echo "$base_dirent"
+            fi
+        done < <(find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -print0)
+    fi
 }
 
 
@@ -626,7 +745,7 @@ git_cmd_in() {
     local ssh_passphrase=''
 
     ## Custom globals
-    local git_cmd_choices=( 'clone' 'branch' 'stash' 'apply' 'stash apply' 'pull' 'push' )
+    local git_cmd_choices=( 'clone' 'branch' 'status' 'stash' 'apply' 'stash apply' 'pull' 'push' )
     local git_cmd_need_ssh_arr=( 'clone' 'pull' 'push' )
     local start_dir repo_dir_arr repo_dir repo_name
 
@@ -658,7 +777,7 @@ EOM
             arg_opt="$(string_lstrip "$arg" '-')"
             arg_opt_nargs=''
             if [ "$(string_contains "$arg_opt" '=')" = true ]; then
-                arg_val="${arg_opt#*=}"
+                arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
                 arg_opt="${arg_opt%%=*}"
                 arg_opt_nargs_do_shift=false
             else
@@ -727,6 +846,9 @@ EOM
 
 git_branch_in() {
     git_cmd_in branch branch "$@"
+}
+git_status_in() {
+    git_cmd_in status status "$@"
 }
 git_pull_in() {
     local func_args_in=("$@")
@@ -818,7 +940,10 @@ rsync_alias() {
         arg="$1"; shift
         if [[ $arg == -* ]]; then
             arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
-            if [ "$arg_opt" == 'dryrun' ]; then
+            if [ "$arg_opt" == 'dr' ] || [ "$arg_opt" == 'dryrun' ]; then
+                dryrun=true
+                continue
+            elif [ "$arg_opt" == 'db' ] || [ "$arg_opt" == 'debug' ]; then
                 dryrun=true
                 continue
             elif [ "$arg_opt" == 'to-host' ] || [ "$arg_opt" == 'from-host' ]; then

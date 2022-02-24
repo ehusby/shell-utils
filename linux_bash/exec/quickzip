@@ -30,7 +30,8 @@ zipfile=''
 force_glob=false
 zip_on_ext=false
 zip_ext='.zip'
-fwd_args_arr=()
+fwd_args_arr_1=()
+fwd_args_arr_2=()
 dryrun=false
 
 ## Custom globals
@@ -78,6 +79,7 @@ Options:
         When SRC_PATH is the full path to an existing file/folder,
         force treating all SRC_PATH arguments as prefixes matching
         additional files/folders in the same directories.
+-db,--debug
 -dr,--dryrun
         Print command(s) used to zip files/folders, without executing.
 EOM
@@ -104,17 +106,29 @@ while (( "$#" )); do
                 arg_opt_nargs=0
                 echo "$script_usage"
                 exit 0
+            elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+                dryrun=true
             elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
                 dryrun=true
             else
                 is_fwd_arg=true
+                fwd_arg_pos=1
+                if [ "$arg_opt" = 'i' ] || [ "$arg_opt" = 'include' ]; then
+                    fwd_arg_pos=2
+                elif [ "$arg_opt" = 'x' ] || [ "$arg_opt" = 'exclude' ]; then
+                    fwd_arg_pos=2
+                fi
             fi
         fi
         if [ "$is_fwd_arg" = true ]; then
             if [ "$(string_contains "$arg" '*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
                 arg="'${arg}'"
             fi
-            fwd_args_arr+=( "$arg" )
+            if (( fwd_arg_pos == 1 )); then
+                fwd_args_arr_1+=( "$arg" )
+            elif (( fwd_arg_pos == 2 )); then
+                fwd_args_arr_2+=( "$arg" )
+            fi
         fi
 
     elif [ "$(string_startswith "$arg" '-')" = false ]; then
@@ -124,7 +138,7 @@ while (( "$#" )); do
         arg_opt="$(string_lstrip "$arg" '-')"
         arg_opt_nargs=''
         if [ "$(string_contains "$arg_opt" '=')" = true ]; then
-            arg_val="${arg_opt#*=}"
+            arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
             arg_opt="${arg_opt%%=*}"
             arg_opt_nargs_do_shift=false
         else
@@ -153,6 +167,10 @@ while (( "$#" )); do
         elif [ "$arg_opt" = 'g' ] || [ "$arg_opt" = 'glob' ]; then
             arg_opt_nargs=0
             force_glob=true
+
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+            arg_opt_nargs=0
+            dryrun=true
 
         elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
@@ -237,7 +255,8 @@ for src_path in "${src_path_arr[@]}"; do
     src_fullpath_arr+=( "$(fullpath_preserve_trailing_slash "$src_path")" )
 done
 
-zip_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
+zip_opt_args_1="${fwd_args_arr_1[*]+${fwd_args_arr_1[*]}}"
+zip_opt_args_2="${fwd_args_arr_2[*]+${fwd_args_arr_2[*]}}"
 
 
 ## Perform zipping
@@ -277,7 +296,7 @@ for src_path in "${src_fullpath_arr[@]}"; do
         src_dirent_arr=( "$src_path_basename" )
     fi
 
-    cmd="zip -r ${zip_opt_args} \"${dst_zipfile}\" $(printf ' "%s"' "${src_dirent_arr[@]}")"
+    cmd="zip -r ${zip_opt_args_1} \"${dst_zipfile}\" $(printf ' "%s"' "${src_dirent_arr[@]}") ${zip_opt_args_2}"
 
     if [ "$dryrun" = true ]; then
         echo "$cmd"

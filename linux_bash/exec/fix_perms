@@ -63,6 +63,7 @@ Options:
         Include files/dirs that match this pattern.
         This option can be provided multiple times to include
         multiple file patterns.
+-db,--debug
 -dr,--dryrun
         Print command used to modify file/folder permissions,
         without executing.
@@ -114,7 +115,7 @@ while (( "$#" )); do
         arg_opt="$(string_lstrip "$arg" '-')"
         arg_opt_nargs=''
         if [ "$(string_contains "$arg_opt" '=')" = true ]; then
-            arg_val="${arg_opt#*=}"
+            arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
             arg_opt="${arg_opt%%=*}"
             arg_opt_nargs_do_shift=false
         else
@@ -139,6 +140,10 @@ while (( "$#" )); do
         elif [ "$arg_opt" = 'n' ] || [ "$arg_opt" = 'name' ]; then
             arg_opt_nargs=1
             namepat_arr+=( "$arg_val" )
+
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+            arg_opt_nargs=0
+            dryrun=true
 
         elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
@@ -270,4 +275,7 @@ for srcpath in "${srcpath_arr[@]}"; do
     fi
 done
 
-echo "Done!"
+
+if [ "$dryrun" = false ]; then
+    echo "Done!"
+fi

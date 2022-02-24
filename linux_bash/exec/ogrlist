@@ -1,0 +1,441 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_name=$(basename "${BASH_SOURCE[0]}")
+script_dir=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd)
+script_dir_abs=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd -P)
+script_file="${script_dir}/${script_name}"
+if [ -L "${BASH_SOURCE[0]}" ]; then
+    script_file_abs=$(readlink "${BASH_SOURCE[0]}")
+else
+    script_file_abs="${script_dir_abs}/${script_name}"
+fi
+export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+source "$bash_functions_script"
+
+
+## Arguments
+dbase_path=''
+layer_name=''
+field_list=''
+sql_where=''
+sql_query=''
+export_path=''
+export_fields='*'
+export_mode_choices=( 'overwrite' 'append' 'update' )
+export_mode=''
+export_geometry=true
+delimiter=','
+list_layers=false
+list_fields=false
+list_geometry=false
+list_trim=false
+list_csv=false
+print_header=false
+debug=false
+
+## Custom globals
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+Usage: ${script_name} [DBASE] [OPTION]...
+
+List information from a Shapefile/CSV or FileGDB database,
+leveraging the GDAL/OGR 'ogrinfo' command.
+
+  If no options are provided, layer names are listed for
+FileGDB DBASE, or field names are listed for Shapefile/CSV DBASE.
+  If layer name option is provided, field names in that layer
+are listed.
+  If layer and field name options are provided, the values of
+all records for that field in that layer are listed.
+
+Options:
+ -l,--layer=<layer-name>
+        Name of feature class layer in DBASE.
+        (Most Shapefiles only have one layer, and the script
+         will assume the layer name is the same as the
+         Shapefile name if this option is not provided.)
+ -f,--field=<field-name,...>
+        Name of field(s) in feature class (indicated by --layer
+        option) from which values are listed.
+        Values from multiple fields can be listed by providing
+        a comma-separated string of field names.
+ -w,--where=<string-expression>
+        Quoted SQL WHERE expression to filter features.
+ -q,--query=<string-expression>
+        Quoted SQL query expression to proceed base expression
+        'SELECT <field> FROM <layer>' and WHERE expression
+        (if --where option is provided).
+        Example: 'limit 10'
+ -e,--export=<output-path>
+        Export features selected by --where/--query options
+        to the provided output path.
+        Leverages the 'ogr2ogr' command.
+-ef,--export-fields=<field-name,...>
+        Name of field(s) in source feature class to include in
+        exported dataset.
+        Values from multiple fields can be listed by providing
+        a comma-separated string of field names.
+        By default, all fields and geometry information are
+        exported.
+-em,--export-mode={$(string_join '|' "${export_mode_choices[@]}")}
+        ogr2ogr option for writing to existing output dataset.
+    --export-no-geom
+        Geometry information is automatically included in
+        exported features by default. Provide this argument
+        to disable automatic inclusion.
+ -H,--header
+        Print header line listing delimited field name(s)
+        before printing list of field values.
+        Useful when redirecting output to a CSV file.
+ -d,--delim=<character> (default='${delimiter}')
+        Delimiting character (or string) separating returned
+        values when multiple fields are listed.
+-ll,--list-layers
+        Force listing of DBASE layers.
+-lf,--list-fields
+        Force listing of DBASE layer fields.
+-lg,--list-geometry
+        Include layer geometry type info in layers list.
+-lt,--list-trim
+        Trim numbering from layer list, or trim field type
+        info from field list.
+    --list-csv
+        Convert layer or field list to CSV string.
+-db,--debug
+-dr,--dryrun
+        Print 'ogrinfo' command used to extract information,
+        without executing.
+EOM
+if (( $# < 1 )); then
+    echo_e -e "$script_usage"
+    exit_script_with_status 1
+fi
+
+
+## Parse arguments
+set +u
+while (( "$#" )); do
+    arg="$1"
+
+    if [ "$(string_startswith "$arg" '-')" = false ]; then
+        if [ -z "$dbase_path" ]; then
+            dbase_path="$arg"
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+    else
+        arg_opt="$(string_lstrip "$arg" '-')"
+        arg_opt_nargs=''
+        if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+            arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
+            arg_opt="${arg_opt%%=*}"
+            arg_opt_nargs_do_shift=false
+        else
+            arg_val="$2"
+            arg_opt_nargs_do_shift=true
+        fi
+        arg_val_can_start_with_dash=false
+
+        if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
+            arg_opt_nargs=0
+            echo "$script_usage"
+            exit 0
+
+        elif [ "$arg_opt" = 'l' ] || [ "$arg_opt" = 'layer' ]; then
+            arg_opt_nargs=1
+            layer_name="$arg_val"
+
+        elif [ "$arg_opt" = 'f' ] || [ "$arg_opt" = 'field' ]; then
+            arg_opt_nargs=1
+            field_list="$arg_val"
+
+        elif [ "$arg_opt" = 'w' ] || [ "$arg_opt" = 'where' ]; then
+            arg_opt_nargs=1
+            sql_where="$arg_val"
+
+        elif [ "$arg_opt" = 'q' ] || [ "$arg_opt" = 'query' ]; then
+            arg_opt_nargs=1
+            sql_query="$arg_val"
+
+        elif [ "$arg_opt" = 'e' ] || [ "$arg_opt" = 'export' ]; then
+            arg_opt_nargs=1
+            export_path="$arg_val"
+
+        elif [ "$arg_opt" = 'ef' ] || [ "$arg_opt" = 'export-fields' ]; then
+            arg_opt_nargs=1
+            export_fields="$arg_val"
+
+        elif [ "$arg_opt" = 'em' ] || [ "$arg_opt" = 'export-mode' ]; then
+            arg_opt_nargs=1
+            export_mode="$arg_val"
+
+        elif [ "$arg_opt" = 'export-no-geom' ]; then
+            arg_opt_nargs=0
+            export_geometry=false
+
+        elif [ "$arg_opt" = 'H' ] || [ "$arg_opt" = 'header' ]; then
+            arg_opt_nargs=0
+            print_header=true
+
+        elif [ "$arg_opt" = 'd' ] || [ "$arg_opt" = 'delim' ]; then
+            arg_opt_nargs=1
+            delimiter="$arg_val"
+
+        elif [ "$arg_opt" = 'll' ] || [ "$arg_opt" = 'list-layers' ]; then
+            arg_opt_nargs=0
+            list_layers=true
+
+        elif [ "$arg_opt" = 'lf' ] || [ "$arg_opt" = 'list-fields' ]; then
+            arg_opt_nargs=0
+            list_fields=true
+
+        elif [ "$arg_opt" = 'lg' ] || [ "$arg_opt" = 'list-geometry' ]; then
+            arg_opt_nargs=0
+            list_geometry=true
+
+        elif [ "$arg_opt" = 'lt' ] || [ "$arg_opt" = 'list-trim' ]; then
+            arg_opt_nargs=0
+            list_trim=true
+
+        elif [ "$arg_opt" = 'list-csv' ]; then
+            arg_opt_nargs=0
+            list_csv=true
+
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+            arg_opt_nargs=0
+            debug=true
+
+        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+            arg_opt_nargs=0
+            debug=true
+
+        else
+            arg_opt_nargs=0
+
+            if [ "$(re_test '^d.$' "$arg_opt")" == "true" ]; then
+                delimiter="${arg_opt/d/}"
+
+            else
+                echo_e "Unexpected argument: ${arg}"
+                exit_script_with_status 1
+            fi
+        fi
+
+        if [ -z "$arg_opt_nargs" ]; then
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ "$arg_opt_nargs_do_shift" = true ] && (( arg_opt_nargs >= 1 )); then
+            for arg_num in $(seq 1 $arg_opt_nargs); do
+                shift
+                arg_val="$1"
+                if [ -z "$arg_val" ]; then
+                    echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                    exit_script_with_status 1
+                elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                    exit_script_with_status 1
+                fi
+            done
+        fi
+    fi
+
+    shift
+done
+set -u
+
+
+## Validate arguments
+
+if [ -z "$dbase_path" ]; then
+    echo_e "DBASE argument must be provided"
+    exit_script_with_status 1
+fi
+if [ -z "$layer_name" ]; then
+    dbase_fname=$(basename "$dbase_path")
+    dbase_path_ext=$(string_to_lowercase "$(string_rstrip "${dbase_fname##*.}" '/')")
+    if [ "$(itemOneOf "$dbase_path_ext" 'shp' 'csv')" = true ]; then
+        # Assume layer name is the same as the filename
+        layer_name="${dbase_fname%.*}"
+    fi
+fi
+if [ -n "$export_path" ]; then
+    if [ -z "$layer_name" ]; then
+        echo_e "--layer argument must be provided with --export option"
+        exit_script_with_status 1
+    fi
+    if [ "$(string_endswith "$(string_to_lowercase "$export_path")" '.csv')" = true ]; then
+        :
+    elif [ -e "$export_path" ] && [ -z "$export_mode" ]; then
+        echo_e "--export path already exists, so --export-mode option must be provided"
+        exit_script_with_status 1
+    fi
+fi
+if [ -z "$export_fields" ]; then
+    echo_e "--export-fields cannot be an empty string"
+fi
+if [ -n "$export_mode" ] && [ "$(itemOneOf "$export_mode" "${export_mode_choices[@]}")" = false ]; then
+    echo_e "--export-mode must be one of the following: ${export_mode_choices[*]}"
+    exit_script_with_status 1
+fi
+
+
+## Adjust arguments
+
+if [ -n "$sql_where" ]; then
+    sql_where="WHERE $(echo "$sql_where" | sed -r "s|\"|\'|g")"
+fi
+if [ -n "$sql_query" ]; then
+    sql_query=$(echo "$sql_query" | sed -r "s|\"|\'|g")
+fi
+
+if [ -n "$export_path" ]; then
+    if [ "$export_geometry" = false ] && [ "$(string_endswith "$(string_to_lowercase "$export_path")" '.shp')" = true ]; then
+        export_path_out="${export_path%.*}.dbf"
+    else
+        export_path_out="$export_path"
+    fi
+    if [ "$(string_endswith "$(string_to_lowercase "$export_path")" '.csv')" = true ]; then
+        export_mode=''
+    elif [ -n "$export_mode" ]; then
+        export_mode="-${export_mode}"
+    fi
+fi
+
+ogrinfo_opt_arr=( '-ro' '-so' '-nomd' '-nocount' '-noextent' )
+
+if [ "$list_geometry" = false ]; then
+    ogrinfo_opt_arr+=( '-nogeomtype' )
+fi
+
+if [ "$field_list" = '*' ] && [ "$print_header" = true ]; then
+    header_all_fields=true
+    header_line="\${header_line}"
+else
+    header_all_fields=false
+    header_line="${field_list//,/${delimiter}}"
+fi
+
+if [ "$list_csv" = true ] || [ "$field_list" = '*' ]; then
+    list_trim=true
+    list_csv_cmd=" | grep -v '^ogc_fid$' | tr '\n' '${delimiter}' | sed 's|${delimiter}$|\n|'"
+else
+    list_csv_cmd=''
+fi
+
+
+### Main program
+
+if [ -n "$export_path" ]; then
+    ## Export features and exit
+
+    if [ "$export_geometry" = false ] || [ "$(string_endswith "$(string_to_lowercase "$export_path")" '.csv')" = true ]; then
+        if [ "$export_fields" = '*' ]; then
+            cmd="bash \"${script_file}\" \"${dbase_path}\" --layer \"${layer_name}\" --list-csv"
+            if [ "$debug" = true ]; then
+                echo "Re-calling ${script_name} to get list of all field names for CSV/no-geom export:"
+                echo "$cmd"
+                echo
+            fi
+            export_fields=$(eval "$cmd")
+            cmd_status=$?
+            if (( cmd_status != 0 )); then
+                echo_e "Received non-zero exit status (${cmd_status}) from child ${script_name} command:"
+                echo_e "$cmd"
+                exit_script_with_status 1
+            fi
+        fi
+    elif [ "$export_geometry" = true ] && [ "$export_fields" != '*' ]; then
+        if [ "$(string_contains "$export_fields" 'geometry')" = false ]; then
+            export_fields="${export_fields},geometry"
+        fi
+    fi
+
+    cmd="ogr2ogr ${export_mode} -dialect sqlite -sql \"SELECT ${export_fields} FROM '${layer_name}' ${sql_where} ${sql_query}\" \"${export_path}\" \"${dbase_path}\""
+
+    if [ "$debug" = true ]; then
+        echo "$cmd"
+    else
+        eval "$cmd"
+        cmd_status=$?
+        if (( cmd_status != 0 )); then
+            echo_e "Received non-zero exit status (${cmd_status}) from ogr2ogr command:"
+            echo_e "$cmd"
+        fi
+        if (( cmd_status == 0 )) && [ -e "$export_path_out" ]; then
+            echo "Successfully exported features"
+        else
+            echo "Failed to export features"
+        fi
+    fi
+    exit 0
+fi
+
+
+## Print database information
+
+cmd=''
+get_fields_cmd=''
+if [ -z "$layer_name" ] || [ "$list_layers" = true ]; then
+    ogrinfo_cmd="ogrinfo ${ogrinfo_opt_arr[*]} '${dbase_path}'"
+    if [ "$list_trim" = true ]; then
+        awk_cmd=" | awk -F' ' '{print \$2}'"
+    else
+        awk_cmd=''
+    fi
+    cmd="${ogrinfo_cmd} | grep -E '^[0-9]+\:' ${awk_cmd} ${list_csv_cmd}"
+elif [ -z "$field_list" ] || [ "$list_fields" = true ] || [ "$header_all_fields" = true ]; then
+    ogrinfo_cmd="ogrinfo ${ogrinfo_opt_arr[*]} '${dbase_path}' '${layer_name}'"
+    if [ "$list_trim" = true ]; then
+        awk_cmd=" | awk -F':' '{print \$1}'"
+    else
+        awk_cmd=''
+    fi
+    cmd="${ogrinfo_cmd} | grep -E '^[^[:space:]]+\: [^[:space:]]+ \([0-9]+\.?[0-9]*\) ?' ${awk_cmd} ${list_csv_cmd}"
+    if [ "$header_all_fields" = true ]; then
+        get_fields_cmd="header_line=\$(${cmd}); all_fields_csv=\$(echo \"\${header_line}\" | sed 's|${delimiter}|,|g')"
+        field_list="\${all_fields_csv}"
+    fi
+fi
+if [ -z "$cmd" ] || [ "$header_all_fields" = true ]; then
+    ogrinfo_cmd="ogrinfo -ro -dialect sqlite -sql \"SELECT ${field_list} FROM '${layer_name}' ${sql_where} ${sql_query}\" \"${dbase_path}\""
+    awk_cmd='BEGIN { csv="" } { val=$0; if (val=="") { if (csv!="") print csv; csv=""; } else if (csv=="") { csv=val; } else { csv=sprintf("%s'"${delimiter}"'%s", csv, val); } } END { if (csv!="") print csv; }'
+    cmd="${ogrinfo_cmd} | sed -n '/OGRFeature(SELECT):/,\$p' | grep -E '(^$| = )' | cut -d'=' -f2- | cut -d' ' -f2- | awk '${awk_cmd}'"
+    if [ "$print_header" = true ]; then
+        cmd="echo \"${header_line}\" ; ${cmd}"
+    fi
+    if [ -n "$get_fields_cmd" ]; then
+        cmd="${get_fields_cmd} ; ${cmd}"
+    fi
+fi
+
+if [ "$debug" = true ]; then
+    echo "$cmd"
+else
+    eval "$cmd"
+    cmd_status=$?
+    # Skip error code 141 (SIGPIPE), which can be triggered
+    # when piping the output of this program to 'head'.
+    if (( cmd_status != 0 )) && (( cmd_status != 141 )); then
+        echo_e -e "\nReceived non-zero exit status (${cmd_status}) from main command"
+        echo_e -e "Rerunning ogrinfo command and redirecting stdout to stderr...\n"
+        eval "$ogrinfo_cmd" 1>/dev/stderr
+        exit_script_with_status 1
+    fi
+fi

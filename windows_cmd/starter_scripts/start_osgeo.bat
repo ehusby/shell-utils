@@ -2,7 +2,13 @@
 
 rem ---------------------
 rem Configure these paths
-set target_path="C:\OSGeo4W64\OSGeo4W.bat"
+if exist "C:\OSGeo4W64\" (
+    set target_path="C:\OSGeo4W64\OSGeo4W.bat"
+) else if exist "C:\OSGeo4W32\" (
+    set target_path="C:\OSGeo4W32\OSGeo4W.bat"
+) else (
+    set target_path="C:\OSGeo4W\OSGeo4W.bat"
+)
 rem ---------------------
 
 if not exist %target_path% (
