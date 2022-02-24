@@ -26,13 +26,15 @@ source "$bash_functions_script"
 
 ## Arguments
 path_arg_arr=()
-target_mkdir=false
+mkdir_targets=false
+mkdir_dstdir=false
 abspath_func='abspath'
 fwd_args_arr=()
 dryrun=false
 
 ## Custom globals
-target_dir_provided=false
+target_dir_arg_provided=false
+dst_dir=''
 
 
 ## Script usage
@@ -49,9 +51,12 @@ to absolute paths for link creation.
 
 Options:
 [all 'ln' options]
-    --mkdir
+    --mkdir-targets
         Create directory where TARGET path(s) should exist before
         creating symbolic link.
+    --mkdir-dstdir
+        Create output DIRECTORY (either last argument path, or 'ln'
+        --target-directory path) where links will be created.
     --abspath-func=<program call string> (default='${abspath_func}')
         Program used to convert TARGET paths into absolute paths.
         Program call is evaluated once for each TARGET path,
@@ -99,9 +104,13 @@ while (( "$#" )); do
             echo "$script_usage"
             exit 0
 
-        elif [ "$arg_opt" = 'mkdir' ]; then
+        elif [ "$arg_opt" = 'mkdir-targets' ]; then
             arg_opt_nargs=0
-            target_mkdir=true
+            mkdir_targets=true
+
+        elif [ "$arg_opt" = 'mkdir-dstdir' ]; then
+            arg_opt_nargs=0
+            mkdir_dstdir=true
 
         elif [ "$arg_opt" = 'abspath-func' ]; then
             arg_opt_nargs=1
@@ -125,7 +134,8 @@ while (( "$#" )); do
 
         else
             if [ "$(itemOneOf "$arg_opt" 't' 'target-directory' )" = true ]; then
-                target_dir_provided=true
+                target_dir_arg_provided=true
+                dst_dir="$arg_val"
             fi
 
             if [ "$(itemOneOf "$arg_opt" 'S' 'suffix' 't' 'target-directory' )" = true ]; then
@@ -175,13 +185,16 @@ num_path_args="${#path_arg_arr[@]}"
 if (( num_path_args == 0 )); then
     echo_e "At least one TARGET argument must be provided"
     exit_script_with_status 1
-elif (( num_path_args == 1 )) || [ "$target_dir_provided" = true ]; then
+elif (( num_path_args == 1 )) || [ "$target_dir_arg_provided" = true ]; then
     last_target_idx=$(( num_path_args - 1 ))
 else
     last_target_idx=$(( num_path_args - 2 ))
+    dst_idx=$(( num_path_args - 1 ))
+    dst_dir="${path_arg_arr[$dst_idx]}"
 fi
 
 abspath_arg_arr=()
+target_dne_arr=()
 
 for idx in "${!path_arg_arr[@]}"; do
     path="${path_arg_arr[$idx]}"
@@ -197,15 +210,24 @@ for idx in "${!path_arg_arr[@]}"; do
 
     abspath_arg_arr+=( "$path" )
 
-    if (( idx == last_target_idx )) && [ "$target_mkdir" = true ]; then
-        for path in "${abspath_arg_arr[@]}"; do
-            if ! { [ -d "$path" ] || [ ! -e "$path" ]; }; then
-                echo_e "TARGET argument is an existing file: ${path}"
-                echo_e "All TARGET arguments cannot be existing files when --target-mkdir option is provided"
-                exit_script_with_status 1
-            fi
-        done
-        for path in "${abspath_arg_arr[@]}"; do
+    if (( idx <= last_target_idx )) && [ ! -e "$path" ]; then
+        target_dne_arr+=( "$path" )
+    fi
+done
+
+
+## Create directories if needed
+
+mkdir_paths=()
+if [ "$mkdir_targets" = true ]; then
+    mkdir_paths=("${target_dne_arr[@]}")
+fi
+if [ "$mkdir_dstdir" = true ] && [ -n "$dst_dir" ]; then
+    mkdir_paths+=( "$dst_dir" )
+fi
+if (( ${#mkdir_paths[@]} )); then
+    for path in "${mkdir_paths[@]}"; do
+        if [ ! -e "$path" ]; then
             if [ "$dryrun" = true ]; then
                 echo "Creating directory: ${path}"
                 continue
@@ -218,14 +240,14 @@ for idx in "${!path_arg_arr[@]}"; do
                 echo_e "Exiting before creating symbolic links"
                 exit_script_with_status 1
             fi
-        done
-    fi
-done
-
-ln_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
+        fi
+    done
+fi
 
 
 ## Perform linking
+
+ln_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
 
 cmd="ln -s ${ln_args} $(printf ' "%s"' "${abspath_arg_arr[@]}")"
 
