@@ -317,6 +317,11 @@ read_csv() {
 
 ## Distill information
 
+du_k() { du --block-size=1K "$@" | awk '{print $1}'; }
+du_m() { du --block-size=1M "$@" | awk '{print $1}'; }
+du_g() { du --block-size=1G "$@" | awk '{print $1}'; }
+du_t() { du --block-size=1T "$@" | awk '{print $1}'; }
+
 wc_nlines() {
     process_items 'wc -l' false true "$@" | awk '{print $1}'
 }
