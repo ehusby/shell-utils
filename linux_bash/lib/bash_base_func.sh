@@ -567,34 +567,56 @@ dirname_all() {
     process_items 'dirname' false true "$@"
 }
 
-pathfromend() {
+cut_slice_alias() {
+    local func_name="$1"; shift
+    local item_type="$1"; shift
+    local delimiter="$1"; shift
+    local reverse="$1"; shift
+    local idx_a idx_b
+    local idx_start idx_end
+
     if (( $# < 1 )); then
-        echo_e "fullpath_preserve_trailing_slash: expected one path operand"
+        echo_e "${func_name}: first one or two arguments must be nonzero indices from end, like '2-1' or '2 1', respectively"
         return 1
     fi
-    local start_idx end_idx
+
     if [[ $1 == *-* ]]; then
-        start_idx=$(echo "$1" | cut -d'-' -f1)
-        end_idx=$(echo "$1" | cut -d'-' -f2)
+        idx_a=$(echo "$1" | cut -d'-' -f1)
+        idx_b=$(echo "$1" | cut -d'-' -f2)
         shift
     elif (( $# >= 2 )); then
-        start_idx="$1"; shift
-        end_idx="$1"; shift
+        idx_a="$1"; shift
+        idx_b="$1"; shift
     fi
-    if [ "$(string_is_posint "$start_idx")" = false ] || [ "$(string_is_posint "$end_idx")" = false ]; then
-        echo_e "pathfromend: first one or two arguments must be nonzero indices from end, like '2-1' or '2 1'"
+
+    if [ "$(string_is_posint "$idx_a")" = false ] || [ "$(string_is_posint "$idx_b")" = false ]; then
+        echo_e "${func_name}: first one or two arguments must be nonzero indices from end, like '2-1' or '2 1'"
         return 1
     fi
     if ! [[ -p /dev/stdin ]] && (( $# == 0 )); then
-        echo_e "pathfromend: expected one or more path operand after index arguments"
+        echo_e "${func_name}: expected one or more ${item_type} operands after index arguments, or piped in on separate lines"
         return 1
     fi
-    if (( start_idx < end_idx )); then
-        local temp_idx="$start_idx"
-        start_idx="$end_idx"
-        end_idx="$temp_idx"
+
+    if (( idx_a < idx_b )); then
+        idx_start="$idx_a"
+        idx_end="$idx_b"
+    else
+        idx_start="$idx_b"
+        idx_end="$idx_a"
     fi
-    start_idx="-${start_idx}"
-    cmd="rev | cut -d'/' -f${end_idx}${start_idx} | rev"
+
+    cmd="cut -d'${delimiter}' -f${idx_start}-${idx_end}"
+
+    if [ "$reverse" = true ]; then
+        cmd="rev | ${cmd} | rev"
+    fi
+
     process_items "$cmd" true false "$@"
+}
+pathfrombegin() {
+    cut_slice_alias pathfrombegin 'path' '/' false "$@"
+}
+pathfromend() {
+    cut_slice_alias pathfromend 'path' '/' true "$@"
 }
