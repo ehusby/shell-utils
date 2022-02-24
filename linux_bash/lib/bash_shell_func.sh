@@ -676,7 +676,7 @@ EOM
             arg_opt="$(string_lstrip "$arg" '-')"
             arg_opt_nargs=''
             if [ "$(string_contains "$arg_opt" '=')" = true ]; then
-                arg_val="${arg_opt#*=}"
+                arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
                 arg_opt="${arg_opt%%=*}"
                 arg_opt_nargs_do_shift=false
             else
@@ -839,7 +839,10 @@ rsync_alias() {
         arg="$1"; shift
         if [[ $arg == -* ]]; then
             arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
-            if [ "$arg_opt" == 'dryrun' ]; then
+            if [ "$arg_opt" == 'dr' ] || [ "$arg_opt" == 'dryrun' ]; then
+                dryrun=true
+                continue
+            elif [ "$arg_opt" == 'db' ] || [ "$arg_opt" == 'debug' ]; then
                 dryrun=true
                 continue
             elif [ "$arg_opt" == 'to-host' ] || [ "$arg_opt" == 'from-host' ]; then
