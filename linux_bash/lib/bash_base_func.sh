@@ -156,6 +156,40 @@ string_strip() {
     print_string "$string_stripped"
 }
 
+string_strip_around_delim() {
+    local string_in delim strip_substr
+
+    strip_substr=''
+
+    if [[ -p /dev/stdin ]]; then
+        delim="$1"
+        if (( $# >= 2 )); then
+            strip_substr="$2"
+        fi
+    else
+        string_in="$1"
+        delim="$2"
+        if (( $# >= 3 )); then
+            strip_substr="$3"
+        fi
+    fi
+
+    delim="$(escape_regex_special_chars "$delim")"
+    if [ -n "$strip_substr" ]; then
+        strip_substr="$(escape_regex_special_chars "$strip_substr")"
+    else
+        strip_substr='[[:space:]]'
+    fi
+
+    local sed_cmd="sed -r 's/^(${strip_substr})*//; s/(${strip_substr})*${delim}(${strip_substr})*/${delim}/g; s/(${strip_substr})*$//;'"
+
+    if [[ -p /dev/stdin ]]; then
+        eval "$sed_cmd"
+    else
+        eval "print_string \"${string_in}\" | ${sed_cmd}"
+    fi
+}
+
 string_rstrip_decimal_zeros() { print_string "$@" | sed '/\./ s/\.\{0,1\}0\{1,\}$//'; }
 
 collapse_repeated_substring() { print_string "$1" | sed -r "s/($(escape_regex_special_chars "$2"))+/\1/g"; }
