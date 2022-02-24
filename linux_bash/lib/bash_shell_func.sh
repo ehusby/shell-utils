@@ -128,8 +128,7 @@ layz() {
 ## File operations
 
 link_or_copy() {
-    ln -f "$@"
-    if (( $? != 0 )); then
+    if ! ln -f "$@"; then
         cp "$@"
     fi
 }
