@@ -225,6 +225,10 @@ touch_all() {
 
 ## Read inputs
 
+get_csv_cols() {
+    :
+}
+
 SHELL_UTILS_READ_CSV_IP=false
 read_csv() {
     local get_fields="$1"
@@ -589,6 +593,9 @@ git_remote() {
 }
 
 git_webpage() {
+    if ! git rev-parse --is-inside-work-tree 1>/dev/null; then
+        return
+    fi
     local get_url_cmd="git config --get remote.origin.url"
     local url=$(eval "$get_url_cmd")
     if [ -z "$url" ]; then
@@ -625,13 +632,28 @@ git_apply_force() {
 }
 
 git_remove_local_branches() {
-  git branch | grep -v '\*' | xargs git branch -D
+    git branch | grep -v '\*' | xargs git branch -D
 }
 
 git_make_exec() {
+    if ! git rev-parse --is-inside-work-tree 1>/dev/null; then
+        return
+    fi
     chmod -x "$@"
     git -c core.fileMode=false update-index --chmod=+x "$@"
     chmod +x "$@"
+}
+
+git_zip() {
+    if ! git rev-parse --is-inside-work-tree 1>/dev/null; then
+        return
+    fi
+    repo=$(basename "$(git rev-parse --show-toplevel)")
+    commit=$(git rev-parse --short HEAD)
+    branch=$(git rev-parse --abbrev-ref HEAD)
+    zipfile="../${repo}_${branch}-${commit}.zip"
+    echo "Creating zipfile archive of repo HEAD with 'git archive': ${zipfile}"
+    git archive --format zip --output "$zipfile" HEAD
 }
 
 git_cmd_in() {
@@ -644,8 +666,9 @@ git_cmd_in() {
     local ssh_passphrase=''
 
     ## Custom globals
-    local git_cmd_choices=( 'clone' 'branch' 'status' 'stash' 'apply' 'stash apply' 'pull' 'push' )
+    local git_cmd_choices=( 'clone' 'branch' 'status' 'stash' 'apply' 'stash apply' 'pull' 'push' 'git_zip' )
     local git_cmd_need_ssh_arr=( 'clone' 'pull' 'push' )
+    local git_cmd_custom_arr=( 'git_zip' )
     local start_dir repo_dir_arr repo_dir repo_name
 
     if [ -n "$1" ]; then
@@ -728,14 +751,23 @@ EOM
         cd "$repo_dir" || return
         repo_name=$(basename "$repo_dir")
 
-        for git_cmd in "${git_cmd_arr[@]}"; do
-            echo "'${repo_name}' results of 'git ${git_cmd}' command:"
-            if [ -n "$ssh_passphrase" ] && [ "$(itemOneOf "$git_cmd" "${git_cmd_need_ssh_arr[@]}")" = true ]; then
-                expect -c "spawn git ${git_cmd}; expect \"passphrase\"; send \"${ssh_passphrase}\r\"; interact"
-            else
-                git -c pager.branch=false ${git_cmd}
-            fi
-        done
+        if ! git rev-parse --is-inside-work-tree 1>/dev/null; then
+            :
+        else
+            for git_cmd in "${git_cmd_arr[@]}"; do
+                if [ "$(itemOneOf "$git_cmd" "${git_cmd_custom_arr[@]}")" = true ]; then
+                    echo "'${repo_name}' results of '${git_cmd}' command:"
+                    eval "$git_cmd"
+                else
+                    echo "'${repo_name}' results of 'git ${git_cmd}' command:"
+                    if [ -n "$ssh_passphrase" ] && [ "$(itemOneOf "$git_cmd" "${git_cmd_need_ssh_arr[@]}")" = true ]; then
+                        expect -c "spawn git ${git_cmd}; expect \"passphrase\"; send \"${ssh_passphrase}\r\"; interact"
+                    else
+                        git -c pager.branch=false ${git_cmd}
+                    fi
+                fi
+            done
+        fi
     done
 
     echo -e "\nChanging back to starting dir: ${start_dir}"
@@ -778,6 +810,9 @@ git_pull_in() {
     fi
 
     eval git_cmd_in pull ${git_cmd_arr[*]} ${func_args_out[*]}
+}
+git_zip_in() {
+    git_cmd_in zip git_zip "$@"
 }
 
 git_clone_replace() {
