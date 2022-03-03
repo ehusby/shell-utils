@@ -62,7 +62,7 @@ of scene records to an output database, or otherwise simply source the list
 of input Catalog IDs from the MFP selection and print the output list of
 filtered Catalog ID results to the terminal window.
 
-The shell-utils 'ogrlist' script is used in conjunction with a connection
+  The shell-utils 'ogrlist' script is used in conjunction with a connection
 to PGC's Danco ${danco_stereo_layer} layer to
 perform the filtering of Catalog IDs. This script assumes the 'ogrlist'
 script is on the PATH and the following function is in your ~/.bashrc file:

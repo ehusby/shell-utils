@@ -46,7 +46,7 @@ Usage:
     ${script_name} [OPTION]... -t DIRECTORY TARGET...  (4th form)
     (see 'man ln' for further details)
 
-  Create symbolic link(s) with 'ln -s', converting TARGET paths
+Create symbolic link(s) with 'ln -s', converting TARGET paths
 to absolute paths for link creation.
 
 Options:

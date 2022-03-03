@@ -42,7 +42,7 @@ Usage:
     cp [OPTION]... -t DIRECTORY SOURCE...
     (see 'man cp' for further details)
 
-  Copy file(s) with 'cp', first creating destination directory
+Copy file(s) with 'cp', first creating destination directory
 with 'mkdir -p' if the destination directory does not exist.
 
 Options:
