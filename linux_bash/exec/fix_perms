@@ -26,16 +26,25 @@ source "$bash_functions_script"
 
 ## Arguments
 octal_perms=''
-files_x=false
 chmod_mode_choices=(  'add' 'set' 'remove' )
 chmod_mode_operator_arr=(  '+'   '='    '-'    )
 chmod_mode='set'
+add_group_s=false
+remove_group_s=false
+add_user_s=false
+remove_user_s=false
+sticky_arg_provided=false
+files_x=false
+files_group_s=false
+folders_user_s=false
 namepat_arr=()
+identify=false
 dryrun=false
 fwd_args_arr=()
 srcpath_arr=()
 
 ## Custom globals
+find_type_arg_val=''
 
 
 ## Script usage
@@ -51,18 +60,59 @@ setting that only makes folders and NOT files executable.
   Additionally, 'find' arguments may be provided to apply
 permission changes more selectively than 'chmod -R'.
 Provide the --dryrun option to first see what command will be
-run under the hood without executing.
+run under the hood without executing. Provide the --identify
+option to list the files/folders that would have their perms
+changed in a normal non-identify run.
 
 Options:
-    --files-x
-        Allow files to be given execute permissions.
-        By default, only folders are given execute perms.
  -m,--mode={$(string_join '|' "${chmod_mode_choices[@]}")} (default=${chmod_mode})
         How 'chmod' should apply permission changes.
- -n,--name
+    --add-group-s
+        Set the 'setgid' attribute for all folders.
+          For folders, having the 'setgid' attribute set means
+        that new files/subfolders created within will be
+        automatically assigned to the same group as the parent
+        directory, rather than the default ("primary") group of
+        the user who created the file/subfolder.
+          For executable files, having the 'setgid' attribute
+        set means that any user who is able to execute the file
+        will automatically execute the file with the privileges
+        of the file's group (even if the user is not part of
+        the file's group).
+    --remove-group-s
+        Unset the 'setgid' attribute for all files and folders.
+    --add-user-s
+        Set the 'setuid' attribute for all files.
+          For executable files, having the 'setuid' attribute
+        set means that any user who is able to execute the file
+        will automatically execute the file with the privileges
+        of the file's owner.
+          For folders, having the 'setuid' attribute set typically
+        means nothing on most UNIX and Linux systems, but may be
+        interpreted on some systems to automatically assign new
+        files/subfolders created within to the owner of the
+        parent folder.
+    --remove-user-s
+        Unset the 'setuid' attribute for all files and folders.
+    --files-x
+        Add execute permissions to files when an applicable
+        OCTAL_PERMS setting is provided.
+        By default, only folders are given execute perms.
+    --files-group-s
+        Set 'setgid' attribute for files when --add-group-s
+        (or an applicable OCTAL_PERMS setting) is provided.
+        By default, only folders will have 'setgid' set.
+    --folders-user-s
+        Set 'setuid' attribute for folders when --add-user-s
+        (or an applicable OCTAL_PERMS setting) is provided.
+        By default, only files will have 'setuid' set.
+ -n,--name=<pattern>
         Include files/dirs that match this pattern.
         This option can be provided multiple times to include
         multiple file patterns.
+ -i,--identify
+        Print file/directory paths identified by 'find' commands,
+        but don't execute permission changes.
 -db,--debug
 -dr,--dryrun
         Print command used to modify file/folder permissions,
@@ -95,6 +145,17 @@ while (( "$#" )); do
                 dryrun=true
             else
                 is_fwd_arg=true
+                if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+                    arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
+                    arg_opt="${arg_opt%%=*}"
+                else
+                    arg_val="$2"
+                fi
+#                if [ "$arg_opt" = 'type' ] && [ "$arg_val" = 'd' ]; then
+#                if [ "$arg_opt" = 'type' ] && [ "$arg_val" = 'f' ]; then
+                if [ "$arg_opt" = 'type' ]; then
+                    find_type_arg_val="$arg_val"
+                fi
             fi
         fi
         if [ "$is_fwd_arg" = true ]; then
@@ -129,17 +190,49 @@ while (( "$#" )); do
             echo "$script_usage"
             exit 0
 
-        elif [ "$arg_opt" = 'files-x' ]; then
-            arg_opt_nargs=0
-            files_x=true
-
         elif [ "$arg_opt" = 'm' ] || [ "$arg_opt" = 'mode' ]; then
             arg_opt_nargs=1
             chmod_mode="$arg_val"
 
+        elif [ "$arg_opt" = 'add-group-s' ]; then
+            arg_opt_nargs=0
+            add_group_s=true
+            sticky_arg_provided=true
+
+        elif [ "$arg_opt" = 'remove-group-s' ]; then
+            arg_opt_nargs=0
+            remove_group_s=true
+            sticky_arg_provided=true
+
+        elif [ "$arg_opt" = 'add-user-s' ]; then
+            arg_opt_nargs=0
+            add_user_s=true
+            sticky_arg_provided=true
+
+        elif [ "$arg_opt" = 'remove-user-s' ]; then
+            arg_opt_nargs=0
+            remove_user_s=true
+            sticky_arg_provided=true
+
+        elif [ "$arg_opt" = 'files-x' ]; then
+            arg_opt_nargs=0
+            files_x=true
+
+        elif [ "$arg_opt" = 'files-group-s' ]; then
+            arg_opt_nargs=0
+            files_group_s=true
+
+        elif [ "$arg_opt" = 'folders-user-s' ]; then
+            arg_opt_nargs=0
+            folders_user_s=true
+
         elif [ "$arg_opt" = 'n' ] || [ "$arg_opt" = 'name' ]; then
             arg_opt_nargs=1
             namepat_arr+=( "$arg_val" )
+
+        elif [ "$arg_opt" = 'i' ] || [ "$arg_opt" = 'identify' ]; then
+            arg_opt_nargs=0
+            identify=true
 
         elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
             arg_opt_nargs=0
@@ -188,15 +281,24 @@ set -u
 
 ## Validate arguments
 
-if [ "$(string_is_posint_or_zero "$octal_perms")" = true ] && (( ${#octal_perms} == 3 )); then
+if [ "$(string_is_posint_or_zero "$octal_perms")" = true ] && { (( ${#octal_perms} == 3 )) || (( ${#octal_perms} == 4 )); }; then
     :
 else
-    echo_e "OCTAL_PERMS must be a 3-digit octal number (accepted by 'chmod')"
+    echo_e "OCTAL_PERMS must be a 3-digit (or 4-digit) octal number (accepted by 'chmod')"
     exit_script_with_status 1
 fi
 
 if [ "$(itemOneOf "$chmod_mode" "${chmod_mode_choices[@]}")" = false ]; then
     echo_e "--mode must be one of the following: ${chmod_mode_choices[*]}"
+    exit_script_with_status 1
+fi
+
+if [ "$add_group_s" = true ] && [ "$remove_group_s" = true ]; then
+    echo_e "--add-group-s and --remove-group-s options are mutually exclusive"
+    exit_script_with_status 1
+fi
+if [ "$add_user_s" = true ] && [ "$remove_user_s" = true ]; then
+    echo_e "--add-user-s and --remove-user-s options are mutually exclusive"
     exit_script_with_status 1
 fi
 
@@ -210,6 +312,32 @@ for srcpath in "${srcpath_arr[@]}"; do
         exit_script_with_status 1
     fi
 done
+
+# Handle 4-digit OCTAL_PERMS
+provided_octal_perms="$octal_perms"
+adding_sticky_bit_from_octal=false
+if (( ${#octal_perms} == 4 )); then
+    if [ "$sticky_arg_provided" = true ]; then
+        echo_e "4-digit OCTAL_PERMS setting is incompatible with add/remove user/group sticky bit options"
+        exit_script_with_status 1
+    fi
+    octal_first_digit="${octal_perms:0:1}"
+    if (( octal_first_digit == 0 )); then
+        :
+    elif (( octal_first_digit == 2 )); then
+        add_group_s=true
+    elif (( octal_first_digit == 4 )); then
+        add_user_s=true
+    elif (( octal_first_digit == 6 )); then
+        add_group_s=true
+        add_user_s=true
+    else
+        echo_e "First digit in a 4-digit OCTAL_PERMS setting must be one of the following: 0 2 4 6"
+        exit_script_with_status 1
+    fi
+    octal_perms="${octal_perms:1:3}"
+    adding_sticky_bit_from_octal=true
+fi
 
 
 # Build -name arguments to give to 'find' command
@@ -230,7 +358,7 @@ find_args=$(string_strip "$find_args")
 
 
 # Convert octal permission setting to RWX format
-chmod_perms_setting=''
+chmod_perms_from_octal=''
 i_chmod_mode=$(indexOf "$chmod_mode" "${chmod_mode_choices[@]}")
 chmod_mode_operator="${chmod_mode_operator_arr[$i_chmod_mode]}"
 for (( i=0; i<${#octal_perms}; i++ )); do
@@ -246,32 +374,93 @@ for (( i=0; i<${#octal_perms}; i++ )); do
     if [ -z "$octal_rwx" ] && [ "$chmod_mode_operator" != '=' ]; then
         :
     else
-        chmod_perms_setting="${chmod_perms_setting},${perm_group}${chmod_mode_operator}${octal_rwx}"
+        chmod_perms_from_octal="${chmod_perms_from_octal},${perm_group}${chmod_mode_operator}${octal_rwx}"
     fi
 done
-chmod_perms_setting=$(string_lstrip "$chmod_perms_setting" ',')
+chmod_perms_from_octal=$(string_lstrip "$chmod_perms_from_octal" ',')
 if [ "$files_x" = false ]; then
-    chmod_perms_setting="${chmod_perms_setting//x/X}"
+    chmod_perms_from_octal="${chmod_perms_from_octal//x/X}"
 fi
 
-echo "Converted permission setting: ${octal_perms} -> ${chmod_perms_setting}"
+# Handle user/group sticky bit settings
+chmod_perms_files="$chmod_perms_from_octal"
+chmod_perms_folders="$chmod_perms_from_octal"
+if [ "$add_user_s" = true ]; then
+    chmod_perms_files="${chmod_perms_files},u+s"
+    if [ "$folders_user_s" = true ]; then
+        chmod_perms_folders="${chmod_perms_folders},u+s"
+    fi
+    if [ "$adding_sticky_bit_from_octal" = true ]; then
+        chmod_perms_from_octal="${chmod_perms_from_octal},u+s"
+    fi
+elif [ "$remove_user_s" = true ]; then
+    chmod_perms_files="${chmod_perms_files},u-s"
+    chmod_perms_folders="${chmod_perms_folders},u-s"
+fi
+if [ "$add_group_s" = true ]; then
+    chmod_perms_folders="${chmod_perms_folders},g+s"
+    if [ "$files_group_s" = true ]; then
+        chmod_perms_files="${chmod_perms_files},g+s"
+    fi
+    if [ "$adding_sticky_bit_from_octal" = true ]; then
+        chmod_perms_from_octal="${chmod_perms_from_octal},g+s"
+    fi
+elif [ "$remove_group_s" = true ]; then
+    chmod_perms_files="${chmod_perms_files},g-s"
+    chmod_perms_folders="${chmod_perms_folders},g-s"
+fi
+
+set_files_and_folders_separate=false
+echo "Converted octal permission setting to 'chmod' setting: ${provided_octal_perms} -> ${chmod_perms_from_octal}"
+if [ "$find_type_arg_val" = 'f' ]; then
+    echo "Permission setting to be applied to files: ${chmod_perms_files}"
+elif [ "$find_type_arg_val" = 'd' ]; then
+    echo "Permission setting to be applied to folders: ${chmod_perms_folders}"
+elif [ "$chmod_perms_files" != "$chmod_perms_folders" ]; then
+    set_files_and_folders_separate=true
+    echo
+    echo "Two passes of the 'find' program will be used to set different perms for files and folders"
+    echo "Permission setting for folders: ${chmod_perms_folders}"
+    echo "Permission setting for files:   ${chmod_perms_files}"
+else
+    echo "Permission setting to be applied to files and folders: ${chmod_perms_files}"
+fi
+echo
 
 
 ## Main program
 
 for srcpath in "${srcpath_arr[@]}"; do
-    if [ -n "$find_args" ]; then
-        cmd="find \"${srcpath}\" ${find_args} -exec chmod ${chmod_perms_setting} {} \;"
+    cmd2=''
+    if [ -n "$find_args" ] || [ "$identify" = true ] || [ "$set_files_and_folders_separate" = true ]; then
+        if [ "$identify" = true ]; then
+            cmd1="find \"${srcpath}\" ${find_args}"
+        elif [ "$find_type_arg_val" = 'f' ]; then
+            cmd1="find \"${srcpath}\" ${find_args} -exec chmod ${chmod_perms_files} {} \;"
+        elif [ "$find_type_arg_val" = 'd' ]; then
+            cmd1="find \"${srcpath}\" ${find_args} -exec chmod ${chmod_perms_folders} {} \;"
+        elif [ "$set_files_and_folders_separate" = true ]; then
+            cmd1="find \"${srcpath}\" -type d ${find_args} -exec chmod ${chmod_perms_folders} {} \;"
+            cmd2="find \"${srcpath}\" -type f ${find_args} -exec chmod ${chmod_perms_files} {} \;"
+        else
+            cmd1="find \"${srcpath}\" ${find_args} -exec chmod ${chmod_perms_files} {} \;"
+        fi
     else
-        cmd="chmod -R ${chmod_perms_setting} \"${srcpath}\""
+        cmd1="chmod -R ${chmod_perms_files} \"${srcpath}\""
     fi
 
     echo "Fixing perms in ${srcpath}"
 
     if [ "$dryrun" = true ]; then
-        echo "$cmd"
+        echo "$cmd1"
+        if [ -n "$cmd2" ]; then
+            echo "$cmd2"
+        fi
     else
-        eval "$cmd"
+        eval "$cmd1"
+        if [ -n "$cmd2" ]; then
+            eval "$cmd2"
+        fi
     fi
 done
 
