@@ -66,11 +66,13 @@ Regardless of the option you chose, you ought to make some final adjustments to 
 ################################
 
 ## Exports (PATH changes and global vars)
+export SYSTEM_CLEAR_LOC=$(which clear 2>/dev/null)  # Used in .bashrc_over_ssh wrapper
+
 # >>> FILL OUT OR COMMENT OUT THE FOLLOWING LINES <<< #
-SHELL_UTILS_PATH="<path-to>/shell-utils"  # Necessary for sourcing general purpose shell functions
-export MY_EMAIL="<your-email-address>"  # Necessary for shell-utils 'email_me' script
+SHELL_UTILS_PATH="path-to/shell-utils"  # Necessary for sourcing general purpose shell functions
+export MY_EMAIL="your-email-address"  # Necessary for shell-utils 'email_me' script
 export PATH="${PATH}:${SHELL_UTILS_PATH}/linux_bash/exec"  # Easily call shell-utils executable scripts
-#export PATH="${PATH}:<path-to>/pyscript-utils"  # Easily call pyscript-utils executable scripts
+#export PATH="${PATH}:path-to/pyscript-utils"  # Easily call pyscript-utils executable scripts
 ```
 - Replace `<path-to>/shell-utils` with the absolute path to the `shell-utils` folder on your local machine. You can get the absolute path to a file or folder by running `readlink -f <path-to>/shell-utils`. If you've set up your repos folder as instructed in this guide, you can replace this line with the following:
 ```
