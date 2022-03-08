@@ -33,6 +33,21 @@ itemOneOf() {
     fi
 }
 
+countItemsEqual() {
+    local base_el="$1"
+    shift
+    local comp_arr=("$@")
+
+    local equal_count=0
+    for el in "${comp_arr[@]}"; do
+        if [ "$el" = "$base_el" ]; then
+            ((equal_count++))
+        fi
+    done
+
+    echo "$equal_count"
+}
+
 process_items() {
     local process_func="$1"; shift
     local pipe_in_items="$1"; shift
