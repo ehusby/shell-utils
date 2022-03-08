@@ -560,6 +560,10 @@ abspath_all_e() {
 fullpath_all_e() {
     process_items 'fullpath_e' false true "$@"
 }
+derefpath_all() {
+    local deref_count="$1"; shift
+    process_items "derefpath ${deref_count}" false true "$@"
+}
 basename_all() {
     process_items 'basename' false true "$@"
 }
