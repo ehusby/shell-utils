@@ -31,7 +31,6 @@ chmod_mode_operator_arr=(  '+'   '='    '-'    )
 chmod_mode='set'
 add_group_s=false
 remove_group_s=false
-disable_add_group_s=false
 add_user_s=false
 remove_user_s=false
 sticky_arg_provided=false
@@ -43,16 +42,6 @@ identify=false
 dryrun=false
 fwd_args_arr=()
 srcpath_arr=()
-
-## Argument defaults advised to modify
-default_add_group_s=false
-if [ "$default_add_group_s" = true ]; then
-    add_group_s_default_text="(enabled by default, provide --disable-add-group-s to unset)"
-    disable_add_group_s_text="Disable automatic application of --add-group-s option."
-else
-    add_group_s_default_text=''
-    disable_add_group_s_text="This argument is not used."
-fi
 
 ## Custom globals
 find_type_arg_val=''
@@ -78,7 +67,7 @@ changed in a normal non-identify run.
 Options:
  -m,--mode={$(string_join '|' "${chmod_mode_choices[@]}")} (default=${chmod_mode})
         How 'chmod' should apply permission changes.
-    --add-group-s ${add_group_s_default_text}
+    --add-group-s
         Set the 'setgid' attribute for all folders.
           For folders, having the 'setgid' attribute set means
         that new files/subfolders created within will be
@@ -92,8 +81,6 @@ Options:
         the file's group).
     --remove-group-s
         Unset the 'setgid' attribute for all files and folders.
-    --disable-add-group-s
-        ${disable_add_group_s_text}
     --add-user-s
         Set the 'setuid' attribute for all files.
           For executable files, having the 'setuid' attribute
@@ -217,11 +204,6 @@ while (( "$#" )); do
             remove_group_s=true
             sticky_arg_provided=true
 
-        elif [ "$arg_opt" = 'disable-add-group-s' ]; then
-            arg_opt_nargs=0
-            disable_add_group_s=true
-            sticky_arg_provided=false
-
         elif [ "$arg_opt" = 'add-user-s' ]; then
             arg_opt_nargs=0
             add_user_s=true
@@ -311,8 +293,8 @@ if [ "$(itemOneOf "$chmod_mode" "${chmod_mode_choices[@]}")" = false ]; then
     exit_script_with_status 1
 fi
 
-if (( "$(countItemsEqual true "$add_group_s" "$remove_group_s" "$disable_add_group_s")" > 1 )); then
-    echo_e "Only one of the following options can be provided: --add-group-s --remove-group-s --disable-add-group-s"
+if [ "$add_group_s" = true ] && [ "$remove_group_s" = true ]; then
+    echo_e "--add-group-s and --remove-group-s options are mutually exclusive"
     exit_script_with_status 1
 fi
 if [ "$add_user_s" = true ] && [ "$remove_user_s" = true ]; then
@@ -330,17 +312,6 @@ for srcpath in "${srcpath_arr[@]}"; do
         exit_script_with_status 1
     fi
 done
-
-# Handle default/disable add-group-s args
-if [ "$add_group_s" = true ] || [ "$remove_group_s" = true ]; then
-    # Providing one of these arguments overrides default_add_group_s=true
-    :
-elif [ "$default_add_group_s" = true ] && [ "$disable_add_group_s" = false ]; then
-    echo "Local script setting will apply --add-group-s option automatically"
-    echo "(Provide the --disable-add-group-s option to disable this action)"
-    echo
-    add_group_s=true
-fi
 
 # Handle 4-digit OCTAL_PERMS
 provided_octal_perms="$octal_perms"
@@ -495,5 +466,5 @@ done
 
 
 if [ "$dryrun" = false ]; then
-    echo -e "\nDone!"
+    echo "Done!"
 fi
