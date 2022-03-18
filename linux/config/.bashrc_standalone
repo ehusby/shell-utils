@@ -75,7 +75,7 @@ export SYSTEM_CLEAR_LOC=$(which clear 2>/dev/null)  # Used in .bashrc_over_ssh w
 # >>> FILL OUT OR COMMENT OUT THE FOLLOWING LINES <<< #
 SHELL_UTILS_PATH="path-to/shell-utils"
 export MY_EMAIL="your-email-address"  # Necessary for shell-utils 'email_me' script
-export PATH="${PATH}:${SHELL_UTILS_PATH}/linux_bash/exec"  # Easily call shell-utils executable scripts
+export PATH="${PATH}:${SHELL_UTILS_PATH}/linux/exec"  # Easily call shell-utils executable scripts
 #export PATH="${PATH}:path-to/pyscript-utils"  # Easily call pyscript-utils executable scripts
 
 # Remove duplicate PATH entries, preserving order
@@ -100,7 +100,7 @@ export PATH="$(LANG=C perl -e 'print join(":", grep { not $seen{$_}++ } split(/:
 
 
 
-##### From shell-utils/linux_bash/lib/bash_base_func.sh #####
+##### From shell-utils/linux/lib/bash_base_func.sh #####
 
 
 ## Array/item parsing
@@ -725,7 +725,7 @@ pathfromend() {
 
 
 
-##### From shell-utils/linux_bash/lib/bash_shell_func.sh #####
+##### From shell-utils/linux/lib/bash_shell_func.sh #####
 
 
 ## Bash prompts

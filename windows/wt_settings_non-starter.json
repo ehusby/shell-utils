@@ -102,7 +102,7 @@
             {
                 "commandline": "C:\\Windows\\System32\\bash.exe",
                 "foreground": "#FA8500",
-                "icon": "C:\\Users\\%USERNAME%\\scratch\\repos\\shell-utils\\windows_cmd\\icons\\bash.ico",
+                "icon": "C:\\Users\\%USERNAME%\\scratch\\repos\\shell-utils\\windows\\icons\\bash.ico",
                 "name": "WSL Bash",
                 "startingDirectory": null,
                 "tabTitle": "WSL Bash"

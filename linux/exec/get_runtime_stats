@@ -25,7 +25,7 @@ source "$bash_functions_script"
 
 
 # A couple custom logging info prints have been added in this version of get_stats from
-# https://github.com/ehusby/shell-utils/blob/main/linux_bash/lib/bash_shell_func.sh
+# https://github.com/ehusby/shell-utils/blob/main/linux/lib/bash_shell_func.sh
 get_stats() {
     # Adapted from https://stackoverflow.com/a/9790056/8896374
     local perl_cmd

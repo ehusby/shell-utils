@@ -21,7 +21,7 @@ Next we're going to go down one of two routes...
 ### <a name="shell_config_opt1"></a>Option 1: "Safer" and clearer for work on a single system
 Copy the config files into your home directory. Check if you already have a `~/.inputrc` file on your system, or if any other files/folders in [the `config` folder](./config) (besides the `.bashrc` file, [which is handled specially](#shell_config_bashrc_default)) already exist in your home directory before running the following commands. For those files/folders that already exist, you should consider [**Option 3**](#shell_config_opt3).
 ```
-cp -r <path-to>/shell-utils/linux_bash/config/.* ~/
+cp -r <path-to>/shell-utils/linux/config/.* ~/
 mv ~/.bashrc ~/.bashrc_system_default
 mv ~/.bashrc_standalone ~/.bashrc
 ```
@@ -34,7 +34,7 @@ Instead of copying the config files, we can _symlink_ these files into your home
 
 Run [the `setup.sh` script](./setup.sh) with the following command to symlink all files/folders from [the shell-utils `config` folder](./config) into your home directory. Any existing *non-symlink* config files/folders will be backed up in your home directory by appending a suffix of "_system_default" to the file/foldername. Any existing *symlink* files/folders will be replaced, so this setup script is safely rerunnable. **If you later move the shell-utils repo, you will need to rerun this setup script to update the config file symlinks so they point to the new location!**
 ```
-bash <path-to>/shell-utils/linux_bash/setup.sh
+bash <path-to>/shell-utils/linux/setup.sh
 ```
 > **IMPORTANT NOTE!**
 > <br>If you later move your local copy of the shell-utils repo, rerun this setup script to update the config file symlinks so they point to the new location.
@@ -53,8 +53,8 @@ This approach, similar to [**Option 1**](#shell_config_opt1), is OK if you're wo
 
 At a bare minimum, you can add the following lines to your existing `~/.bashrc` file to utilize the custom [Bash scripts](./exec) and [shell functions](./lib/bash_shell_func.sh) made available in this repo:
 ```
-export PATH="${PATH}:<path-to>/shell-utils/linux_bash/exec"  # Easily call shell-utils executable scripts
-source "<path-to>/shell-utils/linux_bash/lib/bash_shell_func.sh"  # Source general purpose shell functions
+export PATH="${PATH}:<path-to>/shell-utils/linux/exec"  # Easily call shell-utils executable scripts
+source "<path-to>/shell-utils/linux/lib/bash_shell_func.sh"  # Source general purpose shell functions
 ```
 These lines should be modified as instructed in the next section.
 
@@ -71,7 +71,7 @@ export SYSTEM_CLEAR_LOC=$(which clear 2>/dev/null)  # Used in .bashrc_over_ssh w
 # >>> FILL OUT OR COMMENT OUT THE FOLLOWING LINES <<< #
 SHELL_UTILS_PATH="path-to/shell-utils"  # Necessary for sourcing general purpose shell functions
 export MY_EMAIL="your-email-address"  # Necessary for shell-utils 'email_me' script
-export PATH="${PATH}:${SHELL_UTILS_PATH}/linux_bash/exec"  # Easily call shell-utils executable scripts
+export PATH="${PATH}:${SHELL_UTILS_PATH}/linux/exec"  # Easily call shell-utils executable scripts
 #export PATH="${PATH}:path-to/pyscript-utils"  # Easily call pyscript-utils executable scripts
 ```
 - Replace `<path-to>/shell-utils` with the absolute path to the `shell-utils` folder on your local machine. You can get the absolute path to a file or folder by running `readlink -f <path-to>/shell-utils`. If you've set up your repos folder as instructed in this guide, you can replace this line with the following:
@@ -102,7 +102,7 @@ However, this will only work if the files in that folder have the _executable bi
 <br>
 To make the files in this folder executable again, run the following command to change the files' [permission settings](https://www.gnu.org/software/coreutils/manual/html_node/Setting-Permissions.html):
 ```
-chmod +x <path-to>/shell-utils/linux_bash/exec/*
+chmod +x <path-to>/shell-utils/linux/exec/*
 ```
 Troubleshooting steps:
 - Make sure the path to the [`exec`](./exec) folder is being properly appended to the `PATH` environment variable. You can check the value of this variable by running `echo $PATH`.
