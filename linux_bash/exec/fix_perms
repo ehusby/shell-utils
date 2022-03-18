@@ -29,14 +29,12 @@ octal_perms=''
 chmod_mode_choices=(  'add' 'set' 'remove' )
 chmod_mode_operator_arr=(  '+'   '='    '-'    )
 chmod_mode='set'
-add_group_s=false
-remove_group_s=false
-add_user_s=false
-remove_user_s=false
-sticky_arg_provided=false
+sticky_arg_choices=( 'off' 'files' 'folders' 'all' )
+add_group_s='off'
+remove_group_s='off'
+add_user_s='off'
+remove_user_s='off'
 files_x=false
-files_group_s=false
-folders_user_s=false
 namepat_arr=()
 identify=false
 dryrun=false
@@ -67,8 +65,8 @@ changed in a normal non-identify run.
 Options:
  -m,--mode={$(string_join '|' "${chmod_mode_choices[@]}")} (default=${chmod_mode})
         How 'chmod' should apply permission changes.
-    --add-group-s
-        Set the 'setgid' attribute for all folders.
+    --add-group-s={$(string_join '|' "${sticky_arg_choices[@]}")} (default=${add_group_s})
+        Set the 'setgid' attribute for folders/files.
           For folders, having the 'setgid' attribute set means
         that new files/subfolders created within will be
         automatically assigned to the same group as the parent
@@ -79,10 +77,10 @@ Options:
         will automatically execute the file with the privileges
         of the file's group (even if the user is not part of
         the file's group).
-    --remove-group-s
-        Unset the 'setgid' attribute for all files and folders.
-    --add-user-s
-        Set the 'setuid' attribute for all files.
+    --remove-group-s={$(string_join '|' "${sticky_arg_choices[@]}")} (default=${remove_group_s})
+        Unset the 'setgid' attribute for files/folders.
+    --add-user-s={$(string_join '|' "${sticky_arg_choices[@]}")} (default=${add_user_s})
+        Set the 'setuid' attribute for files/folders.
           For executable files, having the 'setuid' attribute
         set means that any user who is able to execute the file
         will automatically execute the file with the privileges
@@ -92,20 +90,12 @@ Options:
         interpreted on some systems to automatically assign new
         files/subfolders created within to the owner of the
         parent folder.
-    --remove-user-s
-        Unset the 'setuid' attribute for all files and folders.
+    --remove-user-s={$(string_join '|' "${sticky_arg_choices[@]}")} (default=${remove_user_s})
+        Unset the 'setuid' attribute for files/folders.
     --files-x
         Add execute permissions to files when an applicable
         OCTAL_PERMS setting is provided.
         By default, only folders are given execute perms.
-    --files-group-s
-        Set 'setgid' attribute for files when --add-group-s
-        (or an applicable OCTAL_PERMS setting) is provided.
-        By default, only folders will have 'setgid' set.
-    --folders-user-s
-        Set 'setuid' attribute for folders when --add-user-s
-        (or an applicable OCTAL_PERMS setting) is provided.
-        By default, only files will have 'setuid' set.
  -n,--name=<pattern>
         Include files/dirs that match this pattern.
         This option can be provided multiple times to include
@@ -195,36 +185,24 @@ while (( "$#" )); do
             chmod_mode="$arg_val"
 
         elif [ "$arg_opt" = 'add-group-s' ]; then
-            arg_opt_nargs=0
-            add_group_s=true
-            sticky_arg_provided=true
+            arg_opt_nargs=1
+            add_group_s="$arg_val"
 
         elif [ "$arg_opt" = 'remove-group-s' ]; then
-            arg_opt_nargs=0
-            remove_group_s=true
-            sticky_arg_provided=true
+            arg_opt_nargs=1
+            remove_group_s="$arg_val"
 
         elif [ "$arg_opt" = 'add-user-s' ]; then
-            arg_opt_nargs=0
-            add_user_s=true
-            sticky_arg_provided=true
+            arg_opt_nargs=1
+            add_user_s="$arg_val"
 
         elif [ "$arg_opt" = 'remove-user-s' ]; then
-            arg_opt_nargs=0
-            remove_user_s=true
-            sticky_arg_provided=true
+            arg_opt_nargs=1
+            remove_user_s="$arg_val"
 
         elif [ "$arg_opt" = 'files-x' ]; then
             arg_opt_nargs=0
             files_x=true
-
-        elif [ "$arg_opt" = 'files-group-s' ]; then
-            arg_opt_nargs=0
-            files_group_s=true
-
-        elif [ "$arg_opt" = 'folders-user-s' ]; then
-            arg_opt_nargs=0
-            folders_user_s=true
 
         elif [ "$arg_opt" = 'n' ] || [ "$arg_opt" = 'name' ]; then
             arg_opt_nargs=1
@@ -293,12 +271,31 @@ if [ "$(itemOneOf "$chmod_mode" "${chmod_mode_choices[@]}")" = false ]; then
     exit_script_with_status 1
 fi
 
-if [ "$add_group_s" = true ] && [ "$remove_group_s" = true ]; then
-    echo_e "--add-group-s and --remove-group-s options are mutually exclusive"
+if [ "$(itemOneOf "$add_group_s" "${sticky_arg_choices[@]}")" = false ]; then
+    echo_e "--add-group-s must be one of the following: ${sticky_arg_choices[*]}"
     exit_script_with_status 1
 fi
-if [ "$add_user_s" = true ] && [ "$remove_user_s" = true ]; then
-    echo_e "--add-user-s and --remove-user-s options are mutually exclusive"
+if [ "$(itemOneOf "$remove_group_s" "${sticky_arg_choices[@]}")" = false ]; then
+    echo_e "--remove-group-s must be one of the following: ${sticky_arg_choices[*]}"
+    exit_script_with_status 1
+fi
+if [ "$(itemOneOf "$add_user_s" "${sticky_arg_choices[@]}")" = false ]; then
+    echo_e "--add-user-s must be one of the following: ${sticky_arg_choices[*]}"
+    exit_script_with_status 1
+fi
+if [ "$(itemOneOf "$add_user_s" "${sticky_arg_choices[@]}")" = false ]; then
+    echo_e "--remove-user-s must be one of the following: ${sticky_arg_choices[*]}"
+    exit_script_with_status 1
+fi
+
+if [ "$add_group_s" != 'off' ] && [ "$remove_group_s" != 'off' ] \
+    && { [ "$add_group_s" = "$remove_group_s" ] || [ "$add_group_s" = 'all' ] || [ "$remove_group_s" = 'all' ]; }; then
+    echo_e "--add-group-s and --remove-group-s options conflict"
+    exit_script_with_status 1
+fi
+if [ "$add_user_s" != 'off' ] && [ "$remove_user_s" != 'off' ] \
+    && { [ "$add_user_s" = "$remove_user_s" ] || [ "$add_user_s" = 'all' ] || [ "$remove_user_s" = 'all' ]; }; then
+    echo_e "--add-user-s and --remove-user-s options conflict"
     exit_script_with_status 1
 fi
 
@@ -312,32 +309,6 @@ for srcpath in "${srcpath_arr[@]}"; do
         exit_script_with_status 1
     fi
 done
-
-# Handle 4-digit OCTAL_PERMS
-provided_octal_perms="$octal_perms"
-adding_sticky_bit_from_octal=false
-if (( ${#octal_perms} == 4 )); then
-    if [ "$sticky_arg_provided" = true ]; then
-        echo_e "4-digit OCTAL_PERMS setting is incompatible with add/remove user/group sticky bit options"
-        exit_script_with_status 1
-    fi
-    octal_first_digit="${octal_perms:0:1}"
-    if (( octal_first_digit == 0 )); then
-        :
-    elif (( octal_first_digit == 2 )); then
-        add_group_s=true
-    elif (( octal_first_digit == 4 )); then
-        add_user_s=true
-    elif (( octal_first_digit == 6 )); then
-        add_group_s=true
-        add_user_s=true
-    else
-        echo_e "First digit in a 4-digit OCTAL_PERMS setting must be one of the following: 0 2 4 6"
-        exit_script_with_status 1
-    fi
-    octal_perms="${octal_perms:1:3}"
-    adding_sticky_bit_from_octal=true
-fi
 
 
 # Build -name arguments to give to 'find' command
@@ -356,6 +327,12 @@ fi
 find_args="${fwd_args_arr[*]+${fwd_args_arr[*]}} ${find_name_args}"
 find_args=$(string_strip "$find_args")
 
+
+# Handle 4-digit OCTAL_PERMS
+provided_octal_perms="$octal_perms"
+if (( ${#octal_perms} == 4 )); then
+    octal_perms="${octal_perms:1:3}"
+fi
 
 # Convert octal permission setting to RWX format
 chmod_perms_from_octal=''
@@ -381,35 +358,77 @@ chmod_perms_from_octal=$(string_lstrip "$chmod_perms_from_octal" ',')
 if [ "$files_x" = false ]; then
     chmod_perms_from_octal="${chmod_perms_from_octal//x/X}"
 fi
+chmod_perms_before_sticky="$chmod_perms_from_octal"
+
+# Handle 4-digit OCTAL_PERMS
+if (( ${#provided_octal_perms} == 4 )); then
+    octal_first_digit="${octal_perms:0:1}"
+    if (( octal_first_digit == 0 )); then
+        :
+    elif (( octal_first_digit == 2 )); then
+        chmod_perms_from_octal="${chmod_perms_from_octal},g+s"
+        if [ "$add_group_s" = 'off' ]; then
+            add_group_s='folders'
+        fi
+    elif (( octal_first_digit == 4 )); then
+        chmod_perms_from_octal="${chmod_perms_from_octal},u+s"
+        if [ "$add_user_s" = 'off' ]; then
+            add_user_s='files'
+        fi
+    elif (( octal_first_digit == 6 )); then
+        chmod_perms_from_octal="${chmod_perms_from_octal},g+s"
+        chmod_perms_from_octal="${chmod_perms_from_octal},u+s"
+        if [ "$add_group_s" = 'off' ]; then
+            add_group_s='folders'
+        fi
+        if [ "$add_user_s" = 'off' ]; then
+            add_user_s='files'
+        fi
+    else
+        echo_e "First digit in a 4-digit OCTAL_PERMS setting must be one of the following: 0 2 4 6"
+        exit_script_with_status 1
+    fi
+fi
+
 
 # Handle user/group sticky bit settings
-chmod_perms_files="$chmod_perms_from_octal"
-chmod_perms_folders="$chmod_perms_from_octal"
-if [ "$add_user_s" = true ]; then
-    chmod_perms_files="${chmod_perms_files},u+s"
-    if [ "$folders_user_s" = true ]; then
+chmod_perms_files="$chmod_perms_before_sticky"
+chmod_perms_folders="$chmod_perms_before_sticky"
+if [ "$add_user_s" != 'off' ]; then
+    if [ "$add_user_s" = 'files' ] || [ "$add_user_s" = 'all' ]; then
+        chmod_perms_files="${chmod_perms_files},u+s"
+    fi
+    if [ "$add_user_s" = 'folders' ] || [ "$add_user_s" = 'all' ]; then
         chmod_perms_folders="${chmod_perms_folders},u+s"
     fi
-    if [ "$adding_sticky_bit_from_octal" = true ]; then
-        chmod_perms_from_octal="${chmod_perms_from_octal},u+s"
-    fi
-elif [ "$remove_user_s" = true ]; then
-    chmod_perms_files="${chmod_perms_files},u-s"
-    chmod_perms_folders="${chmod_perms_folders},u-s"
 fi
-if [ "$add_group_s" = true ]; then
-    chmod_perms_folders="${chmod_perms_folders},g+s"
-    if [ "$files_group_s" = true ]; then
+if [ "$remove_user_s" != 'off' ]; then
+    if [ "$remove_user_s" = 'files' ] || [ "$remove_user_s" = 'all' ]; then
+        chmod_perms_files="${chmod_perms_files},u-s"
+    fi
+    if [ "$remove_user_s" = 'folders' ] || [ "$remove_user_s" = 'all' ]; then
+        chmod_perms_folders="${chmod_perms_folders},u-s"
+    fi
+fi
+if [ "$add_group_s" != 'off' ]; then
+    if [ "$add_group_s" = 'files' ] || [ "$add_group_s" = 'all' ]; then
         chmod_perms_files="${chmod_perms_files},g+s"
     fi
-    if [ "$adding_sticky_bit_from_octal" = true ]; then
-        chmod_perms_from_octal="${chmod_perms_from_octal},g+s"
+    if [ "$add_group_s" = 'folders' ] || [ "$add_group_s" = 'all' ]; then
+        chmod_perms_folders="${chmod_perms_folders},g+s"
     fi
-elif [ "$remove_group_s" = true ]; then
-    chmod_perms_files="${chmod_perms_files},g-s"
-    chmod_perms_folders="${chmod_perms_folders},g-s"
+fi
+if [ "$remove_group_s" != 'off' ]; then
+    if [ "$remove_group_s" = 'files' ] || [ "$remove_group_s" = 'all' ]; then
+        chmod_perms_files="${chmod_perms_files},g-s"
+    fi
+    if [ "$remove_group_s" = 'folders' ] || [ "$remove_group_s" = 'all' ]; then
+        chmod_perms_folders="${chmod_perms_folders},g-s"
+    fi
 fi
 
+
+# Summarize permission settings to be applied
 set_files_and_folders_separate=false
 echo "Converted octal permission setting to 'chmod' setting: ${provided_octal_perms} -> ${chmod_perms_from_octal}"
 if [ "$find_type_arg_val" = 'f' ]; then
