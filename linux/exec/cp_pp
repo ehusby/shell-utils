@@ -26,17 +26,20 @@ source "$bash_functions_script"
 
 ## Arguments
 path_arg_arr=()
+prefix=''
 fwd_args_arr=()
 dryrun=false
 
 ## Custom globals
 target_dir_arg_provided=false
 dst_dir=''
+dst_file=''
+dst_fname=''
 
 
 ## Script usage
 read -r -d '' script_usage << EOM
-${script_name} ("cp --parents") Usage:
+${script_name} ("cp --parents PLUS") Usage:
     ${script_name} [OPTION]... [-T] SOURCE DEST
     ${script_name} [OPTION]... SOURCE... DIRECTORY
     ${script_name} [OPTION]... -t DIRECTORY SOURCE...
@@ -47,6 +50,12 @@ with 'mkdir -p' if the destination directory does not exist.
 
 Options:
 [all 'cp' options]
+    --prefix=<string>
+        Append this string to the name of the destination
+        file(s).
+-db,--debug
+-dr,--dryrun
+        Print 'cp' commands used to copy, without executing.
 EOM
 if (( $# < 1 )); then
     echo_e -e "$script_usage"
@@ -82,19 +91,37 @@ while (( "$#" )); do
             echo "$script_usage"
             exit 0
 
+        elif [ "$arg_opt" = 'prefix' ]; then
+            arg_opt_nargs=1
+            prefix="$arg_val"
+
+        elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
         else
             if [ "$(itemOneOf "$arg_opt" 't' 'target-directory' )" = true ]; then
+                arg_opt_nargs=1
                 target_dir_arg_provided=true
                 dst_dir="$arg_val"
-            fi
 
-            if [ "$(itemOneOf "$arg_opt" 'S' 'suffix' 't' 'target-directory' )" = true ]; then
+            elif [ "$(itemOneOf "$arg_opt" 'S' 'suffix' 't' 'target-directory' )" = true ]; then
                 arg_opt_nargs=1
                 if [ "$(string_contains "$arg_val" '*')" = true ] || [ "$(string_contains "$arg_val" ' ')" = true ]; then
                     arg_val="\"${arg_val}\""
                 fi
+                fwd_args_arr+=( "$arg_opt_raw" "$arg_val" )
+
             else
                 arg_opt_nargs=0
+                if [ "$(string_contains "$arg" '*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
+                    arg="\"${arg}\""
+                fi
+                fwd_args_arr+=( "$arg" )
             fi
         fi
 
@@ -127,36 +154,94 @@ set -u
 
 num_path_args="${#path_arg_arr[@]}"
 if (( num_path_args == 0 )); then
-    # Allow 'cp' to report error
-    :
+    echo_e "At least one SOURCE argument must be provided"
+    exit_script_with_status 1
 elif (( num_path_args == 1 )) || [ "$target_dir_arg_provided" = true ]; then
-    # Allow 'cp' to report error if target dir is not provided
-    :
+    last_target_idx=$(( num_path_args - 1 ))
+    dst_is_dir=true
 else
+    last_target_idx=$(( num_path_args - 2 ))
     dst_idx=$(( num_path_args - 1 ))
     destination="${path_arg_arr[$dst_idx]}"
     if (( num_path_args > 2 )) || [ "$(string_endswith "$destination" '/')" = true ]; then
         dst_dir="$destination"
+        dst_is_dir=true
     else
-        dst_dir=$(dirname "$destination")
+        dst_file="$destination"
+        dst_fname=$(basename "$dst_file")
+        dst_dir=$(dirname "$dst_file")
+        dst_is_dir=false
     fi
 fi
+
+if [ "$dst_is_dir" = true ]; then
+    if [ -z "$dst_dir" ]; then
+        echo_e "Destination directory must be specified"
+        exit_script_with_status 1
+    elif [ -e "$dst_dir" ] && [ ! -d "$dst_dir" ]; then
+        echo_e "Non-directory path already exists at DEST location: ${dst_dir}"
+        exit_script_with_status 1
+    fi
+fi
+
+srcfile_path_arr=()
+
+for idx in "${!path_arg_arr[@]}"; do
+    if (( idx > last_target_idx )); then
+        break
+    fi
+    srcfile="${path_arg_arr[$idx]}"
+
+    if [ ! -f "$srcfile" ]; then
+        echo_e "SOURCE path is not an existing file: ${srcfile}"
+        exit_script_with_status 1
+    fi
+
+    srcfile_path_arr+=( "$srcfile" )
+done
 
 
 ## Create destination directory if needed
 
 if [ -n "$dst_dir" ] && [ ! -d "$dst_dir" ]; then
-    mkdir -p "$dst_dir"
-    cmd_status=$?
-    if (( cmd_status != 0 )); then
-        echo_e "Received non-zero exit status (${cmd_status}) from mkdir command"
-        echo_e "mkdir -p ${dst_dir}"
-        echo_e "Exiting before copying file(s)"
-        exit_script_with_status 1
+    cmd="mkdir -p \"${dst_dir}\""
+    if [ "$dryrun" = true ]; then
+        echo "$cmd"
+    else
+        eval "$cmd"
+        cmd_status=$?
+        if (( cmd_status != 0 )); then
+            echo_e "Received non-zero exit status (${cmd_status}) from mkdir command"
+            echo_e "mkdir -p ${dst_dir}"
+            echo_e "Exiting before copying file(s)"
+            exit_script_with_status 1
+        fi
     fi
 fi
 
 
 ## Perform copying
 
-cp "${script_args[@]}"
+cp_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
+
+for srcfile in "${srcfile_path_arr[@]}"; do
+    srcfname=$(basename "$srcfile")
+    if [ -n "$prefix" ]; then
+        if [ -n "$dst_fname" ]; then
+            dstfname="${prefix}${dst_fname}"
+        else
+            dstfname="${prefix}${srcfname}"
+        fi
+    else
+        dstfname="$srcfname"
+    fi
+    dstfile="${dst_dir}/${dstfname}"
+
+    cmd="cp ${cp_args} \"${srcfile}\" \"${dstfile}\""
+
+    if [ "$dryrun" = true ]; then
+        echo "$cmd"
+    else
+        eval "$cmd"
+    fi
+done
