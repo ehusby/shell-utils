@@ -36,10 +36,10 @@ dst_dir=''
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage:
-    cp [OPTION]... [-T] SOURCE DEST
-    cp [OPTION]... SOURCE... DIRECTORY
-    cp [OPTION]... -t DIRECTORY SOURCE...
+${script_name} ("cp --parents") Usage:
+    ${script_name} [OPTION]... [-T] SOURCE DEST
+    ${script_name} [OPTION]... SOURCE... DIRECTORY
+    ${script_name} [OPTION]... -t DIRECTORY SOURCE...
     (see 'man cp' for further details)
 
 Copy file(s) with 'cp', first creating destination directory
