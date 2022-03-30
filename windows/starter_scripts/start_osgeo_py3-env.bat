@@ -26,23 +26,23 @@ if not exist %target_path% (
 ) else if "%try_py3_env%" == "true" (
     title OSGeo4W Shell [py3_env]
     if "%run_mode%" == "shell" (
-        call %target_path% & cmd /k "@ECHO OFF&set PATH=%%PATH%%;%PATH%;&py3_env&@ECHO ON&echo 'py3_env' has been loaded. 'python' and 'python3' commands should now use the Python3 environment.&echo run o-help for a list of available commands"
+        call %target_path% & cmd /k "@ECHO OFF&py3_env&@ECHO ON&echo.&echo 'py3_env' has been loaded. 'python' and 'python3' commands should now use the Python3 environment.&echo run o-help for a list of available commands"
     ) else if "%run_mode%" == "pyscript" (
         if "%SHELL_UTILS_START_PYSCRIPT_KEEP_OPEN%" == "true" (
-            call %target_path% & cmd /k "@ECHO OFF&set PATH=%%PATH%%;%PATH%;&py3_env&@ECHO ON&python %*"
+            call %target_path% & cmd /k "@ECHO OFF&py3_env&@ECHO ON&python %*"
         ) else (
-            call %target_path% & cmd /c "@ECHO OFF&set PATH=%%PATH%%;%PATH%;&py3_env&@ECHO ON&python %*"
+            call %target_path% & cmd /c "@ECHO OFF&py3_env&@ECHO ON&python %*"
         )
     )
 ) else (
     title OSGeo4W Shell [o4w_env]
     if "%run_mode%" == "shell" (
-        call %target_path% & cmd /k "@ECHO OFF&set PATH=%%PATH%%;%PATH%;&@ECHO ON&echo run o-help for a list of available commands"
+        call %target_path% & cmd /k "echo run o-help for a list of available commands"
     ) else if "%run_mode%" == "pyscript" (
         if "%SHELL_UTILS_START_PYSCRIPT_KEEP_OPEN%" == "true" (
-            call %target_path% & cmd /k "@ECHO OFF&set PATH=%%PATH%%;%PATH%;&@ECHO ON&python %*"
+            call %target_path% & cmd /k "python %*"
         ) else (
-            call %target_path% & cmd /c "@ECHO OFF&set PATH=%%PATH%%;%PATH%;&@ECHO ON&python %*"
+            call %target_path% & cmd /c "python %*"
         )
     )
 )

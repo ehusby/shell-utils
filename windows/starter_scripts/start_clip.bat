@@ -2,13 +2,8 @@
 
 rem ---------------------
 rem Configure these paths
-if exist "C:\OSGeo4W64\" (
-    set target_path="C:\OSGeo4W64\OSGeo4W.bat"
-) else if exist "C:\OSGeo4W32\" (
-    set target_path="C:\OSGeo4W32\OSGeo4W.bat"
-) else (
-    set target_path="C:\OSGeo4W\OSGeo4W.bat"
-)
+set target_path="C:\Users\%USERNAME%\miniconda3\Scripts\activate.bat"
+set starting_conda_env=C:\Users\%USERNAME%\miniconda3\envs\clip
 rem ---------------------
 
 if "%~1" == "" (
@@ -21,10 +16,10 @@ if not exist %target_path% (
     title ERROR
     cmd /k "echo Target does not exist: %target_path%&echo.&echo Configure paths in this script: %0"
 ) else (
-    title OSGeo4W Shell [root]
+    title Anaconda Prompt [CLIP]
     if "%run_mode%" == "shell" (
-        call %target_path%
+        cmd /k %target_path% %starting_conda_env%
     ) else if "%run_mode%" == "pyscript" (
-        call %target_path% python %*
+        call %target_path% %starting_conda_env% & cmd /c "python %*"
     )
 )
