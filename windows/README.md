@@ -36,6 +36,8 @@ gdal-filegdb
 ```
 By default, OSGeo4W should be installed to `C:\OSGeo4W64` (assuming you installed the 64-bit version). If it was installed to a different location, you will need to change the `target_path` setting accordingly in [`shell-utils/windows/starter_scripts/start_osgeo.bat`](./starter_scripts/start_osgeo.bat) and the py2/py3 versions of that batch script. 
 
+(TODO: update the following list of starter commands)
+
 There are four "starter commands" (shortcut scripts) you can use to fire up an OSGeo4W Shell through the File Explorer Address bar:
 - [osgeo_vanilla](./exec/osgeo_vanilla.bat)
   <br>Runs [`shell-utils/windows/starter_scripts/start_osgeo.bat`](./starter_scripts/start_osgeo.bat), which opens which the OSGeo4W Shell without running any additional initialization commands. The only Python version that is callable by default would be Python 2, but only if you installed the `python2-core` package through the OSGeo4W installer. If you installed the `python3-core` package, you can instead run the `py3_env` command to load an environment that should then make Python 3 callable with the `python` name. You can test this by running `py3_env` followed by `python` to fire up the Python 3 command-line interpreter.
@@ -95,6 +97,8 @@ pyexec my_tool.py [script arguments]
 The reason why running `pyexec my_tool.py` is safer than simply running `my_tool.py` is that the Python environment that exists in your shell (OSGeo4W, Anaconda, Bash, etc.) can and will be different from the environment of the system default Python program. Often they will differ for important reasons, and the `my_tool.py` script may even be unable to run with the system default Python. By running with [`pyexec`](./exec/pyexec.bat), you can be confident that it's the Python version currently available in your shell (callable by the `python` command) that is used when you run `pyexec my_tool.py`.
 
 ## <a name="set_system_default_python"></a>Set the system-wide default Python program
+(TODO: overhaul this section with new batch script methods)
+
 When you try to execute a `.py` Python script directly by either double-clicking on it in File Explorer or running `.\my_script.py` in a shell (without the `python` prefix), Windows will try to use the system default Python program to run your script. This is most concisely configured through the Windows *Registry Editor* (aka "regedit") program, but you should be able to set this easily through File Explorer. If you experience issues, you may need to [configure the system default Python through the registry](#set_system_default_python_registry) instead.
 
 We'll test this setup process using the [`check_python_location.py`](https://github.com/ehusby/CLIP/blob/master/check_python_location.py) Python script in the in [the `CLIP` repo](https://github.com/ehusby/CLIP). `CLIP` contains handy scripts you can double-click run to quickly modify the contents of your clipboard. After you have the repo accessible on your local machine, do the following:
