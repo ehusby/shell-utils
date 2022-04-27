@@ -256,7 +256,9 @@ set -u
 ## Validate arguments
 
 ogrlist_export_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
-echo "The following provided optional arguments are assumed to be 'ogrlist' optional args for (--mfp-out) DBASE_OUT export: ${ogrlist_export_opt_args}"
+if [ -n "$ogrlist_export_opt_args" ]; then
+    echo "The following provided optional arguments are assumed to be 'ogrlist' optional args for (--mfp-out) DBASE_OUT export: ${ogrlist_export_opt_args}"
+fi
 
 if (( ${#catid_arr[@]} == 0 )) && [ -z "$dbase_in" ]; then
     echo_e "At least one Catalog ID argument must be provided, or (--mfp-in) DBASE_IN"
