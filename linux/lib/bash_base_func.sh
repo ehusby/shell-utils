@@ -504,6 +504,33 @@ abspath_e() {
     abspath "$path"
 }
 
+fullpath_pe() {
+    if (( $# != 1 )); then
+        echo_e "fullpath_pe: expected one path operand"
+        return 1
+    fi
+    local path="$1"
+    local parent_dir=$(dirname "$path")
+    if [ ! -d "$parent_dir" ]; then
+        echo_e "fullpath_pe: parent dir does not exist: ${parent_dir}"
+        return 1
+    fi
+    fullpath "$path"
+}
+abspath_pe() {
+    if (( $# != 1 )); then
+        echo_e "abspath_pe: expected one path operand"
+        return 1
+    fi
+    local path="$1"
+    local parent_dir=$(dirname "$path")
+    if [ ! -d "$parent_dir" ]; then
+        echo_e "abspath_pe: parent dir does not exist: ${parent_dir}"
+        return 1
+    fi
+    abspath "$path"
+}
+
 preserve_trailing_slash_alias() {
     if (( $# != 2 )); then
         echo_e "preserve_trailing_slash_alias: expected a path function name and one path operand"
