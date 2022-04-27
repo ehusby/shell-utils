@@ -46,7 +46,7 @@ Usage:
     ${script_name} [OPTION]... -t DIRECTORY TARGET...  (4th form)
     (see 'man ln' for further details)
 
-Create symbolic link(s) with 'ln -s', converting TARGET paths
+Create symbolic link(s) with 'ln -s -n', converting TARGET paths
 to absolute paths for link creation.
 
 Options:
@@ -220,12 +220,12 @@ done
 
 mkdir_paths=()
 if [ "$mkdir_targets" = true ]; then
-    mkdir_paths=("${target_dne_arr[@]}")
+    mkdir_paths=("${target_dne_arr[@]+${target_dne_arr[@]}}")
 fi
 if [ "$mkdir_dstdir" = true ] && [ -n "$dst_dir" ]; then
     mkdir_paths+=( "$dst_dir" )
 fi
-if (( ${#mkdir_paths[@]} )); then
+if (( ${#mkdir_paths[@]} > 0 )); then
     for path in "${mkdir_paths[@]}"; do
         if [ ! -e "$path" ]; then
             if [ "$dryrun" = true ]; then
@@ -249,7 +249,7 @@ fi
 
 ln_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
 
-cmd="ln -s ${ln_args} $(printf ' "%s"' "${abspath_arg_arr[@]}")"
+cmd="ln -s -n ${ln_args} $(printf ' "%s"' "${abspath_arg_arr[@]}")"
 
 if [ "$dryrun" = true ]; then
     echo "$cmd"
