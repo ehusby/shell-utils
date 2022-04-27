@@ -520,6 +520,7 @@ find_missing_suffix() {
     base_suffix="$1"; shift
     check_suffix_arr=()
     suffix_exist_cond='all'
+    inverse=false
     debug=false
 
     local arg
@@ -535,6 +536,8 @@ find_missing_suffix() {
                 suffix_exist_cond='any'
             elif [ "$arg_opt" = 'all' ]; then
                 suffix_exist_cond='all'
+            elif [ "$arg_opt" = 'inverse' ]; then
+                inverse=true
             else
                 break
             fi
@@ -562,7 +565,8 @@ find_missing_suffix() {
                     break
                 fi
             done
-            if [ "$all_exist" = false ]; then
+            if { [ "$all_exist" = false ] && [ "$inverse" = false ]; }\
+            || { [ "$all_exist" = true  ] && [ "$inverse" = true  ]; }; then
                 echo "$base_dirent"
             fi
         done < <(find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -print0)
@@ -578,7 +582,8 @@ find_missing_suffix() {
                     break
                 fi
             done
-            if [ "$some_exist" = false ]; then
+            if { [ "$some_exist" = false ] && [ "$inverse" = false ]; }\
+            || { [ "$some_exist" = true  ] && [ "$inverse" = true  ]; }; then
                 echo "$base_dirent"
             fi
         done < <(find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -print0)
