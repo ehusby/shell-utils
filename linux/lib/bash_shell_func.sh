@@ -396,8 +396,11 @@ find_alias() {
     local parsing_opt_args arg arg_opt argval
     parsing_opt_args=false
     while (( "$#" )); do
-        arg="$1"
-        if [[ $arg == -* ]] || [ "$arg" == '!' ]; then
+        arg_raw="$1"
+        argval_raw="$2"
+        arg=$(printf '%q' "$arg_raw")
+        argval=$(printf '%q' "$argval_raw")
+        if [[ $arg == -* ]]; then
             parsing_opt_args=true
             arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
             if [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ] || [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
@@ -407,10 +410,10 @@ find_alias() {
                 findup_direct=true
                 shift; continue
             elif [ "$find_func_name" = 'findup' ] && [ "$arg_opt" = 'minheight' ]; then
-                findup_minheight="$2"
+                findup_minheight="$argval"
                 shift; shift; continue
             elif [ "$find_func_name" = 'findup' ] && [ "$arg_opt" = 'maxheight' ]; then
-                findup_maxheight="$2"
+                findup_maxheight="$argval"
                 shift; shift; continue
             elif [ "$arg_opt" = 'mindepth' ] || [ "$arg_opt" = 'maxdepth' ]; then
                 depth_arg_provided=true
@@ -422,21 +425,16 @@ find_alias() {
                 opt_args_1+=( "$arg" )
                 shift; parsing_opt_args=false; continue
             elif [ "$arg_opt" = 'D' ] || [ "$arg_opt" = 'Olevel' ]; then
-                shift; argval="$1"
-                opt_args_1+=( "$arg" "$argval" )
+                opt_args_1+=( "$arg" "$argval" ); shift
                 shift; parsing_opt_args=false; continue
             fi
-        elif [[ $arg == [\(\)\;] ]]; then
+        elif [[ $arg_raw == [\!\(\)\;] ]]; then
             parsing_opt_args=true
-            arg="\\${arg}"
         fi
         if [ "$parsing_opt_args" = true ]; then
-            if [[ $arg == *"*"* ]] || [[ $arg == *" "* ]]; then
-                arg="'${arg}'"
-            fi
             opt_args_2+=( "$arg" )
         else
-            path_args+=( "$arg" )
+            path_args+=( "$arg_raw" )
         fi
         shift
     done
