@@ -644,6 +644,15 @@ git_make_exec() {
     chmod +x "$@"
 }
 
+git_remove_exec() {
+    if ! git rev-parse --is-inside-work-tree 1>/dev/null; then
+        return
+    fi
+    chmod +x "$@"
+    git -c core.fileMode=false update-index --chmod=-x "$@"
+    chmod -x "$@"
+}
+
 git_zip() {
     if ! git rev-parse --is-inside-work-tree 1>/dev/null; then
         return
