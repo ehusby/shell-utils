@@ -17,8 +17,8 @@ You can download Git for your operating system [here](https://git-scm.com/downlo
 
 ### Setup SSH keys
 With Git now installed, we can generate an SSH key on your local machine and tie it to your GitHub account. If you're on Windows, open "Git Bash" to perform the following steps.
-1. Generate an SSH key on your local machine by running `ssh-keygen`. I'd recommend setting a short and memorable passphrase that is similar to a bank PIN in complexity, but a bit stronger (please don't actually use your bank PIN).
-2. Run `cat ~/.ssh/id_rsa.pub` to print your *public* SSH key in the terminal. This is the key we need to give to GitHub.
+1. Generate an SSH key on your local machine by running `ssh-keygen -t ecdsa -b 256`. I'd recommend setting a short and memorable passphrase that is similar to a bank PIN in complexity, but a bit stronger (please don't actually use your bank PIN).
+2. Run `cat ~/.ssh/id_ecdsa.pub` to print your *public* SSH key in the terminal. This is the key we need to give to GitHub.
 3. Go to the ["SSH and GPG keys"](https://github.com/settings/keys) section of your GitHub account settings, and click the "New SSH key" button. Now copy and paste the key that was printed in your terminal into the "Key" box. In the "Title" box, give a concise name for your local machine.
 
 ## Next steps
