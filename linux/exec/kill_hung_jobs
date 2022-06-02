@@ -200,7 +200,7 @@ while true; do
                 log "$hungjob_msg" >> "$hungjobs_digest"
                 qdel "$jobid"
                 cp "$outfile" "$hungjobs_stash_dir"
-                if [ "$errfile" != "$outfile" ]; then
+                if [ "$errfile" != "$outfile" ] && [ -f "$errfile" ]; then
                     cp "$errfile" "$hungjobs_stash_dir"
                 fi
             fi
