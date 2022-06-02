@@ -4,13 +4,18 @@ setlocal EnableDelayedExpansion
 rem ---------------------
 rem Configure these paths
 set target_path="C:\Users\%USERNAME%\miniconda3\Scripts\activate.bat"
-set starting_conda_env=C:\Users\%USERNAME%\miniconda3
+set starting_conda_env=C:\Users\%USERNAME%\miniconda3\envs\pgc
 rem ---------------------
 
 if "%~1" == "" (
     set run_mode=shell
 ) else (
     set run_mode=pyscript
+    set pyscript=%~1
+    echo !pyscript! | findstr /r "^.*\\CLIP\\[^\\]*.*\.py" > nul
+    if "!errorlevel!" == "0" (
+        set SHELL_UTILS_START_PYSCRIPT_KEEP_OPEN=false
+    )
 )
 
 if not exist %target_path% (

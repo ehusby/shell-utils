@@ -1,4 +1,5 @@
 @ECHO OFF
+setlocal EnableDelayedExpansion
 
 rem ---------------------
 rem Configure these paths

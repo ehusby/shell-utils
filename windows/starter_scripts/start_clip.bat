@@ -1,4 +1,5 @@
 @ECHO OFF
+setlocal EnableDelayedExpansion
 
 rem ---------------------
 rem Configure these paths
@@ -10,6 +11,11 @@ if "%~1" == "" (
     set run_mode=shell
 ) else (
     set run_mode=pyscript
+    set pyscript=%~1
+    echo !pyscript! | findstr /r "^.*\\CLIP\\[^\\]*.*\.py" > nul
+    if "!errorlevel!" == "0" (
+        set SHELL_UTILS_START_PYSCRIPT_KEEP_OPEN=false
+    )
 )
 
 if not exist %target_path% (
@@ -20,6 +26,10 @@ if not exist %target_path% (
     if "%run_mode%" == "shell" (
         cmd /k %target_path% %starting_conda_env%
     ) else if "%run_mode%" == "pyscript" (
-        call %target_path% %starting_conda_env% & cmd /c "python %*"
+        if "%SHELL_UTILS_START_PYSCRIPT_KEEP_OPEN%" == "true" (
+            call %target_path% %starting_conda_env% & cmd /k "python %*"
+        ) else (
+            call %target_path% %starting_conda_env% & cmd /c "python %*"
+        )
     )
 )
