@@ -216,7 +216,7 @@ touch_all() {
     fi
     while (( $# > 0 )); do
         echo "Touching files in: ${1}"
-        find "$1" -type f -exec touch {} \;
+        find "$1" -type f -exec touch {} +
         shift
     done
     echo "Done!"
@@ -376,7 +376,7 @@ get_stats() {
 
 #alias findl='find -mindepth 1 -maxdepth 1'
 #alias findls='find -mindepth 1 -maxdepth 1 -ls | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
-#alias findlsh='find -mindepth 1 -maxdepth 1 -type f -exec ls -lh {} \; | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
+#alias findlsh='find -mindepth 1 -maxdepth 1 -type f -exec ls -lh {} + | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
 find_alias() {
     local find_func_name="$1"; shift
 
@@ -486,7 +486,7 @@ find_alias() {
         elif [ "$find_func_name" = 'findls' ]; then
             find_cmd_suffix="-ls | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
         elif [ "$find_func_name" = 'findlsh' ]; then
-            find_cmd_suffix=" -type f -exec ls -lh {} \; | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+            find_cmd_suffix=" -type f -exec ls -lh {} + | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
         fi
 
         cmd="find ${opt_args_1[*]} ${path_args[*]} ${stock_depth_args} ${opt_args_2[*]} ${find_cmd_suffix}"

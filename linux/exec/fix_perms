@@ -455,14 +455,14 @@ for srcpath in "${srcpath_arr[@]}"; do
         if [ "$identify" = true ]; then
             cmd1="find \"${srcpath}\" ${find_args}"
         elif [ "$find_type_arg_val" = 'f' ]; then
-            cmd1="find \"${srcpath}\" ${find_args} -exec chmod ${chmod_perms_files} {} \;"
+            cmd1="find \"${srcpath}\" ${find_args} -exec chmod ${chmod_perms_files} {} +"
         elif [ "$find_type_arg_val" = 'd' ]; then
-            cmd1="find \"${srcpath}\" ${find_args} -exec chmod ${chmod_perms_folders} {} \;"
+            cmd1="find \"${srcpath}\" ${find_args} -exec chmod ${chmod_perms_folders} {} +"
         elif [ "$set_files_and_folders_separate" = true ]; then
-            cmd1="find \"${srcpath}\" -type d ${find_args} -exec chmod ${chmod_perms_folders} {} \;"
-            cmd2="find \"${srcpath}\" -type f ${find_args} -exec chmod ${chmod_perms_files} {} \;"
+            cmd1="find \"${srcpath}\" -type d ${find_args} -exec chmod ${chmod_perms_folders} {} +"
+            cmd2="find \"${srcpath}\" -type f ${find_args} -exec chmod ${chmod_perms_files} {} +"
         else
-            cmd1="find \"${srcpath}\" ${find_args} -exec chmod ${chmod_perms_files} {} \;"
+            cmd1="find \"${srcpath}\" ${find_args} -exec chmod ${chmod_perms_files} {} +"
         fi
     else
         cmd1="chmod -R ${chmod_perms_files} \"${srcpath}\""
