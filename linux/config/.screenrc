@@ -169,5 +169,8 @@ deflogin off
 # Fix term issues on remote SSH connections within screen tabs
 term screen-256color
 
+# Fix random mouse scroll wheel issue where control characters would be printed instead of scrolling
+termcapinfo xterm* ti@:te@
+
 # Force Bash shell if not default shell
 #shell "/bin/bash"
