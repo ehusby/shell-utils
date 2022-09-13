@@ -93,21 +93,41 @@ EOM
 set +u
 parsing_fwd_args=false
 while (( "$#" )); do
-    arg="$1"
+    arg_raw="$1"
+    arg_esc=$(escape_string "$arg_raw")
+    arg_opt_raw=''
+    arg_opt_esc=''
+    arg_val_raw=''
+    arg_val_esc=''
+    is_optional_arg=false
+    arg_opt_nargs_do_shift=true
+    if [ "$(string_startswith "$arg_raw" '-')" = true ]; then
+        is_optional_arg=true
+        if [ "$(string_contains "$arg_raw" '=')" = true ]; then
+            arg_opt_nargs_do_shift=false
+            arg_opt_raw=$(string_lstrip "${arg_raw%%=*}" '-')
+            arg_val_raw=$(printf '%s' "${arg_raw#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
+        else
+            arg_opt_raw=$(string_lstrip "$arg_raw" '-')
+            arg_val_raw="$2"
+        fi
+        arg_opt_esc=$(escape_string "$arg_opt_raw")
+        arg_val_esc=$(escape_string "$arg_val_raw")
+    fi
 
-    if [ "$arg" == '!' ]; then
+    arg="$arg_esc"
+    arg_opt="$arg_opt_esc"
+    arg_val="$arg_val_esc"
+
+    if [[ $arg_raw == [\!\(\)\;] ]]; then
         parsing_fwd_args=true
-    elif [[ $arg == [\(\)\;] ]]; then
-        parsing_fwd_args=true
-        arg="\\${arg}"
     fi
 
     if [ "$parsing_fwd_args" = true ]; then
         # Accept critical script optional arguments
         # specified at end of command.
         is_fwd_arg=true
-        if [ "$(string_startswith "$arg" '-')" = true ]; then
-            arg_opt="$(string_lstrip "$arg" '-')"
+        if [ "$is_optional_arg" = true ]; then
             is_fwd_arg=false
             if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
                 arg_opt_nargs=0
@@ -117,12 +137,6 @@ while (( "$#" )); do
                 debug=true
             else
                 is_fwd_arg=true
-                if [ "$(string_contains "$arg_opt" '=')" = true ]; then
-                    arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
-                    arg_opt="${arg_opt%%=*}"
-                else
-                    arg_val="$2"
-                fi
                 if [ "$arg_opt" = 'mindepth' ] || [ "$arg_opt" = 'maxdepth' ]; then
                     find_depth_provided=true
                 elif [ "$arg_opt" = 'type' ] && [ "$arg_val" = 'd' ]; then
@@ -131,33 +145,20 @@ while (( "$#" )); do
                     find_type_f=true
                 elif [ "$arg_opt" = 'prune' ]; then
                     find_prune=true
+                elif [ "$arg_opt" = 'name' ]; then
+                    find_name_provided=true
                 fi
             fi
         fi
         if [ "$is_fwd_arg" = true ]; then
-            if [ "$(string_contains "$arg" '*')" = true ] || [ "$(string_contains "$arg" ' ')" = true ]; then
-                arg="'${arg}'"
-            fi
-            fwd_args_arr_2+=( "$arg" )
-            if [ "$(string_contains "$arg" '-name')" = true ]; then
-                find_name_provided=true
-            fi
+            fwd_args_arr_2+=( "$arg_esc" )
         fi
 
-    elif [ "$(string_startswith "$arg" '-')" = false ]; then
-        srcpath_arr+=( "$arg" )
+    elif [ "$is_optional_arg" = false ]; then
+        srcpath_arr+=( "$arg_raw" )
 
     else
-        arg_opt="$(string_lstrip "$arg" '-')"
         arg_opt_nargs=''
-        if [ "$(string_contains "$arg_opt" '=')" = true ]; then
-            arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
-            arg_opt="${arg_opt%%=*}"
-            arg_opt_nargs_do_shift=false
-        else
-            arg_val="$2"
-            arg_opt_nargs_do_shift=true
-        fi
         arg_val_can_start_with_dash=false
 
         if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
@@ -179,7 +180,7 @@ while (( "$#" )); do
 
         elif [ "$arg_opt" = 'n' ] || [ "$arg_opt" = 'name' ]; then
             arg_opt_nargs=1
-            namepat_arr+=( "$arg_val" )
+            namepat_arr+=( "$arg_val_esc" )
 
         elif [ "$arg_opt" = 's' ] || [ "$arg_opt" = 'sum' ]; then
             arg_opt_nargs=0
@@ -224,19 +225,19 @@ while (( "$#" )); do
         fi
 
         if [ -z "$arg_opt_nargs" ]; then
-            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg_raw}"
             exit_script_with_status 1
         fi
 
         if [ "$arg_opt_nargs_do_shift" = true ] && (( arg_opt_nargs >= 1 )); then
             for arg_num in $(seq 1 $arg_opt_nargs); do
                 shift
-                arg_val="$1"
-                if [ -z "$arg_val" ]; then
-                    echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                arg_val_raw="$1"
+                if [ -z "$arg_val_raw" ]; then
+                    echo_e "Missing expected value (#${arg_num}) for argument: ${arg_raw}"
                     exit_script_with_status 1
-                elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
-                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val_raw" '-')" = true ]; then
+                    echo_e "Unexpected argument value: ${arg_raw} ${arg_val_raw}"
                     exit_script_with_status 1
                 fi
             done
@@ -324,9 +325,9 @@ if (( ${#namepat_arr[@]} > 0 )); then
     find_name_args="\("
     for i in "${!namepat_arr[@]}"; do
         if (( i == 0 )); then
-            find_name_args="${find_name_args} -name '${namepat_arr[i]}'"
+            find_name_args="${find_name_args} -name ${namepat_arr[i]}"
         else
-            find_name_args="${find_name_args} -o -name '${namepat_arr[i]}'"
+            find_name_args="${find_name_args} -o -name ${namepat_arr[i]}"
         fi
     done
     find_name_args="${find_name_args} \)"
@@ -341,11 +342,11 @@ find_args_2=$(string_strip "$find_args_2" ' ')
 ## Main program
 
 if [ "$sum_all" = true ]; then
-    srcpath_arr=( "$(printf '"%s" ' "${srcpath_arr[@]}" )" )
-    quote_srcpath=false
+    srcpath_arr=( "$(printf '%q ' "${srcpath_arr[@]}" )" )
+    escape_srcpath=false
     report_srcpath=false
 else
-    quote_srcpath=true
+    escape_srcpath=true
     report_srcpath=true
 fi
 for srcpath in "${srcpath_arr[@]}"; do
@@ -372,11 +373,12 @@ for srcpath in "${srcpath_arr[@]}"; do
         du_cmd="${du_cmd} -a"
     fi
 
-    if [ "$quote_srcpath" = true ]; then
-        find_cmd="find ${find_args_1} \"${srcpath}\" ${find_args_2_inst}"
+    if [ "$escape_srcpath" = true ]; then
+        srcpath_esc=$(escape_string "$srcpath")
     else
-        find_cmd="find ${find_args_1} ${srcpath} ${find_args_2_inst}"
+        srcpath_esc="$srcpath"
     fi
+    find_cmd="find ${find_args_1} ${srcpath_esc} ${find_args_2_inst}"
     full_cmd="${find_cmd} -print0 | xargs -r0 ${du_cmd} | awk '{sum+=\$1} END {print sum}'"
     if [ "$identify" = true ]; then
         run_cmd="$find_cmd"

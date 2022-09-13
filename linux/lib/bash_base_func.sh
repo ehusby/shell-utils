@@ -92,6 +92,14 @@ process_items() {
 ## Printing
 
 print_string() { printf '%s' "$*"; }
+escape_string() {
+    local str_out=$(printf '%q' "$*")
+    if [ "$str_out" == "''" ]; then
+        print_string ''
+    else
+        print_string "$str_out"
+    fi
+}
 
 echo_e()  { echo "$@" >&2; }
 echo_oe() { echo "$@" | tee >(cat >&2); }
