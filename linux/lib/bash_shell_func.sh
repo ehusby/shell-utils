@@ -222,6 +222,32 @@ touch_all() {
     echo "Done!"
 }
 
+trashem() {
+    # Utilizes trash-cli: https://github.com/andreafrancia/trash-cli
+    if (( $# == 0 )); then
+        echo "Usage: trashem PATH... ['find' OPTION]..."
+        return
+    fi
+    path_arr=()
+    while (( $# > 0 )); do
+        if [[ $1 == -* ]]; then
+            break
+        fi
+        path_arr+=( "$(abspath "${1%/}")" )
+        shift
+    done
+    if (( ${#path_arr[@]} == 0 )); then
+        echo "Usage: PATH... ['find' OPTION]..."
+        return
+    fi
+    for path in "${path_arr[@]}"; do
+        echo "Trashing: ${path}"
+        stat "$path" > "${path}.removed.stat"
+        find "$path" "$@" | sort > "${path}.removed.contents"
+        trash-put "$path"
+    done
+}
+
 
 ## Read inputs
 
@@ -326,8 +352,22 @@ du_m() { du --block-size=1M "$@" | awk '{print $1}'; }
 du_g() { du --block-size=1G "$@" | awk '{print $1}'; }
 du_t() { du --block-size=1T "$@" | awk '{print $1}'; }
 
+smart_sort() {
+    # Example: ls WV01_20140716_102001003208CC00_102001003223F500_2m_lsf_v040310/*_meta.txt | smart_sort '_seg([0-9]+)_' '_seg%04d_'
+    local substr_pattern_capture_sort_group="$1"
+    local substr_format_expand_sort_group="$2"
+    local substr_pattern=$(echo "$substr_pattern_capture_sort_group" | tr -d '()')
+    sed -r -e "s|^(.*)(${substr_pattern})(.*)$|\1\2\3,\2|" -e "s|${substr_pattern_capture_sort_group}|\$(printf '${substr_format_expand_sort_group}' \1)|" \
+        | while IFS= read -r line; do eval echo "$line"; done \
+        | sort | sed -r "s|^(.*)(${substr_pattern})(.*),(${substr_pattern})$|\1\4\3|"
+}
+
 wc_nlines() {
     process_items 'wc -l' false true "$@" | awk '{print $1}'
+}
+
+count_items() {
+    awk '{item_count_dict[$0]++} END {for (item in item_count_dict) printf "%5s <-- %s\n", item_count_dict[item], item}' | sort -k3
 }
 
 count_by_date() {
@@ -868,6 +908,19 @@ git_clone_replace() {
 
 
 ## Other
+
+qstat_r_jobs() {
+    qstat -fx -u "$USER" | sed 's|</Job>|</Job>\n|g' | grep '<job_state>R</job_state>' | sed -r 's|.*<Job_Id>([^<]+)</Job_Id>.*<Job_Name>([^<]+)</Job_Name>.*|\1,\2|'
+}
+qstat_r_jobs_all() {
+    qstat -fx | sed 's|</Job>|</Job>\n|g' | grep '<job_state>R</job_state>' | sed -r 's|.*<Job_Id>([^<]+)</Job_Id>.*<Job_Name>([^<]+)</Job_Name>.*|\1,\2|'
+}
+qstat_r_joblogs() {
+    qstat -fx -u "$USER" | sed 's|</Job>|</Job>\n|g' | grep '<job_state>R</job_state>' | grep -v '<Job_Name>STDIN</Job_Name>' | sed -r 's|.*<Output_Path>([^<]+)</Output_Path>.*|\1|' | sed -r 's|^.+:([^:]+)$|\1|'
+}
+qstat_r_joblogs_home() {
+    qstat -fx -u "$USER" | sed 's|</Job>|</Job>\n|g' | grep '<job_state>R</job_state>' | grep -v '<Job_Name>STDIN</Job_Name>' | sed -r 's|.*<Output_Path>([^<]+)</Output_Path>.*|\1|' | sed -r 's|^.+:([^:]+)$|\1|' | basename_all | sed "s|^|${HOME}/|"
+}
 
 ssh_alias() {
     set -x; ssh "$@" -t "bash --rcfile ~/.bashrc_from_ssh"; set +x
