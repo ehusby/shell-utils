@@ -1,0 +1,126 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_name=$(basename "${BASH_SOURCE[0]}")
+script_dir=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd)
+script_dir_abs=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd -P)
+script_file="${script_dir}/${script_name}"
+if [ -L "${BASH_SOURCE[0]}" ]; then
+    script_file_abs=$(readlink "${BASH_SOURCE[0]}")
+else
+    script_file_abs="${script_dir_abs}/${script_name}"
+fi
+export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_args=("$@")
+
+
+## Arguments
+demfile=''
+outfile=''
+outfile_default_suffix='round-cog.tif'
+dryrun=false
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+Usage:
+    ${script_name} DEMFILE [OPTION]...
+
+  Use gdal_calc.py and gdal_translate to produce a COG copy of the
+source demfile raster with DEM values rounded to 1/128 meters for
+optimal LZW compression.
+  If the --outfile option is not provided, by default the output file
+will be created next to the demfile with filename like
+"DEMFILE_${outfile_default_suffix}".
+
+Options:
+ -o,--outfile=<path>
+        Path to output rounded COG file.
+-dr,--dryrun
+        Print 'ln' command used to create link, without executing.
+EOM
+if (( $# < 1 )); then
+    echo -e >/dev/stderr "$script_usage"
+    exit 1
+fi
+
+
+## Parse arguments
+set +u
+while (( "$#" )); do
+    arg="$1"
+    if ! [[ $arg == -* ]]; then
+        if [ -z "$demfile" ]; then
+            demfile="$arg"
+        else
+            echo >/dev/stderr "Unexpected argument: ${arg}"
+            exit 1
+        fi
+    else
+        if [ "$arg" = '-h' ] || [ "$arg" = '--help' ]; then
+            echo -e "$script_usage"
+            exit 0
+        elif [ "$arg" = '-dr' ] || [ "$arg" = '--dryrun' ]; then
+            dryrun=true
+        elif [ "$arg" = '-o' ] || [ "$arg" = '--outfile' ]; then
+            outfile="$2"; shift
+        else
+            echo >/dev/stderr "Unexpected argument: ${arg}"
+            exit 1
+        fi
+    fi
+    shift
+done
+set -u
+
+if [ -z "$outfile" ]; then
+    outfile="${demfile%.*}_${outfile_default_suffix}"
+fi
+tmpfile="${outfile%.*}_tmp.tif"
+
+
+## Validate arguments
+if [ ! -f "$demfile" ]; then
+    echo >/dev/stderr "ERROR: Source demfile is not an existing file: ${demfile}"
+    exit 1
+fi
+if [ -f "$outfile" ]; then
+    echo >/dev/stderr "WARNING: Output file exists and will be overwritten: ${outfile}"
+fi
+
+
+## Do processing
+
+echo "Checking source DEM NoData value"
+cmd="gdalinfo ${demfile} | grep 'NoData Value' | cut -d= -f2"
+echo -e "$cmd"
+nodata_val=$(eval "$cmd")
+if [ -n "$nodata_val" ]; then
+    nodata_arg="--NoDataValue=${nodata_val}"
+else
+    nodata_arg=''
+fi
+
+echo "Creating intermediate rounded DEM: ${demfile} -> ${tmpfile}"
+cmd="gdal_calc.py --overwrite -A \"${demfile}\" --outfile=\"${tmpfile}\" --calc='round_(A*128.0)/128.0' ${nodata_arg} --co tiled=yes --co compress=lzw --co bigtiff=yes"
+echo -e "$cmd"
+if [ "$dryrun" = false ]; then
+    eval "$cmd"
+fi
+
+echo "Converting rounded DEM to COG: ${tmpfile} -> ${outfile}"
+cmd="gdal_translate -of COG -co resampling=bilinear -co overviews=ignore_existing -co compress=lzw -co predictor=3 -co bigtiff=yes \"${tmpfile}\" \"${outfile}\""
+echo -e "$cmd"
+if [ "$dryrun" = false ]; then
+    eval "$cmd"
+fi
+
+echo "Removing intermediate rounded DEM"
+if [ "$dryrun" = false ]; then
+    rm "$tmpfile"
+fi
+
+echo "Done"
