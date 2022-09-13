@@ -51,9 +51,9 @@ line2csstring() {
     echo "$result"
 }
 
-string_replace() { sed -r "s|${1}|${2}|g"; }
-string_prepend() { sed -r "s|(.*)|${1}\1|"; }
-string_append() { sed -r "s|(.*)|\1${1}|"; }
+string_replace() { sed "s|${1}|${2}|g"; }
+string_prepend() { sed "s|^|${1}|"; }
+string_append() { sed "s|$|${1}|"; }
 
 
 ## Command-line argument manipulation
