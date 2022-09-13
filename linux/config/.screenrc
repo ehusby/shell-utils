@@ -174,3 +174,14 @@ termcapinfo xterm* ti@:te@
 
 # Force Bash shell if not default shell
 #shell "/bin/bash"
+
+# Use these bindings to quickly move windows left or right
+bind 1 number 1
+bind 2 number 2
+bind 3 number 3
+bind 4 number 4
+bind 5 number 5
+bind 6 number 6
+bind 7 number 7
+bind 8 number 8
+bind 9 number 9
