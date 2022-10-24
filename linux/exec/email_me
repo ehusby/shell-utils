@@ -25,7 +25,8 @@ set +u; shopt -s expand_aliases; source ~/.bashrc; shopt -u expand_aliases; set 
 source "$bash_functions_script"
 
 ## Required envvars
-if { ! env | grep -q '^MY_EMAIL='; } || [ -z "$MY_EMAIL" ]; then
+set +u; if [ -n "$MY_EMAIL" ]; then my_email_is_set=true; else my_email_is_set=false; fi; set -u
+if [ "$my_email_is_set" = false ]; then
     echo "Please run 'export MY_EMAIL=\"your-email-address\"' in this bash instance and add that to your ~/.bashrc file :)"
     exit_script_with_status 1
 fi
