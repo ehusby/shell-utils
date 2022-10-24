@@ -239,6 +239,84 @@ string_startswith() { re_test "^$(escape_regex_special_chars "$2")" "$1"; }
 string_endswith() { re_test "$(escape_regex_special_chars "$2")\$" "$1"; }
 string_contains() { re_test "$(escape_regex_special_chars "$2")" "$1"; }
 
+string_startswith_oneof_index() {
+    local el="$1"     # Save first argument in a variable
+    shift             # Shift all arguments to the left (original $1 gets lost)
+    local arr=("$@")  # Rebuild the array with rest of arguments
+    local index=-1
+
+    local i
+    for i in "${!arr[@]}"; do
+        if [ "$(string_startswith "$el" "${arr[$i]}")" = true ]; then
+            index="$i"
+            break
+        fi
+    done
+
+    echo "$index"
+}
+string_startswith_oneof_match() {
+    local el="$1"
+    shift
+    local arr=("$@")
+    local index=-1
+
+    index=$(string_startswith_oneof_index "$el" ${arr[@]+"${arr[@]}"})
+    if (( index != -1 )); then
+        echo "${arr[index]}"
+    fi
+}
+string_startswith_oneof() {
+    local el="$1"
+    shift
+    local arr=("$@")
+
+    if (( $(string_startswith_oneof_index "$el" ${arr[@]+"${arr[@]}"}) == -1 )); then
+        echo false
+    else
+        echo true
+    fi
+}
+
+string_endswith_oneof_index() {
+    local el="$1"     # Save first argument in a variable
+    shift             # Shift all arguments to the left (original $1 gets lost)
+    local arr=("$@")  # Rebuild the array with rest of arguments
+    local index=-1
+
+    local i
+    for i in "${!arr[@]}"; do
+        if [ "$(string_endswith "$el" "${arr[$i]}")" = true ]; then
+            index="$i"
+            break
+        fi
+    done
+
+    echo "$index"
+}
+string_endswith_oneof_match() {
+    local el="$1"
+    shift
+    local arr=("$@")
+    local index=-1
+
+    index=$(string_endswith_oneof_index "$el" ${arr[@]+"${arr[@]}"})
+    if (( index != -1 )); then
+        echo "${arr[index]}"
+    fi
+}
+string_endswith_oneof() {
+    local el="$1"
+    shift
+    local arr=("$@")
+
+    if (( $(string_endswith_oneof_index "$el" ${arr[@]+"${arr[@]}"}) == -1 )); then
+        echo false
+    else
+        echo true
+    fi
+}
+
 string_is_int() {            re_test '^-?[0-9]+$' "$1"; }
 string_is_posint_or_zero() { re_test   '^[0-9]+$' "$1"; }
 string_is_negint_or_zero() { re_test  '^-[0-9]+$' "$1"; }
