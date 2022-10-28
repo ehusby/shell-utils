@@ -61,27 +61,22 @@ If you have an older installation of OSGeo4W that requires running the `py3_env`
 Anaconda is a powerful package manager for Python through which you can quickly create custom Python environments for programs that each require a specific set of Python package dependencies. I prefer to use the [Miniconda installer](https://docs.conda.io/en/latest/miniconda.html) (Python 3 version) as the main [Anaconda installer](https://www.anaconda.com/products/individual) comes bloated with many pre-installed Python packages you'll never use.
 
 If you choose to "Install for: Just Me", then the default installation location is `C:\Users\%USERNAME%\miniconda3`. If Miniconda was installed to a different location, you will need to change the `target_path` and `starting_conda_env` settings accordingly in [`shell-utils/windows/starter_scripts/start_conda.bat`](./starter_scripts/start_conda.bat).
-<br>
 > **Note:** The `starting_conda_env` setting determines which Conda environment is loaded when the starter script is run. The `base` environment is loaded by default. You may want to change this if you later create a different environment that acts as a better default environment on your system. 
 
 [`conda`](./exec/conda.bat) is the shortcut command used to start up an Anaconda Prompt through the File Explorer Address bar.
 
 ### WSL Bash
 [Windows Subsystem for Linux (WSL)](https://docs.microsoft.com/en-us/windows/wsl/about) is pretty nifty. Who doesn't want Bash on Windows?!
-<br>
 [Installation instructions are here](https://docs.microsoft.com/en-us/windows/wsl/install-win10#manual-installation-steps). **I choose "WSL 1" over "WSL 2"** because [I want to be able to access all files in Windows through Bash](https://docs.microsoft.com/en-us/windows/wsl/compare-versions). When choosing a Linux distribution to install, I'd get the latest version of Ubuntu. While you're at it, I'd also [install the "new" Windows Terminal](https://docs.microsoft.com/en-us/windows/terminal/get-started) that looks nice and makes for easy switching between Command Prompt, Powershell, and your new ("Ubuntu") Bash. With the right configuration, you can run `wt` in the address bar of any File Explorer window to open Windows Terminal and its subshells directly into that folder! See the note below for proper shell profile settings.
-<br>
 > **Note:** Windows Terminal settings for OSGeo4W, Anaconda, WSL Bash, and Git Bash are included in this repo. Refer to [wt_settings_non-starter.json](./wt_settings_non-starter.json) for profile settings that leverage shell executable and icon files in *typical installation locations*. Refer to [wt_settings_use-starter.json](./wt_settings_use-starter.json) for profile settings that leverage the starter scripts and icon files in the shell-utils repo (recommended, but you must make sure the paths to your local copy of the shell-utils repo are correct).
 
 Once you have WSL Bash fully installed, you can **follow the [shell-utils setup guide for Linux](../linux/README.md) to configure your Bash shell!**
 
 [`wsl-bash`](./exec/wsl-bash.bat) is the shortcut command used to start up a Bash shell through the File Explorer Address bar.
-<br>
 > **Note:** While this shortcut command should be able to open a Bash shell to any location on your C drive or other **local** drives you had connected to your PC at the time you installed WSL, **mapped network drives** and removable drives (i.e. thumb drives or other USB drives) must be mounted manually in Bash before the shortcut command will work in these locations! **Use the [`mount_drive` script from the Linux part of this repo](../linux/exec/mount_drive) to permanently mount network drives in WSL Bash.**
 
 ## <a name="path_config_2"></a>Easily call frequently-used scripts from anywhere
 Say you have a code repository containing a set of Python scripts that you use all the time for data processing tasks, and all of the scripts are located directly inside the repo's root directory at `C:\Users\%USERNAME%\scratch\repos\data-processing-tools`. If these scripts have distinct filenames, it would be handy if we could run them from any shell by simply typing *the filename of the script*, without needing to type the whole `C:\Users\%USERNAME%\scratch\repos\data-processing-tools` directory prefix. We can make these scripts callable by name from any location on your computer by simply [adding that directory path to the system-wide `PATH` environment variable](#path_config_1).
-<br>
 > **Note:** Changes to Windows Environment Variable settings are only applied in *new shells* opened after the changes have been saved.
 
 After adding a script folder to the PATH environment variable, you can test that this worked by opening a new Command Prompt window and running the command `where <filename-of-script>`. If one of the files in this folder is a Python script named `my_tool.py`, that command would be `where my_tool.py`.
@@ -119,7 +114,6 @@ We'll test this setup process using the [`check_python_location.py`](https://git
 8. Navigate to the location of the Python executable you want to be the system default, and select it. 
    - To make the OSGeo4W Python install the system default Python program, navigate to `C:\OSGeo4W\apps\Python39` and select the "python"(.exe) file in that folder.
    - If you're unsure where the Python executable is located, open the shell program through which you can call `python` (such as Anaconda Prompt), and run the command `where python` to determine its location.
-<br>
 > **Note on Windows bug:** When using the above "Open with" method to change the system-wide default Python program, you may need to temporarily rename/move the current default `*.py` "Open" application file for Windows to accept the new default. **Don't forget to undo your rename/move of that file once the new default has been set successfully!!** The first time you change the default, the application file you need to rename/move is most likely a `python.exe` file in the current default Python's install location (locate by running `where python` in the shell program through which you can call `python`). If you have already changed the default using the above steps, the file to rename/move would be the `shell-utils/windows/open_with_scripts/run_pyscript_*.bat` file you previously set through the above steps. 
 
 The `check_python_location.py` script should now run with the Python executable you selected, and a terminal window should open verifying the location of that `python.exe` file. Close that terminal window and now try double-click running the `check_python_location.py` file. If the `.py` file association is set correctly, the terminal window should appear again showing the same Python executable location you selected. If instead you see a terminal window quickly appear and then disappear, a different program opens, or *the Python executable location is not what you set it to a moment ago*, then try [configuring this through the registry](#set_system_default_python_registry) instead.
