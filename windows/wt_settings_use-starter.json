@@ -76,10 +76,10 @@
                 "startingDirectory": null
             },
             {
-                "commandline": "C:\\Users\\%USERNAME%\\scratch\\repos\\shell-utils\\windows\\starter_scripts\\start_osgeo_py3.bat",
+                "commandline": "C:\\Users\\%USERNAME%\\scratch\\repos\\shell-utils\\windows\\starter_scripts\\start_osgeo_o4w-env_keep-path.bat",
                 "foreground": "#16B40C",
                 "icon": "C:\\Users\\%USERNAME%\\scratch\\repos\\shell-utils\\windows\\icons\\osgeo.ico",
-                "name": "OSGeo4W - Python3",
+                "name": "OSGeo4W",
                 "startingDirectory": null,
                 "tabTitle": "OSGeo4W - Python3"
             },
