@@ -100,8 +100,8 @@
                 "tabTitle": "WSL Bash"
             },
             {
-                "commandline": "C:\\Users\\husby036\\scratch\\repos\\shell-utils\\windows\\starter_scripts\\start_git-bash.bat",
-                "icon": "C:\\Users\\husby036\\scratch\\repos\\shell-utils\\windows\\icons\\git-bash.ico",
+                "commandline": "C:\\Users\\%USERNAME%\\scratch\\repos\\shell-utils\\windows\\starter_scripts\\start_git-bash.bat",
+                "icon": "C:\\Users\\%USERNAME%\\scratch\\repos\\shell-utils\\windows\\icons\\git-bash.ico",
                 "name": "Git Bash",
                 "startingDirectory": null,
                 "tabTitle": "Git Bash"
