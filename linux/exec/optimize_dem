@@ -118,7 +118,7 @@ if [ -n "$num_threads" ]; then
 else
     num_threads_arg=''
 fi
-cmd="gdal_calc.py --overwrite -A \"${demfile}\" --outfile=\"${tmpfile}\" --calc='round_(A*128.0)/128.0' ${nodata_arg} --co tiled=yes --co compress=lzw --co bigtiff=yes ${num_threads_arg}"
+cmd="gdal_calc.py --overwrite --format GTiff --co bigtiff=yes --co tiled=yes --co compress=lzw --co predictor=1 ${num_threads_arg} -A \"${demfile}\" --outfile=\"${tmpfile}\" --calc='round_(A*128.0)/128.0' ${nodata_arg}"
 echo -e "$cmd"
 if [ "$dryrun" = false ]; then
     eval "$cmd"
@@ -130,7 +130,7 @@ if [ -n "$num_threads" ]; then
 else
     num_threads_arg=''
 fi
-cmd="gdal_translate -of COG -co resampling=bilinear -co overviews=ignore_existing -co compress=lzw -co predictor=3 -co bigtiff=yes ${num_threads_arg} \"${tmpfile}\" \"${outfile}\""
+cmd="gdalwarp -ovr NONE -of COG -co bigtiff=yes -co overviews=ignore_existing -co resampling=bilinear -co compress=lzw -co predictor=3 ${num_threads_arg} \"${tmpfile}\" \"${outfile}\""
 echo -e "$cmd"
 if [ "$dryrun" = false ]; then
     eval "$cmd"
