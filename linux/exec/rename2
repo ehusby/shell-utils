@@ -26,6 +26,7 @@ source "$bash_functions_script"
 
 ## Arguments
 force_glob=false
+do_copy=true
 src_path=''
 new_name=''
 fwd_args_arr=()
@@ -60,6 +61,8 @@ Options:
         When SRC_PATH is the full path to an existing file/folder,
         force treating SRC_PATH as a prefix matching additional
         files/folders in the same directory.
+-cp,--copy
+        Copy files instead of renaming.
 -db,--debug
 -dr,--dryrun
         Print 'mv' command(s) used to rename files/folders,
@@ -154,6 +157,10 @@ while (( "$#" )); do
             arg_opt_nargs=0
             force_glob=true
 
+        elif [ "$arg_opt" = 'cp' ] || [ "$arg_opt" = 'copy' ]; then
+            arg_opt_nargs=0
+            do_copy=true
+
         elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
             arg_opt_nargs=0
             dryrun=true
@@ -240,12 +247,18 @@ fi
 
 mv_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
 
+if [ "$do_copy" = true ]; then
+    mv_program='cp'
+else
+    mv_program='mv'
+fi
+
 
 ## Perform renaming
 
 for src_dirent in "${src_dirent_arr[@]}"; do
 
-    cmd="mv ${mv_opt_args} \"${src_dirent}\" \"${src_dirent/${old_prefix_full}/${new_prefix_full}}\""
+    cmd="${mv_program} ${mv_opt_args} \"${src_dirent}\" \"${src_dirent/${old_prefix_full}/${new_prefix_full}}\""
 
     if [ "$dryrun" = true ]; then
         echo "$cmd"
