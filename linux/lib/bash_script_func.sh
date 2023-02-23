@@ -207,11 +207,18 @@ sec2hms() {
     printf "%02d:%02d:%02d\n" "$hms_hr" "$hms_min" "$hms_sec"
 }
 hms2sec() {
+    local day_part hms_part
     local hms_hr hms_min hms_sec
     local total_sec
 
-    IFS=: read -r hms_hr hms_min hms_sec <<< "${1%.*}"
-    total_sec="$(( 10#$hms_hr*3600 + 10#$hms_min*60 + 10#$hms_sec ))"
+    IFS=- read -r day_part hms_part <<< "$1"
+    if [ -z "$hms_part" ]; then
+        hms_part="$day_part"
+        day_part=0
+    fi
+
+    IFS=: read -r hms_hr hms_min hms_sec <<< "${hms_part%.*}"
+    total_sec="$(( 10#$day_part*86400 + 10#$hms_hr*3600 + 10#$hms_min*60 + 10#$hms_sec ))"
 
     echo "$total_sec"
 }
