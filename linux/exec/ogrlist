@@ -46,6 +46,7 @@ layer_sort=false
 arc_sde=false
 feature_count=false
 summary_only=false
+no_fields=false
 raw_info=false
 no_limit=false
 print_header=false
@@ -144,6 +145,9 @@ Options:
         Ignore options that modify layer/field listing and
         print information that would normally be printed with
         'ogrinfo' Summary Only ('-so') option.
+-nf,--no-fields
+        Use only with the --summary-only option.
+        Remove field list from --summary-only output.
 -ri,--raw-info
         Print raw feature info as it would be printed by 'ogrinfo'.
         Useful when provided with the "--query 'limit N'" option
@@ -152,6 +156,7 @@ Options:
         "--query 'limit 1'" is set automatically unless --no-limit
         is also provided.
 -nl,--no-limit
+        Use only with the --raw-info option.
         Do not automatically set "--query 'limit 1'" upon providing
         the --raw-info option.
 -db,--debug
@@ -277,6 +282,10 @@ while (( $# > 0 )); do
         elif [ "$arg_opt" = 'so' ] || [ "$arg_opt" = 'summary-only' ]; then
             arg_opt_nargs=0
             summary_only=true
+
+        elif [ "$arg_opt" = 'nf' ] || [ "$arg_opt" = 'no-fields' ]; then
+            arg_opt_nargs=0
+            no_fields=true
 
         elif [ "$arg_opt" = 'ri' ] || [ "$arg_opt" = 'raw-info' ]; then
             arg_opt_nargs=0
@@ -516,7 +525,11 @@ elif [ -z "$field_list" ] || [ "$list_fields" = true ] || [ "$header_all_fields"
     if [ "$feature_count" = true ]; then
         cmd="${ogrinfo_cmd} | grep -E '^Feature Count: [0-9]+$' | grep -Eo [0-9]+"
     elif [ "$summary_only" = true ]; then
-        cmd="$ogrinfo_cmd"
+        if [ "$no_fields" = true ]; then
+            cmd="${ogrinfo_cmd} | grep -E -v '^[^[:space:]]+\: [^[:space:]]+ \([0-9]+\.?[0-9]*\) ?'"
+        else
+            cmd="$ogrinfo_cmd"
+        fi
     else
         list_mod_cmd=''
         if [ "$list_trim" = true ]; then
@@ -532,7 +545,7 @@ elif [ -z "$field_list" ] || [ "$list_fields" = true ] || [ "$header_all_fields"
         fi
     fi
 fi
-if [ -z "$cmd" ] || { [ "$header_all_fields" = true ] && [ "$list_layers" = false ] && [ "$list_fields" = false ]; }; then
+if [ -z "$cmd" ] || { [ "$header_all_fields" = true ] && [ "$list_layers" = false ] && [ "$list_fields" = false ] && [ "$summary_only" = false ]; }; then
     ogrinfo_cmd="ogrinfo -ro -dialect sqlite -sql \"SELECT ${field_list} FROM '${layer_name}' ${sql_where} ${sql_query}\" \"${dbase_path}\""
     cmd="${ogrinfo_cmd} | sed -n '/OGRFeature(SELECT):/,\$p'"
     if [ "$feature_count" = true ]; then
