@@ -26,9 +26,10 @@ source "$bash_functions_script"
 
 ## Arguments
 force_glob=false
-do_copy=true
+do_copy=false
 src_path=''
 new_name=''
+repl_str=''
 fwd_args_arr=()
 symlink_file_arr=()
 dryrun=false
@@ -38,7 +39,7 @@ dryrun=false
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage: ${script_name} [OPTION]... SRC_PATH NEW_NAME [--update-symlinks SYMLINK_PATH...] ['mv' OPTION]...
+Usage: ${script_name} [OPTION]... SRC_PATH {NEW_NAME OR {MATCH_STR REPL_STR}} [--update-symlinks SYMLINK_PATH...] ['mv' OPTION]...
 
 Rename one or more files or folders.
 
@@ -46,15 +47,29 @@ Rename one or more files or folders.
 or a path leading up and including the common filename/foldername
 prefix of multiple files/folders in the same source directory.
 
-  If SRC_PATH is a single file, the full filename/foldername of
-the source file is renamed to NEW_NAME.
-  If SRC_PATH ends in a prefix matching multiple files/folders
-in the same directory, the filenames/foldernames of the matches
-are renamed to "{NEW_NAME}{old-name-suffix}".
+If NEW_NAME is provided...
+
+  If SRC_PATH is a path to a single file/folder, that file/folder
+is renamed to NEW_NAME.
+  If SRC_PATH is a path prefix matching multiple files/folders
+in the same directory with names like '{SRC_PATH}{old-name-suffix}',
+the filenames/foldernames of the matching files/folders are renamed
+to "{NEW_NAME}{old-name-suffix}".
 
   If NEW_NAME does not start with '/', it is treated as a path
 relative to the directory of SRC_PATH.
   If NEW_NAME starts with '/', it is treated as an absolute path.
+
+If MATCH_STR and REPL_STR are provided...
+
+  If SRC_PATH is a path to a single file/folder, the part(s) of the
+file/folder basename that match MATCH_STR are replaced with REPL_STR
+in renaming.
+  If SRC_PATH is a path prefix matching multiple files/folders
+in the same directory, the part(s) of the file/folder basename that
+match MATCH_STR are replaced with REPL_STR in renaming.
+
+  MATCH_STR cannot contain the '/' character.
 
 Options:
  -g,--glob
@@ -130,6 +145,8 @@ while (( $# > 0 )); do
             src_path="$arg"
         elif [ -z "$new_name" ]; then
             new_name="$arg"
+        elif [ -z "$repl_str" ]; then
+            repl_str="$arg"
         else
             echo_e "Unexpected argument: ${arg}"
             exit_script_with_status 1
@@ -212,6 +229,10 @@ if [ -z "$src_path" ] || [ -z "$new_name" ]; then
     echo_e "Both SRC_PATH and NEW_NAME arguments must be provided"
     exit_script_with_status 1
 fi
+if [ -n "$repl_str" ] && [ "$(string_contains "$new_name" '/')" = true ]; then
+    echo_e "NEW_NAME cannot contain '/' characters when REPL_STR is provided"
+    exit_script_with_status 1
+fi
 
 old_prefix_full=$(fullpath "$src_path")
 old_prefix_abs=$(abspath "$src_path")
@@ -235,14 +256,18 @@ for symlink_file in "${symlink_file_arr[@]+${symlink_file_arr[@]}}"; do
     fi
 done
 
-if [ "$(string_startswith "$new_name" '/')" = true ]; then
-    new_prefix_full=$(fullpath "$new_name")
-    new_prefix_abs=$(abspath "$new_name")
-else
-    src_dir_full=$(dirname "$old_prefix_full")
-    src_dir_abs=$(dirname "$old_prefix_abs")
-    new_prefix_full="${src_dir_full}/${new_name}"
-    new_prefix_abs="${src_dir_abs}/${new_name}"
+if [ -z "$repl_str" ]; then
+    if [ "$(string_startswith "$new_name" '/')" = true ]; then
+        new_prefix_full=$(fullpath "$new_name")
+        new_prefix_abs=$(abspath "$new_name")
+    else
+        src_dir_full=$(dirname "$old_prefix_full")
+        src_dir_abs=$(dirname "$old_prefix_abs")
+        new_prefix_full="${src_dir_full}/${new_name}"
+        new_prefix_abs="${src_dir_abs}/${new_name}"
+    fi
+elif [ -n "$repl_str" ]; then
+    new_prefix_full=''
 fi
 
 mv_opt_args="${fwd_args_arr[*]+${fwd_args_arr[*]}}"
@@ -258,7 +283,15 @@ fi
 
 for src_dirent in "${src_dirent_arr[@]}"; do
 
-    cmd="${mv_program} ${mv_opt_args} \"${src_dirent}\" \"${src_dirent/${old_prefix_full}/${new_prefix_full}}\""
+    if [ -z "$repl_str" ]; then
+        dst_dirent="${src_dirent/${old_prefix_full}/${new_prefix_full}}"
+    elif [ -n "$repl_str" ]; then
+        src_dirent_name=$(basename "$src_dirent")
+        dst_dirent_name=$(echo "$src_dirent_name" | sed -r "s|${new_name}|${repl_str}|g")
+        dst_dirent="$(dirname "$src_dirent")/${dst_dirent_name}"
+    fi
+
+    cmd="${mv_program} ${mv_opt_args} \"${src_dirent}\" \"${dst_dirent}\""
 
     if [ "$dryrun" = true ]; then
         echo "$cmd"
@@ -270,7 +303,15 @@ done
 for symlink_file in "${symlink_file_arr[@]+${symlink_file_arr[@]}}"; do
     link_orig=$(readlink "$symlink_file")
 
-    cmd="ln -s -f \"${link_orig/${old_prefix_abs}/${new_prefix_abs}}\" \"${symlink_file}\""
+    if [ -z "$repl_str" ]; then
+        new_dirent="${link_orig/${old_prefix_abs}/${new_prefix_abs}}"
+    elif [ -n "$repl_str" ]; then
+        old_dirent_name=$(basename "$link_orig")
+        new_dirent_name=$(echo "$old_dirent_name" | sed -r "s|${new_name}|${repl_str}|g")
+        new_dirent="$(dirname "$link_orig")/${new_dirent_name}"
+    fi
+
+    cmd="ln -s -f \"${new_dirent}\" \"${symlink_file}\""
 
     if [ "$dryrun" = true ]; then
         echo "$cmd"
