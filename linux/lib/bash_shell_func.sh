@@ -513,7 +513,7 @@ get_stats() {
 '@num_list=(); while(<>){ $sqsum+=$_*$_; push(@num_list,$_); };'\
 '$nitems=@num_list;'\
 'if ($nitems == 0) { $sum=0; $min=0; $max=0; $med=0; $avg=0; $std=0; } else {'\
-'$sum=sum(@num_list); $avg=$sum/$nitems; $max=max(@num_list)+0; $min=min(@num_list)+0;'\
+'$min=min(@num_list)+0; $max=max(@num_list)+0; $sum=sum(@num_list); $avg=$sum/$nitems;'\
 '$std=sqrt($sqsum/$nitems-($sum/$nitems)*($sum/$nitems));'\
 '$mid=int $nitems/2; @srtd=sort @num_list; if($nitems%2){ $med=$srtd[$mid]+0; }else{ $med=($srtd[$mid-1]+$srtd[$mid])/2; }; };'\
 'print "cnt: ${nitems}\nsum: ${sum}\nmin: ${min}\nmax: ${max}\nmed: ${med}\navg: ${avg}\nstd: ${std}\n";'\
