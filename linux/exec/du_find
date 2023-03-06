@@ -92,7 +92,7 @@ EOM
 ## Parse arguments
 set +u
 parsing_fwd_args=false
-while (( "$#" )); do
+while (( $# > 0 )); do
     arg_raw="$1"
     arg_esc=$(escape_string "$arg_raw")
     arg_opt_raw=''

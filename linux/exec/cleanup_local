@@ -89,7 +89,7 @@ fi
 
 ## Parse arguments
 set +u
-while (( "$#" )); do
+while (( $# > 0 )); do
     arg="$1"
 
     if [ "$(string_startswith "$arg" '-')" = false ]; then

@@ -9,7 +9,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/bash_base_func.sh"
 log() {
     local echo_args=( '-e' )
     local arg
-    while (( "$#" )); do
+    while (( $# > 0 )); do
         arg="$1"
         if [ "$(string_startswith "$arg" '-')" = true ]; then
             arg_opt=$(string_lstrip "$arg" '-')

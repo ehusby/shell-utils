@@ -117,7 +117,7 @@ fi
 ## Parse arguments
 set +u
 parsing_fwd_args=false
-while (( "$#" )); do
+while (( $# > 0 )); do
     arg="$1"
 
     if [ "$parsing_fwd_args" = true ]; then

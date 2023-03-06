@@ -860,7 +860,7 @@ link_or_copy() {
 absymlink_defunct() {
     local arg_arr arg
     arg_arr=()
-    while (( "$#" )); do
+    while (( $# > 0 )); do
         arg="$1"
         if ! [[ $arg == -* ]]; then
             arg=$(readlink -f "$arg")
@@ -888,7 +888,7 @@ mv_and_absymlink() {
     else
         dst_dir_exists=true
         local arg arg_opt
-        while (( $# )); do
+        while (( $# > 0 )); do
             arg="$1"
             if [ "$(string_startswith "$arg" '-')" = true ]; then
                 arg_opt=$(string_lstrip "$arg" '-')
@@ -1119,7 +1119,7 @@ find_alias() {
 
     local parsing_opt_args arg arg_opt argval
     parsing_opt_args=false
-    while (( "$#" )); do
+    while (( $# > 0 )); do
         arg="$1"
         if [[ $arg == -* ]] || [ "$arg" == '!' ]; then
             parsing_opt_args=true
@@ -1247,7 +1247,7 @@ find_missing_suffix() {
     debug=false
 
     local arg
-    while (( "$#" )); do
+    while (( $# > 0 )); do
         arg="$1"
         if ! [[ $arg == -* ]]; then
             check_suffix_arr+=( "$arg" )
@@ -1353,7 +1353,7 @@ git_apply_force() {
 }
 
 git_remove_local_branches() {
-  git branch | grep -v '\*' | xargs git branch -D
+  git branch | grep -v '\*' | xargs -r git branch -D
 }
 
 git_make_exec() {
@@ -1390,7 +1390,7 @@ EOM
 
     ## Parse arguments
     local arg arg_opt arg_opt_nargs arg_val_can_start_with_dash
-    while (( "$#" )); do
+    while (( $# > 0 )); do
         arg="$1"
 
         if [ "$(string_startswith "$arg" '-')" = false ]; then

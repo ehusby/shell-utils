@@ -10,7 +10,7 @@ shift
 
 script_args=()
 if [ -n "$script_path" ]; then
-    while (( "$#" )); do
+    while (( $# > 0 )); do
         arg="$1"
         script_args+=( "$arg" )
         shift

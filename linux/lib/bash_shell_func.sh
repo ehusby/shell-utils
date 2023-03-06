@@ -435,7 +435,7 @@ find_alias() {
 
     local parsing_opt_args arg arg_opt argval
     parsing_opt_args=false
-    while (( "$#" )); do
+    while (( $# > 0 )); do
         arg_raw="$1"
         argval_raw="$2"
         arg=$(printf '%q' "$arg_raw")
@@ -562,7 +562,7 @@ find_missing_suffix() {
     debug=false
 
     local arg
-    while (( "$#" )); do
+    while (( $# > 0 )); do
         arg="$1"
         if ! [[ $arg == -* ]]; then
             check_suffix_arr+=( "$arg" )
@@ -737,7 +737,7 @@ EOM
 
     ## Parse arguments
     local arg arg_opt arg_opt_nargs arg_val_can_start_with_dash
-    while (( "$#" )); do
+    while (( $# > 0 )); do
         arg="$1"
 
         if [ "$(string_startswith "$arg" '-')" = false ]; then
