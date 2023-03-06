@@ -93,6 +93,7 @@ process_items() {
 ## Printing
 
 print_string() { printf '%s' "$*"; }
+println_string() { printf '%s\n' "$*"; }
 escape_string() {
     local str_out=$(printf '%q' "$*")
     if [ "$str_out" == "''" ]; then
@@ -591,6 +592,31 @@ abspath_e() {
     abspath "$path"
 }
 
+fullpath_oe() {
+    if (( $# != 1 )); then
+        echo_e "fullpath_oe: expected one path operand"
+        return 1
+    fi
+    local path="$1"
+    if [ ! -e "$path" ]; then
+        println_string "$path"
+    else
+        fullpath "$path"
+    fi
+}
+abspath_oe() {
+    if (( $# != 1 )); then
+        echo_e "abspath_oe: expected one path operand"
+        return 1
+    fi
+    local path="$1"
+    if [ ! -e "$path" ]; then
+        println_string "$path"
+    else
+        abspath "$path"
+    fi
+}
+
 fullpath_pe() {
     if (( $# != 1 )); then
         echo_e "fullpath_pe: expected one path operand"
@@ -680,14 +706,20 @@ derefpath() {
 abspath_all() {
     process_items 'abspath' false true "$@"
 }
-fullpath_all() {
-    process_items 'fullpath' false true "$@"
-}
 abspath_all_e() {
     process_items 'abspath_e' false true "$@"
 }
+abspath_all_oe() {
+    process_items 'abspath_oe' false true "$@"
+}
+fullpath_all() {
+    process_items 'fullpath' false true "$@"
+}
 fullpath_all_e() {
     process_items 'fullpath_e' false true "$@"
+}
+fullpath_all_oe() {
+    process_items 'fullpath_oe' false true "$@"
 }
 derefpath_all() {
     local deref_count="$1"; shift
