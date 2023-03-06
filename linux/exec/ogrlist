@@ -40,7 +40,14 @@ list_layers=false
 list_fields=false
 list_geometry=false
 list_trim=false
+list_sort=false
 list_csv=false
+layer_sort=false
+arc_sde=false
+feature_count=false
+summary_only=false
+raw_info=false
+no_limit=false
 print_header=false
 debug=false
 
@@ -49,24 +56,33 @@ debug=false
 
 ## Script usage
 read -r -d '' script_usage << EOM
-Usage: ${script_name} [DBASE] [OPTION]...
+Usage: ${script_name} DBASE [LAYER_NAME] [OPTION]...
 
-List information from a Shapefile/CSV or FileGDB database,
-leveraging the GDAL/OGR 'ogrinfo' command.
+  List attribute information of features in a geodatabase,
+leveraging the GDAL/OGR 'ogrinfo' command. Supports reading
+of common geodatabase formats such as Shapefile, FileGDB,
+GeoPackage, and CSV.
+  Provide an SQL query to list information from a subset of
+features in the database. Matching features can also be
+exported to an output Shapefile or other common geodatabase
+format.
 
   If no options are provided, layer names are listed for
 FileGDB DBASE, or field names are listed for Shapefile/CSV DBASE.
-  If layer name option is provided, field names in that layer
+  If LAYER_NAME is provided, field names in that layer
 are listed.
   If layer and field name options are provided, the values of
 all records for that field in that layer are listed.
 
 Options:
- -l,--layer=<layer-name>
-        Name of feature class layer in DBASE.
-        (Most Shapefiles only have one layer, and the script
+ -l,--layer=<LAYER_NAME>
+        Name of feature class layer in DBASE. Can also be
+        provided as positional argument LAYER_NAME without
+        option flag.
+        (Shapefiles only have one layer, and the script
          will assume the layer name is the same as the
-         Shapefile name if this option is not provided.)
+         Shapefile name if DBASE has a '.shp' extension and
+         LAYER_NAME is not provided.)
  -f,--field=<field-name,...>
         Name of field(s) in feature class (indicated by --layer
         option) from which values are listed.
@@ -112,8 +128,32 @@ Options:
 -lt,--list-trim
         Trim numbering from layer list, or trim field type
         info from field list.
+-ls,--list-sort
+        Sort layer/field list.
     --list-csv
         Convert layer or field list to CSV string.
+    --layer-sort
+        Trim and sort layer list.
+    --arc-sde
+        Remove SDE/GDB junk layers from layer list when DBASE
+        is an ArcSDE database.
+-fc,--feature-count
+        Add feature count to layer list, or print only feature
+        count if a target layer is provided.
+-so,--summary-only
+        Ignore options that modify layer/field listing and
+        print information that would normally be printed with
+        'ogrinfo' Summary Only ('-so') option.
+-ri,--raw-info
+        Print raw feature info as it would be printed by 'ogrinfo'.
+        Useful when provided with the "--query 'limit N'" option
+        to quickly see example values for fields.
+        By default, if --where and --query options are not provided
+        "--query 'limit 1'" is set automatically unless --no-limit
+        is also provided.
+-nl,--no-limit
+        Do not automatically set "--query 'limit 1'" upon providing
+        the --raw-info option.
 -db,--debug
 -dr,--dryrun
         Print 'ogrinfo' command used to extract information,
@@ -133,6 +173,8 @@ while (( $# > 0 )); do
     if [ "$(string_startswith "$arg" '-')" = false ]; then
         if [ -z "$dbase_path" ]; then
             dbase_path="$arg"
+        elif [ -z "$layer_name" ]; then
+            layer_name="$arg"
         else
             echo_e "Unexpected argument: ${arg}"
             exit_script_with_status 1
@@ -212,9 +254,37 @@ while (( $# > 0 )); do
             arg_opt_nargs=0
             list_trim=true
 
+        elif [ "$arg_opt" = 'ls' ] || [ "$arg_opt" = 'list-sort' ]; then
+            arg_opt_nargs=0
+            list_sort=true
+
         elif [ "$arg_opt" = 'list-csv' ]; then
             arg_opt_nargs=0
             list_csv=true
+
+        elif [ "$arg_opt" = 'layer-sort' ]; then
+            arg_opt_nargs=0
+            layer_sort=true
+
+        elif [ "$arg_opt" = 'arc-sde' ]; then
+            arg_opt_nargs=0
+            arc_sde=true
+
+        elif [ "$arg_opt" = 'fc' ] || [ "$arg_opt" = 'feature-count' ]; then
+            arg_opt_nargs=0
+            feature_count=true
+
+        elif [ "$arg_opt" = 'so' ] || [ "$arg_opt" = 'summary-only' ]; then
+            arg_opt_nargs=0
+            summary_only=true
+
+        elif [ "$arg_opt" = 'ri' ] || [ "$arg_opt" = 'raw-info' ]; then
+            arg_opt_nargs=0
+            raw_info=true
+
+        elif [ "$arg_opt" = 'nl' ] || [ "$arg_opt" = 'no-limit' ]; then
+            arg_opt_nargs=0
+            no_limit=true
 
         elif [ "$arg_opt" = 'db' ] || [ "$arg_opt" = 'debug' ]; then
             arg_opt_nargs=0
@@ -298,11 +368,17 @@ fi
 
 ## Adjust arguments
 
+if [ "$raw_info" = true ] && [ "$no_limit" = false ] && [ -z "$sql_where" ] && [ -z "$sql_query" ]; then
+    sql_query="limit 1"
+fi
 if [ -n "$sql_where" ]; then
     sql_where="WHERE $(echo "$sql_where" | sed -r "s|\"|\'|g")"
 fi
 if [ -n "$sql_query" ]; then
     sql_query=$(echo "$sql_query" | sed -r "s|\"|\'|g")
+fi
+if [ -z "$field_list" ] && { [ -n "$sql_where" ] || [ -n "$sql_query" ]; }; then
+    field_list='*'
 fi
 
 if [ -n "$export_path" ]; then
@@ -318,9 +394,13 @@ if [ -n "$export_path" ]; then
     fi
 fi
 
-ogrinfo_opt_arr=( '-ro' '-so' '-nomd' '-nocount' '-noextent' )
+if [ "$feature_count" = true ] || [ "$summary_only" = true ]; then
+    ogrinfo_opt_arr=( '-ro' '-so' )
+else
+    ogrinfo_opt_arr=( '-ro' '-so' '-nomd' '-nocount' '-noextent' )
+fi
 
-if [ "$list_geometry" = false ]; then
+if [ "$list_geometry" = false ] && [ "$summary_only" = false ] && [ -n "$layer_name" ] && [ "$list_layers" = false ]; then
     ogrinfo_opt_arr+=( '-nogeomtype' )
 fi
 
@@ -332,11 +412,18 @@ else
     header_line="${field_list//,/${delimiter}}"
 fi
 
-if [ "$list_csv" = true ] || [ "$field_list" = '*' ]; then
+if [ "$field_list" = '*' ] && { [ "$list_layers" = false ] && [ "$list_fields" = false ]; }; then
+    list_csv=true
+fi
+if [ "$list_csv" = true ]; then
     list_trim=true
     list_csv_cmd=" | grep -v '^ogc_fid$' | tr '\n' '${delimiter}' | sed 's|${delimiter}$|\n|'"
 else
     list_csv_cmd=''
+fi
+
+if [ "$arc_sde" = true ]; then
+    layer_sort=true
 fi
 
 
@@ -392,43 +479,103 @@ fi
 
 cmd=''
 get_fields_cmd=''
+list_layers_with_fc=false
 if [ -z "$layer_name" ] || [ "$list_layers" = true ]; then
-    ogrinfo_cmd="ogrinfo ${ogrinfo_opt_arr[*]} '${dbase_path}'"
-    if [ "$list_trim" = true ]; then
-        awk_cmd=" | awk -F' ' '{print \$2}'"
+    ogrinfo_cmd="ogrinfo ${ogrinfo_opt_arr[*]} '${dbase_path}' 2> >(grep -v '^Warning 1: Multi-column primary key' >&2)"
+    if [ "$summary_only" = true ]; then
+        cmd="$ogrinfo_cmd"
     else
-        awk_cmd=''
+        if [ "$list_geometry" = false ]; then
+            ogrinfo_cmd="${ogrinfo_cmd} | sed -r 's|\s+\([^\(\)]+\)$||'"
+        fi
+        list_mod_cmd=''
+        if [ "$layer_sort" = true ]; then
+            list_trim=true
+            list_sort=true
+        fi
+        if [ "$list_trim" = true ]; then
+            list_mod_cmd="${list_mod_cmd} | cut -d' ' -f2-"
+        fi
+        if [ "$arc_sde" = true ]; then
+            list_mod_cmd="${list_mod_cmd} | grep '^sde\.' | grep -Ev '^sde\.[a-z][0-9]+(\s|$)' | grep -Ev '^sde\.(sde|gdb|st)_' | grep -Ev '^sde\.(dbtune)(\s|$)' | sort"
+        fi
+        if [ "$list_sort" = true ]; then
+            if [ "$list_trim" = true ]; then
+                list_mod_cmd="${list_mod_cmd} | sort -k1"
+            else
+                list_mod_cmd="${list_mod_cmd} | sort -k2"
+            fi
+        fi
+        cmd="${ogrinfo_cmd} | grep -E '^[0-9]+\:' ${list_mod_cmd} ${list_csv_cmd}"
+        if [ "$feature_count" = true ]; then
+            list_layers_with_fc=true
+        fi
     fi
-    cmd="${ogrinfo_cmd} | grep -E '^[0-9]+\:' ${awk_cmd} ${list_csv_cmd}"
 elif [ -z "$field_list" ] || [ "$list_fields" = true ] || [ "$header_all_fields" = true ]; then
     ogrinfo_cmd="ogrinfo ${ogrinfo_opt_arr[*]} '${dbase_path}' '${layer_name}'"
-    if [ "$list_trim" = true ]; then
-        awk_cmd=" | awk -F':' '{print \$1}'"
+    if [ "$feature_count" = true ]; then
+        cmd="${ogrinfo_cmd} | grep -E '^Feature Count: [0-9]+$' | grep -Eo [0-9]+"
+    elif [ "$summary_only" = true ]; then
+        cmd="$ogrinfo_cmd"
     else
-        awk_cmd=''
-    fi
-    cmd="${ogrinfo_cmd} | grep -E '^[^[:space:]]+\: [^[:space:]]+ \([0-9]+\.?[0-9]*\) ?' ${awk_cmd} ${list_csv_cmd}"
-    if [ "$header_all_fields" = true ]; then
-        get_fields_cmd="header_line=\$(${cmd}); all_fields_csv=\$(echo \"\${header_line}\" | sed 's|${delimiter}|,|g')"
-        field_list="\${all_fields_csv}"
+        list_mod_cmd=''
+        if [ "$list_trim" = true ]; then
+            list_mod_cmd="${list_mod_cmd} | awk -F':' '{print \$1}'"
+        fi
+        if [ "$list_sort" = true ]; then
+            list_mod_cmd="${list_mod_cmd} | sort"
+        fi
+        cmd="${ogrinfo_cmd} | grep -E '^[^[:space:]]+\: [^[:space:]]+ \([0-9]+\.?[0-9]*\) ?' ${list_mod_cmd} ${list_csv_cmd}"
+        if [ "$header_all_fields" = true ]; then
+            get_fields_cmd="header_line=\$(${cmd}); all_fields_csv=\$(echo \"\${header_line}\" | sed 's|${delimiter}|,|g')"
+            field_list="\${all_fields_csv}"
+        fi
     fi
 fi
-if [ -z "$cmd" ] || [ "$header_all_fields" = true ]; then
+if [ -z "$cmd" ] || { [ "$header_all_fields" = true ] && [ "$list_layers" = false ] && [ "$list_fields" = false ]; }; then
     ogrinfo_cmd="ogrinfo -ro -dialect sqlite -sql \"SELECT ${field_list} FROM '${layer_name}' ${sql_where} ${sql_query}\" \"${dbase_path}\""
-    awk_cmd='BEGIN { csv="" } { val=$0; if (val=="") { if (csv!="") print csv; csv=""; } else if (csv=="") { csv=val; } else { csv=sprintf("%s'"${delimiter}"'%s", csv, val); } } END { if (csv!="") print csv; }'
-    cmd="${ogrinfo_cmd} | sed -n '/OGRFeature(SELECT):/,\$p' | grep -E '(^$| = )' | cut -d'=' -f2- | cut -d' ' -f2- | awk '${awk_cmd}'"
-    if [ "$print_header" = true ]; then
-        cmd="echo \"${header_line}\" ; ${cmd}"
-    fi
-    if [ -n "$get_fields_cmd" ]; then
-        cmd="${get_fields_cmd} ; ${cmd}"
+    cmd="${ogrinfo_cmd} | sed -n '/OGRFeature(SELECT):/,\$p'"
+    if [ "$feature_count" = true ]; then
+        cmd="${cmd} | grep '^OGRFeature' | wc -l"
+    else
+        if [ "$raw_info" = false ]; then
+            awk_cmd='BEGIN { csv="" } { val=$0; if (val=="") { if (csv!="") print csv; csv=""; } else if (csv=="") { csv=val; } else { csv=sprintf("%s'"${delimiter}"'%s", csv, val); } } END { if (csv!="") print csv; }'
+            cmd="${cmd} | grep -E '(^$| = )' | cut -d'=' -f2- | cut -d' ' -f2- | awk '${awk_cmd}'"
+            if [ "$print_header" = true ]; then
+                cmd="echo \"${header_line}\" ; ${cmd}"
+            fi
+        fi
+        if [ -n "$get_fields_cmd" ]; then
+            cmd="${get_fields_cmd} ; ${cmd}"
+        fi
     fi
 fi
 
 if [ "$debug" = true ]; then
     echo "$cmd"
+elif [ "$list_layers_with_fc" = false ]; then
+    eval "$cmd" | while IFS= read -r line; do echo "$line"; done
+    cmd_status=$?
+    # Skip error code 141 (SIGPIPE), which can be triggered
+    # when piping the output of this program to 'head'.
+    if (( cmd_status != 0 )) && (( cmd_status != 141 )); then
+        echo_e -e "\nReceived non-zero exit status (${cmd_status}) from main command"
+        echo_e -e "Rerunning ogrinfo command and redirecting stdout to stderr...\n"
+        eval "$ogrinfo_cmd" 1>/dev/stderr
+        exit_script_with_status 1
+    fi
 else
-    eval "$cmd"
+    while IFS= read -r layer_list_line; do
+        layer_name=$(echo "$layer_list_line" | sed -r -e 's|^\d+\:\s*||')
+        layer_fc=$(bash "$script_file_abs" "${script_args[@]}" -l "$layer_name")
+        cmd_status=$?
+        if (( cmd_status != 0 )) && (( cmd_status != 141 )); then
+            echo_e -e "\nReceived non-zero exit status (${cmd_status}) from feature count command"
+        else
+            layer_list_line="${layer_list_line} [${layer_fc}]"
+        fi
+        echo "$layer_list_line"
+    done < <(eval "$cmd")
     cmd_status=$?
     # Skip error code 141 (SIGPIPE), which can be triggered
     # when piping the output of this program to 'head'.
