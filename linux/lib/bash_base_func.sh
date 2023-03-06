@@ -739,6 +739,7 @@ cut_slice_alias() {
     local reverse="$1"; shift
     local idx_a idx_b
     local idx_start idx_end
+    local dash_provided
 
     if (( $# < 1 )); then
         echo_e "${func_name}: first one or two arguments must be nonzero indices from end, like '2-1' or '2 1', respectively"
@@ -746,15 +747,17 @@ cut_slice_alias() {
     fi
 
     if [[ $1 == *-* ]]; then
+        dash_provided=true
         idx_a=$(echo "$1" | cut -d'-' -f1)
         idx_b=$(echo "$1" | cut -d'-' -f2)
         shift
-    elif (( $# >= 2 )); then
+    else
+        dash_provided=false
         idx_a="$1"; shift
         idx_b="$1"; shift
     fi
 
-    if [ "$(string_is_posint "$idx_a")" = false ] || [ "$(string_is_posint "$idx_b")" = false ]; then
+    if [ "$(string_is_posint "$idx_a")" = false ] || { [ -n "$idx_b" ] && [ "$(string_is_posint "$idx_b")" = false ]; }; then
         echo_e "${func_name}: first one or two arguments must be nonzero indices from end, like '2-1' or '2 1'"
         return 1
     fi
@@ -763,15 +766,24 @@ cut_slice_alias() {
         return 1
     fi
 
-    if (( idx_a < idx_b )); then
-        idx_start="$idx_a"
-        idx_end="$idx_b"
-    else
-        idx_start="$idx_b"
-        idx_end="$idx_a"
-    fi
+    cmd="cut -d'${delimiter}'"
 
-    cmd="cut -d'${delimiter}' -f${idx_start}-${idx_end}"
+    if [ -z "$idx_b" ]; then
+        if [ "$dash_provided" = true ]; then
+            cmd="${cmd} -f${idx_a}-"
+        else
+            cmd="${cmd} -f${idx_a}"
+        fi
+    else
+        if (( idx_a < idx_b )); then
+            idx_start="$idx_a"
+            idx_end="$idx_b"
+        else
+            idx_start="$idx_b"
+            idx_end="$idx_a"
+        fi
+        cmd="${cmd} -f${idx_start}-${idx_end}"
+    fi
 
     if [ "$reverse" = true ]; then
         cmd="rev | ${cmd} | rev"
