@@ -136,7 +136,7 @@ link_or_copy() {
 absymlink_defunct() {
     local arg_arr arg
     arg_arr=()
-    while (( "$#" )); do
+    while (( $# > 0 )); do
         arg="$1"
         if ! [[ $arg == -* ]]; then
             arg=$(readlink -f "$arg")
