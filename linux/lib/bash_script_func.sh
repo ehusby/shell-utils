@@ -4,6 +4,25 @@
 source "$(dirname "${BASH_SOURCE[0]}")/bash_base_func.sh"
 
 
+wrap_custom_exec() {
+    if [ -n "$CUSTOM_EXEC" ]; then
+        local cmd
+        if (( $# == 0 )); then
+            cmd=''
+        elif (( $# == 1 )); then
+            cmd="$1"
+        else
+            cmd=$(printf "%q " "$@")
+        fi
+        ${CUSTOM_EXEC} bash -c "$cmd"
+    elif (( $# == 1 )); then
+        eval "$1"
+    else
+        "$@"
+    fi
+}
+
+
 ## Log printing
 
 log() {
@@ -207,11 +226,17 @@ sec2hms() {
     printf "%02d:%02d:%02d\n" "$hms_hr" "$hms_min" "$hms_sec"
 }
 hms2sec() {
-    local day_part hms_part
+    local hms_str day_part hms_part
     local hms_hr hms_min hms_sec
     local total_sec
 
-    IFS=- read -r day_part hms_part <<< "$1"
+    hms_str=$(print_string "$1" | grep -Eo -m1 '[0-9]*-?[0-9]+:[0-9]{2}:[0-9]{2}')
+    if [ -z "$hms_str" ]; then
+        echo_e "hms2sec: unable to parse input string: ${1}"
+        return 1
+    fi
+
+    IFS=- read -r day_part hms_part <<< "$hms_str"
     if [ -z "$hms_part" ]; then
         hms_part="$day_part"
         day_part=0
