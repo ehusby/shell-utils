@@ -124,6 +124,10 @@ layz() {
     fi
 }
 
+timestmap2datestr() {
+    sed -r 's|([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})|\1-\2-\3 \4:\5:\6|'
+}
+
 
 ## File operations
 
@@ -250,6 +254,10 @@ trashem() {
 
 
 ## Read inputs
+
+headtail() {
+    perl -e 'my $size = '$1'; my @buf = (); while (<>) { print if $. <= $size; push(@buf, $_); if ( @buf > $size ) { shift(@buf); } } print "------\n"; print @buf;'
+}
 
 get_csv_cols() {
     :
@@ -383,16 +391,118 @@ count_by_month_with_ex() {
     grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+.*$' | awk '{date=$1; date_count_dict[date]++; date_ex_dict[date]=$0} END {for (date in date_count_dict) printf "%s : %5s : %s\n", date, date_count_dict[date], date_ex_dict[date]}' | sort
 }
 
-sum_col() {
-    local col_num=1
-    local col_delim=' '
+strip_cols() {
+    local col_delim_in=' '
+    local col_delim_out=' '
     if (( $# >= 1 )); then
-        col_num="$1"
+        col_delim_in="$1"
     fi
     if (( $# >= 2 )); then
-        col_delim="$2"
+        col_delim_out="$2"
     fi
-    awk -F"$col_delim" "{print \$${col_num}}" | paste -s -d"+" | bc
+    awk -F "$col_delim_in" '
+BEGIN {}
+{
+    for (i=1; i<=NF; i++) {
+        if (i!=1) {
+            printf("'"${col_delim_out}"'");
+        }
+        printf("%s", $i);
+    }
+    printf("\n");
+} END {}'
+}
+
+get_cols() {
+    local col_idx_arr=()
+    local col_delim_in=''
+    local col_delim_out=''
+    local col_delim_in_provided=false
+    local col_delim_out_provided=false
+    while (( $# != 0 )); do
+        if [ "$(string_is_posint "$1")" = true ]; then
+            col_idx_arr+=( "$1" )
+        elif [ "$col_delim_in_provided" = false ]; then
+            col_delim_in="$1"
+            col_delim_in_provided=true
+        elif [ "$col_delim_out_provided" = false ]; then
+            col_delim_out="$1"
+            col_delim_out_provided=true
+        fi
+        shift
+    done
+    if [ "$col_delim_in_provided" = false ]; then
+        col_delim_in=' '
+    fi
+    if [ "$col_delim_out_provided" = false ]; then
+        if [ "$col_delim_in_provided" = true ]; then
+            col_delim_out="$col_delim_in"]
+        else
+            col_delim_out=','
+        fi
+    fi
+    awk -F "$col_delim_in" '
+BEGIN {}
+{
+    n=split("'"${col_idx_arr[*]}"'", col_idx_arr);
+    if (n==0) {
+        for (i=1; i<=NF; i++) {
+            if (i!=1) {
+                printf("'"${col_delim_out}"'");
+            }
+            printf("%s", $i);
+        }
+        printf("\n");
+    } else {
+        for (i=1; i<=n; i++) {
+            if (i!=1) {
+                printf("'"${col_delim_out}"'");
+            }
+            col_idx=col_idx_arr[i];
+            printf("%s", $col_idx);
+        }
+        printf("\n");
+    }
+} END {}'
+}
+
+sum_cols() {
+    local col_delim=' '
+    if (( $# >= 1 )); then
+        col_delim="$1"
+    fi
+    awk -F "$col_delim" '
+BEGIN {}
+{
+    for (i=1; i<=NF; i++) {
+        sums[i]+=$i;
+        maxi=i;
+    }
+} END {
+    for(i=1; i<=maxi; i++) {
+        if (i!=1) {
+            printf("'"${col_delim}"'");
+        }
+        printf("%s", sums[i]);
+    }
+    printf("\n");
+}'
+}
+
+sum_all() {
+    local col_delim=' '
+    if (( $# >= 1 )); then
+        col_delim="$1"
+    fi
+    awk -F "$col_delim" '
+BEGIN {}
+{
+    for (i=1; i<=NF; i++) {
+        sum+=$i;
+    }
+} END {
+    printf("%s\n", sum);
+}'
 }
 
 get_stats() {
@@ -629,6 +739,21 @@ find_missing_suffix() {
 }
 
 
+## Package management
+
+apt_cleanup() {
+    sudo apt-get update && sudo apt-get autoclean && sudo apt-get clean && sudo apt-get autoremove
+}
+
+conda_history() {
+    conda env export --from-history
+}
+
+pip_history() {
+    python -m pip list --verbose
+}
+
+
 ## Git
 
 git_remote() {
@@ -675,7 +800,7 @@ git_apply_force() {
 }
 
 git_remove_local_branches() {
-    git branch | grep -v '\*' | xargs git branch -D
+    git branch | grep -v '\*' | xargs -r git branch -D
 }
 
 git_make_exec() {
@@ -926,9 +1051,15 @@ ssh_alias() {
     set -x; ssh "$@" -t "bash --rcfile ~/.bashrc_from_ssh"; set +x
 }
 
+ssh_expect_passphrase() {
+    local passphrase="$1"; shift
+    local ssh_args=$(echo "$@" | sed -r -e "s|'|\\\\\"|g" -e "s|;|\\\\;|g")
+    expect -c "spawn ssh ${ssh_args}; expect \"passphrase\"; send \"${passphrase}\r\"; interact"
+}
+
 #alias rsync_example='rsync_alias auto user@hostname -rtLPv'
 rsync_alias() {
-    local direction_choices=( 'to-host' 'from-host' 'auto' )
+    local direction_choices=( 'to-remote' 'from-remote' 'auto' )
     local direction="$1"; shift
     local remote_host="$1"; shift
     local opt_arg_arr=()
@@ -966,9 +1097,9 @@ rsync_alias() {
         return 1
     fi
 
-    if [ "$direction" = 'to-host' ]; then
+    if [ "$direction" = 'to-remote' ]; then
         dst_path="${remote_host}:${dst_path}"
-    elif [ "$direction" = 'from-host' ]; then
+    elif [ "$direction" = 'from-remote' ]; then
         src_path="${remote_host}:${src_path}"
     elif [ "$direction" = 'auto' ]; then
         if [ -e "$src_path" ] && [ -e "$dst_path" ]; then
