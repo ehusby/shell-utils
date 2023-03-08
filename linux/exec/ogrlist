@@ -528,7 +528,7 @@ if [ -z "$layer_name" ] || [ "$list_layers" = true ]; then
                 list_mod_cmd="${list_mod_cmd} | sort -k2"
             fi
         fi
-        cmd="${ogrinfo_cmd} | grep -E '^[0-9]+\:' ${list_mod_cmd} ${list_csv_cmd}"
+        cmd="${ogrinfo_cmd} | grep -E '^([0-9]+\:|Layer\:)' ${list_mod_cmd} ${list_csv_cmd}"
         if [ "$feature_count" = true ]; then
             list_layers_with_fc=true
         fi
@@ -592,7 +592,7 @@ elif [ "$list_layers_with_fc" = false ]; then
     fi
 else
     while IFS= read -r layer_list_line; do
-        layer_name=$(echo "$layer_list_line" | sed -r -e 's|^\d+\:\s*||')
+        layer_name=$(echo "$layer_list_line" | sed -r -e 's/^([0-9]+\:|Layer\:)\s*//')
         layer_fc=$(bash "$script_file_abs" "${script_args[@]}" -l "$layer_name")
         cmd_status=$?
         if (( cmd_status != 0 )) && (( cmd_status != 141 )); then
