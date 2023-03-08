@@ -30,6 +30,7 @@ do_copy=false
 src_path=''
 new_name=''
 repl_str=''
+repl_str_provided=false
 fwd_args_arr=()
 symlink_file_arr=()
 dryrun=false
@@ -147,6 +148,7 @@ while (( $# > 0 )); do
             new_name="$arg"
         elif [ -z "$repl_str" ]; then
             repl_str="$arg"
+            repl_str_provided=true
         else
             echo_e "Unexpected argument: ${arg}"
             exit_script_with_status 1
@@ -229,7 +231,7 @@ if [ -z "$src_path" ] || [ -z "$new_name" ]; then
     echo_e "Both SRC_PATH and NEW_NAME arguments must be provided"
     exit_script_with_status 1
 fi
-if [ -n "$repl_str" ] && [ "$(string_contains "$new_name" '/')" = true ]; then
+if [ "$repl_str_provided" = true ] && [ "$(string_contains "$new_name" '/')" = true ]; then
     echo_e "NEW_NAME cannot contain '/' characters when REPL_STR is provided"
     exit_script_with_status 1
 fi
@@ -256,7 +258,7 @@ for symlink_file in "${symlink_file_arr[@]+${symlink_file_arr[@]}}"; do
     fi
 done
 
-if [ -z "$repl_str" ]; then
+if [ "$repl_str_provided" = false ]; then
     if [ "$(string_startswith "$new_name" '/')" = true ]; then
         new_prefix_full=$(fullpath "$new_name")
         new_prefix_abs=$(abspath "$new_name")
@@ -266,7 +268,7 @@ if [ -z "$repl_str" ]; then
         new_prefix_full="${src_dir_full}/${new_name}"
         new_prefix_abs="${src_dir_abs}/${new_name}"
     fi
-elif [ -n "$repl_str" ]; then
+elif [ "$repl_str_provided" = true ]; then
     new_prefix_full=''
 fi
 
@@ -283,9 +285,9 @@ fi
 
 for src_dirent in "${src_dirent_arr[@]}"; do
 
-    if [ -z "$repl_str" ]; then
+    if [ "$repl_str_provided" = false ]; then
         dst_dirent="${src_dirent/${old_prefix_full}/${new_prefix_full}}"
-    elif [ -n "$repl_str" ]; then
+    elif [ "$repl_str_provided" = true ]; then
         src_dirent_name=$(basename "$src_dirent")
         dst_dirent_name=$(echo "$src_dirent_name" | sed -r "s|${new_name}|${repl_str}|g")
         dst_dirent="$(dirname "$src_dirent")/${dst_dirent_name}"
@@ -303,9 +305,9 @@ done
 for symlink_file in "${symlink_file_arr[@]+${symlink_file_arr[@]}}"; do
     link_orig=$(readlink "$symlink_file")
 
-    if [ -z "$repl_str" ]; then
+    if [ "$repl_str_provided" = false ]; then
         new_dirent="${link_orig/${old_prefix_abs}/${new_prefix_abs}}"
-    elif [ -n "$repl_str" ]; then
+    elif [ "$repl_str_provided" = true ]; then
         old_dirent_name=$(basename "$link_orig")
         new_dirent_name=$(echo "$old_dirent_name" | sed -r "s|${new_name}|${repl_str}|g")
         new_dirent="$(dirname "$link_orig")/${new_dirent_name}"
