@@ -499,7 +499,11 @@ for log_path in "${log_path_arr[@]}"; do
             runtime_sec="$((time_end_sec - time_start_sec))"
             runtime_min=$(echo "scale=3 ; ${runtime_sec} / 60" | bc)
 
-            echo "${logfile},${runtime_min}"
+            if [ "$get_stats_fn" = 'get_stats' ]; then
+                echo "$runtime_min"
+            elif [ "$get_stats_fn" = 'get_stats_plus_ref' ]; then
+                echo "${logfile},${runtime_min}"
+            fi
 
         elif [ "$mode" = 'runtime' ]; then
             runtime_min_total=0
@@ -548,7 +552,11 @@ for log_path in "${log_path_arr[@]}"; do
             done < <(${runtime_grep_preprocess} "$logfile" | grep -Eo ${runtime_grep_match_count_arg} "$runtime_grep" | sed -r "s|${runtime_grep}|\1|" | sed -r "$runtime_sed")
 
             if [ "$runtime_report" = 'sum' ] && [ "$matched_a_runtime_in_this_logfile" = true ]; then
-                echo "${logfile},${runtime_min_total}"
+                if [ "$get_stats_fn" = 'get_stats' ]; then
+                    echo "$runtime_min_total"
+                elif [ "$get_stats_fn" = 'get_stats_plus_ref' ]; then
+                    echo "${logfile},${runtime_min_total}"
+                fi
             fi
         fi
 
