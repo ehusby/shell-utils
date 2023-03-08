@@ -702,6 +702,30 @@ derefpath() {
     done
     echo "/$(string_strip "${path_temp}/${path_suffix}" '/')"
 }
+derefpath_e() {
+    if (( $# != 2 )); then
+        echo_e "derefpath_e: expected two arguments: DEREF_COUNT PATH"
+        return 1
+    fi
+    local path="$2"
+    if [ ! -e "$path" ]; then
+        echo_e "derefpath_e: path does not exist: ${path}"
+        return 1
+    fi
+    derefpath "$@"
+}
+derefpath_oe() {
+    if (( $# != 2 )); then
+        echo_e "derefpath_e: expected two arguments: DEREF_COUNT PATH"
+        return 1
+    fi
+    local path="$2"
+    if [ ! -e "$path" ]; then
+        println_string "$path"
+    else
+        derefpath "$@"
+    fi
+}
 
 abspath_all() {
     process_items 'abspath' false true "$@"
@@ -724,6 +748,14 @@ fullpath_all_oe() {
 derefpath_all() {
     local deref_count="$1"; shift
     process_items "derefpath ${deref_count}" false true "$@"
+}
+derefpath_all_e() {
+    local deref_count="$1"; shift
+    process_items "derefpath_e ${deref_count}" false true "$@"
+}
+derefpath_all_oe() {
+    local deref_count="$1"; shift
+    process_items "derefpath_oe ${deref_count}" false true "$@"
 }
 basename_all() {
     process_items 'basename' false true "$@"
