@@ -843,8 +843,8 @@ git_cmd_in() {
     local ssh_passphrase=''
 
     ## Custom globals
-    local git_cmd_choices=( 'clone' 'branch' 'status' 'stash' 'apply' 'stash apply' 'pull' 'push' 'git_zip' )
-    local git_cmd_need_ssh_arr=( 'clone' 'pull' 'push' )
+    local git_cmd_choices=( 'clone' 'branch' 'status' 'fetch' 'stash' 'apply' 'stash apply' 'pull' 'push' 'git_zip' )
+    local git_cmd_need_ssh_arr=( 'clone' 'fetch' 'pull' 'push' )
     local git_cmd_custom_arr=( 'git_zip' )
     local start_dir repo_dir_arr repo_dir repo_name
 
@@ -957,6 +957,9 @@ git_branch_in() {
 }
 git_status_in() {
     git_cmd_in status status "$@"
+}
+git_fetch_in() {
+    git_cmd_in fetch fetch "$@"
 }
 git_pull_in() {
     local func_args_in=("$@")
