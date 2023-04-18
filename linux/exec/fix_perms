@@ -34,7 +34,8 @@ add_group_s='off'
 remove_group_s='off'
 add_user_s='off'
 remove_user_s='off'
-files_x=false
+add_file_x=false
+remove_file_x=false
 namepat_arr=()
 identify=false
 dryrun=false
@@ -65,6 +66,12 @@ changed in a normal non-identify run.
 Options:
  -m,--mode={$(string_join '|' "${chmod_mode_choices[@]}")} (default=${chmod_mode})
         How 'chmod' should apply permission changes.
+    --add-file-x
+        Add execute permissions to files when an applicable
+        OCTAL_PERMS setting is provided.
+        By default, only folders are given execute perms.
+    --remove-file-x
+        Remove all execute permissions from files.
     --add-group-s={$(string_join '|' "${sticky_arg_choices[@]}")} (default=${add_group_s})
         Set the 'setgid' attribute for folders/files.
           For folders, having the 'setgid' attribute set means
@@ -92,10 +99,6 @@ Options:
         parent folder.
     --remove-user-s={$(string_join '|' "${sticky_arg_choices[@]}")} (default=${remove_user_s})
         Unset the 'setuid' attribute for files/folders.
-    --files-x
-        Add execute permissions to files when an applicable
-        OCTAL_PERMS setting is provided.
-        By default, only folders are given execute perms.
  -n,--name=<pattern>
         Include files/dirs that match this pattern.
         This option can be provided multiple times to include
@@ -184,6 +187,14 @@ while (( $# > 0 )); do
             arg_opt_nargs=1
             chmod_mode="$arg_val"
 
+        elif [ "$arg_opt" = 'add-file-x' ]; then
+            arg_opt_nargs=0
+            add_file_x=true
+
+        elif [ "$arg_opt" = 'remove-file-x' ]; then
+            arg_opt_nargs=0
+            remove_file_x=true
+
         elif [ "$arg_opt" = 'add-group-s' ]; then
             arg_opt_nargs=1
             add_group_s="$arg_val"
@@ -199,10 +210,6 @@ while (( $# > 0 )); do
         elif [ "$arg_opt" = 'remove-user-s' ]; then
             arg_opt_nargs=1
             remove_user_s="$arg_val"
-
-        elif [ "$arg_opt" = 'files-x' ]; then
-            arg_opt_nargs=0
-            files_x=true
 
         elif [ "$arg_opt" = 'n' ] || [ "$arg_opt" = 'name' ]; then
             arg_opt_nargs=1
@@ -288,6 +295,10 @@ if [ "$(itemOneOf "$add_user_s" "${sticky_arg_choices[@]}")" = false ]; then
     exit_script_with_status 1
 fi
 
+if [ "$add_file_x" = true ] && [ "$remove_file_x" = true ]; then
+    echo_e "--set-file-x and --unset-file-x options conflict"
+    exit_script_with_status 1
+fi
 if [ "$add_group_s" != 'off' ] && [ "$remove_group_s" != 'off' ] \
     && { [ "$add_group_s" = "$remove_group_s" ] || [ "$add_group_s" = 'all' ] || [ "$remove_group_s" = 'all' ]; }; then
     echo_e "--add-group-s and --remove-group-s options conflict"
@@ -355,7 +366,7 @@ for (( i=0; i<${#octal_perms}; i++ )); do
     fi
 done
 chmod_perms_from_octal=$(string_lstrip "$chmod_perms_from_octal" ',')
-if [ "$files_x" = false ]; then
+if [ "$add_file_x" = false ]; then
     chmod_perms_from_octal="${chmod_perms_from_octal//x/X}"
 fi
 chmod_perms_before_sticky="$chmod_perms_from_octal"
@@ -394,6 +405,10 @@ fi
 # Handle user/group sticky bit settings
 chmod_perms_files="$chmod_perms_before_sticky"
 chmod_perms_folders="$chmod_perms_before_sticky"
+if [ "$remove_file_x" = true ]; then
+    chmod_perms_files="${chmod_perms_files//x/}"
+    chmod_perms_files="${chmod_perms_files//X/}"
+fi
 if [ "$add_user_s" != 'off' ]; then
     if [ "$add_user_s" = 'files' ] || [ "$add_user_s" = 'all' ]; then
         chmod_perms_files="${chmod_perms_files},u+s"
@@ -434,9 +449,11 @@ echo "Converted octal permission setting to 'chmod' setting: ${provided_octal_pe
 if [ "$find_type_arg_val" = 'f' ]; then
     echo "Permission setting to be applied to files: ${chmod_perms_files}"
 elif [ "$find_type_arg_val" = 'd' ]; then
+    chmod_perms_folders="${chmod_perms_folders//X/x}"
     echo "Permission setting to be applied to folders: ${chmod_perms_folders}"
 elif [ "$chmod_perms_files" != "$chmod_perms_folders" ]; then
     set_files_and_folders_separate=true
+    chmod_perms_folders="${chmod_perms_folders//X/x}"
     echo
     echo "Two passes of the 'find' program will be used to set different perms for files and folders"
     echo "Permission setting for folders: ${chmod_perms_folders}"
