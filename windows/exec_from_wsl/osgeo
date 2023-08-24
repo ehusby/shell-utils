@@ -3,6 +3,13 @@
 ## Bash settings
 set -uo pipefail
 
-script_name="start_osgeo_py3"
+script_name="start_osgeo_py3-env_keep-path"
+
 dp0=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd -P)
-"/mnt/c/Windows/System32/cmd.exe" "${dp0}/../starter_scripts/${script_name}.bat"
+
+drive_letter=$(echo "$dp0" | grep -Eo '^/mnt/[a-z]/' | cut -d'/' -f3 | tr '[:lower:]' '[:upper:]')
+script_path_windows=$(echo "${dp0}/../starter_scripts/${script_name}.bat" | sed -e "s|/mnt/[a-z]/|${drive_letter}:/|" -e "s|/|\\\\|g")
+
+set -x
+"/mnt/c/Windows/System32/cmd.exe" /c "$script_path_windows"
+set +x

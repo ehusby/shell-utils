@@ -4,7 +4,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/bash_base_func.sh"
 
 
-wrap_custom_exec() {
+wrap_cmd_custom_exec() {
     if [ -n "$CUSTOM_EXEC" ]; then
         local cmd
         if (( $# == 0 )); then
@@ -20,6 +20,22 @@ wrap_custom_exec() {
     else
         "$@"
     fi
+}
+
+wrap_cmd_set_pipefail() {
+    local disable_pipefail_at_end cmd_rc
+    if [ "$(string_contains "$SHELLOPTS" 'pipefail')" = true ]; then
+        disable_pipefail_at_end=false
+    else
+        set -o pipefail
+        disable_pipefail_at_end=true
+    fi
+    "$@"
+    cmd_rc=$?
+    if [ "$disable_pipefail_at_end" = true ]; then
+        set +o pipefail
+    fi
+    return "$cmd_rc"
 }
 
 

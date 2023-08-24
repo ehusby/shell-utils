@@ -264,7 +264,7 @@ if (( ${#catid_arr[@]} == 0 )) && [ -z "$dbase_in" ]; then
     echo_e "At least one Catalog ID argument must be provided, or (--mfp-in) DBASE_IN"
     exit_script_with_status 1
 fi
-if (( ${#catid_arr[@]} > 0 )) && [ -n "$ogrlist_opt_args" ]; then
+if (( ${#catid_arr[@]} > 0 )) && [ -n "$ogrlist_export_opt_args" ]; then
     echo_e "Provided Catalog ID arguments are incompatible with provided 'ogrlist' optional args"
     exit_script_with_status 1
 fi

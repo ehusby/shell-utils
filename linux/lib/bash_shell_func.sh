@@ -31,6 +31,10 @@ ccmd() {
 }
 
 
+## Colorize output streams
+color() { "$@" 2> >(sed $'s,.*,\e[31m&\e[m,'>&2); }
+
+
 ## String manipulation
 
 line2space() {
@@ -51,13 +55,93 @@ line2csstring() {
     echo "$result"
 }
 
+line2csstring_alt() {
+    tr '\n' ',' | sed -r -e "s|\s||g" -e "s|^,*|'|" -e "s|,*$|'|" -e "s|,+|,|g" -e "s|,|','|g"
+}
+
+# Replace all instances of a string with another string.
+#
+# Takes a piped in string (any number of lines) and outputs the
+# the same string with all instances of a specified string replaced
+# with another provided string.
+# This is a simple wrapper of the `sed` command.
+#
+# $1 - First string, to be searched for and replaced.
+# $2 - Second string, to replace the first string with.
+#
+# Examples
+#
+#   echo "dog cat dog cat" | string_replace 'cat' 'pig'
+#   => "dog pig dog pig"
+#
+# Prints to stdout the string with replacements made.
+#
+# Returns the exit code of the wrapped `sed` command.
 string_replace() { sed "s|${1}|${2}|g"; }
+
+# Prepend a string to the beginning of each input line.
+#
+# Takes a piped in string (any number of lines) and outputs the
+# the same string with the provided string affixed to the beginning
+# of each input line.
+# This is a simple wrapper of the `sed` command.
+#
+# $1 - The string to be prepended to each input line.
+#
+# Examples
+#
+#   echo "world" | string_prepend "hello "
+#   => "hello world"
+#
+# Prints to stdout the string with prepends added.
+#
+# Returns the exit code of the wrapped `sed` command.
 string_prepend() { sed "s|^|${1}|"; }
+
+# Append a string to the end of each input line.
+#
+# Takes a piped in string (any number of lines) and outputs the
+# the same string with the provided string affixed to the end
+# of each input line.
+# This is a simple wrapper of the `sed` command.
+#
+# $1 - The string to be appended to each input line.
+#
+# Examples
+#
+#   echo "hello" | string_append " world"
+#   => "hello world"
+#
+# Prints to stdout the string with appends added.
+#
+# Returns the exit code of the wrapped `sed` command.
 string_append() { sed "s|$|${1}|"; }
 
 
 ## Command-line argument manipulation
 
+# Run `eval echo` on the provided arguments.
+#
+# Takes in a string of arguments, provided either as function arguments
+# or piped in on a single line, and runs  them through
+# `eval "echo <arguments>"` so that globs can be expanded.
+#
+# $@ - Arguments provided to `echo` command.
+#
+# Examples
+#
+#   ls *.txt
+#   ./test1.txt  ./test2.txt  ./test3.txt
+#
+#   echoeval "*.txt"
+#   => test1.txt test2.txt test3.txt
+#
+#   echo "*.txt" | echoeval
+#   => test1.txt test2.txt test3.txt
+#
+# Prints to stdout the result of the `echo` command`.
+#
+# Returns the exit code of the `echo` command.
 echoeval() {
     local echo_args
     if [[ -p /dev/stdin ]]; then
@@ -131,6 +215,20 @@ timestmap2datestr() {
 
 ## File operations
 
+# Link file(s) if possible, otherwise copy.
+#
+# First executes `ln -f <arguments>` with all provided arguments appended
+# If the return code of that command is non-zero, executes `cp <arguments>`
+# using the same set of provided arguments.
+#
+# $@ - Arguments provided to `ln -f` or `cp` to perform link or copy.
+#
+# Examples
+#
+#   link_or_copy "src_file.txt" "dst_file.txt"
+#
+# Returns the non-zero exit code of `cp` command if both `ln -f` and `cp`
+# are unsuccessful (non-zero exit code), or 0 otherwise.
 link_or_copy() {
     if ! ln -f "$@"; then
         cp "$@"
@@ -264,6 +362,35 @@ get_csv_cols() {
 }
 
 SHELL_UTILS_READ_CSV_IP=false
+# Read CSV file field values line by line.
+#
+# This method is a substitute for the standard `read` command used to
+# more easily parse one or more field values from a CSV file. In each
+# call to `read_csv`, variables are set in the current shell to reflect
+# the values of the indicated field names at the last line read by an
+# internal call to the `read` command on the CSV file. The names of
+# these variables are the same as the field names, and are meant to be
+# used directly.
+# The (non-local) variables containing the CSV field values are
+# created and modified through `eval`. Once the final line in the CSV
+# file has been read, the variables are unset through
+# `eval "unset <field_name>"`.
+#
+# $1 - Comma-separated list of field names whose values will be read.
+#
+# Examples
+#
+#   line_num=0
+#   while read_csv field1,field2; do
+#       ((line_num++))
+#       echo "line ${line_num}: field1=${field1}, field2=${field2}"
+#   done < "./example.csv"
+#   => "line 1: field1=some_value1, field2=other_value1"
+#   => "line 2: field1=some_value2, field2=other_value2"
+#   => ...
+#
+# Returns the exit code of the `read` command used to parse the last
+# line read from the CSV file.
 read_csv() {
     local get_fields="$1"
     local csv_delim=','
@@ -360,6 +487,10 @@ du_m() { du --block-size=1M "$@" | awk '{print $1}'; }
 du_g() { du --block-size=1G "$@" | awk '{print $1}'; }
 du_t() { du --block-size=1T "$@" | awk '{print $1}'; }
 
+uniq_preserve_order() {
+    awk '!visited[$0]++'
+}
+
 smart_sort() {
     # Example: ls WV01_20140716_102001003208CC00_102001003223F500_2m_lsf_v040310/*_meta.txt | smart_sort '_seg([0-9]+)_' '_seg%04d_'
     local substr_pattern_capture_sort_group="$1"
@@ -444,7 +575,7 @@ get_cols() {
     awk -F "$col_delim_in" '
 BEGIN {}
 {
-    n=split("'"${col_idx_arr[*]}"'", col_idx_arr);
+    n=split("'"${col_idx_arr[*]}"'", col_idx_arr, " ");
     if (n==0) {
         for (i=1; i<=NF; i++) {
             if (i!=1) {
@@ -736,6 +867,10 @@ find_missing_suffix() {
             fi
         done < <(find_alias find_missing_suffix "$search_dir" "$@" -name "*${base_suffix}" -print0)
     fi
+}
+
+ls_suffix() {
+    ls -1 ${1}* | sed "s|^${1}||"
 }
 
 
@@ -1037,11 +1172,73 @@ git_clone_replace() {
 
 ## Other
 
+qstat_info() {
+    local user=''
+    local job_state=''
+    local logs=false
+    local home=false
+    local dryrun=false
+
+    local arg arg_opt arg_val
+    while (( $# > 0 )); do
+        arg="$1"
+        if [[ $arg == -* ]]; then
+            arg_opt=$(echo "$arg" | sed -r 's|\-+(.*)|\1|')
+            arg_val="$2"
+            if [ "$arg_opt" = 'dryrun' ] || [ "$arg_opt" = 'debug' ]; then
+                dryrun=true
+            elif [ "$arg_opt" = 'user' ] || [ "$arg_opt" = 'u' ] ; then
+                user="$arg_val"; shift
+            elif [ "$arg_opt" = 'state' ]; then
+                job_state="$arg_val"; shift
+            elif [ "$arg_opt" = 'logs' ]; then
+                logs=true
+            elif [ "$arg_opt" = 'home' ]; then
+                home=true
+            elif [ -z "$job_state" ] && [[ $arg =~ ^-[a-zA-Z]$ ]]; then
+                job_state="${arg//-/}"
+            else
+                echo "Unrecognized argument: ${arg}"
+                return 1
+            fi
+        else
+            echo "Unrecognized argument: ${arg}"
+            return 1
+        fi
+        shift
+    done
+
+    if [ -n "$user" ]; then
+        arg_user="-u ${user}"
+    else
+        arg_user=''
+    fi
+    if [ -n "$job_state" ]; then
+        job_state=$(printf '%s' "$job_state" | tr '[:lower:]' '[:upper:]')
+        cmd_filter_state="| grep '<job_state>${job_state}</job_state>'"
+    else
+        cmd_filter_state="| grep -v '<job_state>C</job_state>'"
+    fi
+
+    cmd_base="qstat -fx ${arg_user} | sed 's|</Job>|</Job>\n|g' | grep '<Job>' ${cmd_filter_state}"
+
+    if [ "$logs" = true ]; then
+        cmd="${cmd_base} | grep -v '<Job_Name>STDIN</Job_Name>' | sed -r 's|.*<Output_Path>([^<]+)</Output_Path>.*|\1|' | sed -r 's|^.+:([^:]+)$|\1|'"
+        if [ "$home" = true ]; then
+            cmd="${cmd} | rev | cut -d'/' -f1 | rev | sed 's|^|${HOME}/|'"
+        fi
+    else
+        cmd="${cmd_base} | sed -r 's|.*<Job_Id>([^<]+)</Job_Id>.*<Job_Name>([^<]+)</Job_Name>.*<Job_Owner>([^<]+)</Job_Owner>.*|\1,\2,\3|'"
+    fi
+
+    if [ "$dryrun" = true ]; then
+        echo "$cmd"
+    else
+        eval "$cmd"
+    fi
+}
 qstat_r_jobs() {
     qstat -fx -u "$USER" | sed 's|</Job>|</Job>\n|g' | grep '<job_state>R</job_state>' | sed -r 's|.*<Job_Id>([^<]+)</Job_Id>.*<Job_Name>([^<]+)</Job_Name>.*|\1,\2|'
-}
-qstat_r_jobs_all() {
-    qstat -fx | sed 's|</Job>|</Job>\n|g' | grep '<job_state>R</job_state>' | sed -r 's|.*<Job_Id>([^<]+)</Job_Id>.*<Job_Name>([^<]+)</Job_Name>.*|\1,\2|'
 }
 qstat_r_joblogs() {
     qstat -fx -u "$USER" | sed 's|</Job>|</Job>\n|g' | grep '<job_state>R</job_state>' | grep -v '<Job_Name>STDIN</Job_Name>' | sed -r 's|.*<Output_Path>([^<]+)</Output_Path>.*|\1|' | sed -r 's|^.+:([^:]+)$|\1|'
@@ -1128,4 +1325,28 @@ rsync_alias() {
 rsync_alias_defopt() {
     local remote_host="$1"; shift
     rsync_alias auto "$remote_host" -rtlv --partial-dir='.rsync-partial' --progress --exclude '.DS_Store' "$@"
+}
+
+start_gcp() {
+    local gcp_dir="$GLOBUS_CONNECT_PERSONAL_INSTALL_DIR"
+    if [ -z "$gcp_dir" ]; then
+        echo_e "Add 'export GLOBUS_CONNECT_PERSONAL_INSTALL_DIR=\"path-to-gcp-dir\" to your ~/.bashrc file"
+        return 1
+    fi
+    local gcp_process=$(pgrep -af -u "$USER" '[g]lobusonline')
+    if [ -z "$gcp_process" ]; then
+        local gcp_cmd="${gcp_dir}/globusconnectpersonal -start"
+        echo -e "Starting Globus Connect Personal with the following command:\n${gcp_cmd}"
+#        setsid nohup "$gcp_cmd" </dev/null >/dev/null 2>&1 &
+        eval "$gcp_cmd" </dev/null >/dev/null 2>&1 &
+        local wait_sec=3
+        echo "Sleeping ${wait_sec} seconds before checking GCP process health..."
+        sleep ${wait_sec}s
+        gcp_process=$(pgrep -af -u "$USER" '[g]lobusonline')
+        if [ -z "$gcp_process" ]; then
+            echo "GCP process may have failed to start"
+        else
+            echo "GCP process appears to be running successfully"
+        fi
+    fi
 }

@@ -271,6 +271,7 @@ while (( $# > 0 )); do
         elif [ "$arg_opt" = 'find-args' ]; then
             arg_opt_nargs=1
             find_args="$arg_val"
+            arg_val_can_start_with_dash=true
 
         elif [ "$arg_opt" = 'mode' ]; then
             arg_opt_nargs=1
@@ -519,13 +520,13 @@ for log_path in "${log_path_arr[@]}"; do
 
                 if [ "$runtime_is_hms" = true ]; then
                     runtime_sec=$(hms2sec "$runtime_match")
-                    if (( $? != 0 )); then
+                    if (( $? != 0 )) || [ -z "$runtime_sec" ]; then
                         echo_e "Function failure: hms2sec '${runtime_match}', ${logfile}"
                         exit_script_with_status 1
                     fi
                 else
                     runtime_sec=$(echo "$runtime_match" | bc)
-                    if (( $? != 0 )); then
+                    if (( $? != 0 )) || [ -z "$runtime_sec" ]; then
                         echo_e "Function failure: echo '${runtime_match}' | bc, ${logfile}"
                         exit_script_with_status 1
                     fi
@@ -533,7 +534,7 @@ for log_path in "${log_path_arr[@]}"; do
 
                 bc_expr_sec2min="scale=3 ; ${runtime_sec} / 60"
                 runtime_min=$(echo "$bc_expr_sec2min" | bc)
-                if (( $? != 0 )); then
+                if (( $? != 0 )) || [ -z "$runtime_min" ]; then
                     echo_e "Function failure: echo '${bc_expr_sec2min}' | bc, ${logfile}"
                     exit_script_with_status 1
                 fi
@@ -543,7 +544,7 @@ for log_path in "${log_path_arr[@]}"; do
                 elif [ "$runtime_report" = 'sum' ]; then
                     bc_expr_sum="${runtime_min_total} + ${runtime_min}"
                     runtime_min_total=$(echo "$bc_expr_sum" | bc)
-                    if (( $? != 0 )); then
+                    if (( $? != 0 )) || [ -z "$runtime_min_total" ]; then
                         echo_e "Function failure: echo '${bc_expr_sum}' | bc, ${logfile}"
                         exit_script_with_status 1
                     fi
@@ -583,7 +584,7 @@ done | ${get_stats_fn}
 if (( $? != 0 )); then
     echo
     if [ "$count_first" = 'on' ] && (( nlogfiles_total == 0 )); then
-        echo_e "No files found in LOG_PATHs matching log filename pattern(s): \"${find_name_args}\""
+        echo_e "No files found in LOG_PATHs matching log filename pattern(s): ${logfname_patt_combined_str}"
     elif [ "$count_first" = 'off' ]; then
         echo_e "Failed to get runtime stats"
         echo_e "Please try again with --count-first='on' to further diagnose any issues"
