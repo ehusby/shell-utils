@@ -4,6 +4,31 @@
 source "$(dirname "${BASH_SOURCE[0]}")/bash_base_func.sh"
 
 
+start_gcp() {
+    local gcp_dir="$GLOBUS_CONNECT_PERSONAL_INSTALL_DIR"
+    if [ -z "$gcp_dir" ]; then
+        echo_e "Add 'export GLOBUS_CONNECT_PERSONAL_INSTALL_DIR=\"path-to-gcp-dir\" to your ~/.bashrc file"
+        return 1
+    fi
+    local gcp_process=$(pgrep -af -u "$USER" '[g]lobusonline')
+    if [ -z "$gcp_process" ]; then
+        local gcp_cmd="${gcp_dir}/globusconnectpersonal -start"
+        echo -e "Starting Globus Connect Personal with the following command:\n${gcp_cmd}"
+#        setsid nohup "$gcp_cmd" </dev/null >/dev/null 2>&1 &
+        eval "$gcp_cmd" </dev/null >/dev/null 2>&1 &
+        local wait_sec=3
+        echo "Sleeping ${wait_sec} seconds before checking GCP process health..."
+        sleep ${wait_sec}s
+        gcp_process=$(pgrep -af -u "$USER" '[g]lobusonline')
+        if [ -z "$gcp_process" ]; then
+            echo "GCP process may have failed to start"
+        else
+            echo "GCP process appears to be running successfully"
+        fi
+    fi
+}
+
+
 globus_xfer_watchdog() {
     local task_name="$1"
     local task_id="$2"

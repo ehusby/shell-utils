@@ -4,6 +4,11 @@
 source "$(dirname "${BASH_SOURCE[0]}")/bash_base_func.sh"
 
 
+## Debugging
+
+bash_strace() { echo exit | strace bash -li |& grep '^open'; }
+
+
 ## Bash prompts
 
 prompt_venv_prefix() { printf '%s' "$PS1" | grep -Eo '^[[:space:]]*\([^\(\)]*\)[[:space:]]+'; }
@@ -482,6 +487,10 @@ read_csv() {
 
 ## Distill information
 
+stat_sec() {
+    stat --format '%Y' "$@"
+}
+
 du_k() { du --block-size=1K "$@" | awk '{print $1}'; }
 du_m() { du --block-size=1M "$@" | awk '{print $1}'; }
 du_g() { du --block-size=1G "$@" | awk '{print $1}'; }
@@ -651,6 +660,20 @@ get_stats() {
 'print "cnt: ${nitems}\nsum: ${sum}\nmin: ${min}\nmax: ${max}\nmed: ${med}\navg: ${avg}\nstd: ${std}\nrng: ${rng}\nint: ${int}\n";'\
 'if ($nitems == 0) { exit(1); } else { exit(0); };'
     perl -e "$perl_cmd"
+}
+
+get_intervals() {
+    awk 'BEGIN {prev_val="";} {curr_val=$0; if (prev_val!="") print curr_val-prev_val; prev_val=curr_val;}'
+}
+
+filesize_diff_perc() {
+    local base_dir="$1"; shift
+    local comp_dir="$1"; shift
+    local find_args=$(escape_regex_special_chars "$*")
+    paste -d',' \
+        <(eval find "$base_dir" -type f "$find_args" -print | sort | xargs du --block-size=1K "$@" | awk '{print $1}') \
+        <(eval find "$comp_dir" -type f "$find_args" -print | sort | xargs du --block-size=1K "$@" | awk '{print $1}') \
+        | awk -F',' '{print ($2-$1)/$1}' | get_stats
 }
 
 
@@ -1326,28 +1349,4 @@ rsync_alias() {
 rsync_alias_defopt() {
     local remote_host="$1"; shift
     rsync_alias auto "$remote_host" -rtlv --partial-dir='.rsync-partial' --progress --exclude '.DS_Store' "$@"
-}
-
-start_gcp() {
-    local gcp_dir="$GLOBUS_CONNECT_PERSONAL_INSTALL_DIR"
-    if [ -z "$gcp_dir" ]; then
-        echo_e "Add 'export GLOBUS_CONNECT_PERSONAL_INSTALL_DIR=\"path-to-gcp-dir\" to your ~/.bashrc file"
-        return 1
-    fi
-    local gcp_process=$(pgrep -af -u "$USER" '[g]lobusonline')
-    if [ -z "$gcp_process" ]; then
-        local gcp_cmd="${gcp_dir}/globusconnectpersonal -start"
-        echo -e "Starting Globus Connect Personal with the following command:\n${gcp_cmd}"
-#        setsid nohup "$gcp_cmd" </dev/null >/dev/null 2>&1 &
-        eval "$gcp_cmd" </dev/null >/dev/null 2>&1 &
-        local wait_sec=3
-        echo "Sleeping ${wait_sec} seconds before checking GCP process health..."
-        sleep ${wait_sec}s
-        gcp_process=$(pgrep -af -u "$USER" '[g]lobusonline')
-        if [ -z "$gcp_process" ]; then
-            echo "GCP process may have failed to start"
-        else
-            echo "GCP process appears to be running successfully"
-        fi
-    fi
 }
