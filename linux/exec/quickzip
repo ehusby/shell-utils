@@ -234,7 +234,7 @@ if [ "$zip_on_ext" = true ]; then
             src_path_basename_noext="${src_path_basename_noext}."
         fi
         src_path_noext="${src_path_dirname}/${src_path_basename_noext}"
-        if [ "$(itemOneOf "$src_path_noext" "${src_path_zoe_arr[@]+${src_path_zoe_arr[@]}}")" = false ]; then
+        if [ "$(itemOneOf "$src_path_noext" ${src_path_zoe_arr[@]+"${src_path_zoe_arr[@]}"})" = false ]; then
             src_path_zoe_arr+=( "$src_path_noext" )
         fi
     done

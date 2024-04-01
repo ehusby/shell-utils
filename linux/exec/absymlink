@@ -220,7 +220,7 @@ done
 
 mkdir_paths=()
 if [ "$mkdir_targets" = true ]; then
-    mkdir_paths=("${target_dne_arr[@]+${target_dne_arr[@]}}")
+    mkdir_paths=(${target_dne_arr[@]+"${target_dne_arr[@]}"})
 fi
 if [ "$mkdir_dstdir" = true ] && [ -n "$dst_dir" ]; then
     mkdir_paths+=( "$dst_dir" )

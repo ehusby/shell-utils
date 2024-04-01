@@ -45,6 +45,7 @@ list_sort=false
 list_csv=false
 layer_sort=false
 arc_sde=false
+list_all_tables=false
 feature_count=false
 summary_only=false
 no_fields=false
@@ -143,6 +144,9 @@ Options:
     --arc-sde
         Remove SDE/GDB junk layers from layer list when DBASE
         is an ArcSDE database.
+-at,--all-tables
+        Provide '-oo LIST_ALL_TABLES=YES' option to internal
+        'ogrinfo' command.
 -fc,--feature-count
         Add feature count to layer list, or print only feature
         count if a target layer is provided.
@@ -284,6 +288,10 @@ while (( $# > 0 )); do
             arg_opt_nargs=0
             arc_sde=true
 
+        elif [ "$arg_opt" = 'at' ] || [ "$arg_opt" = 'all-tables' ]; then
+            arg_opt_nargs=0
+            list_all_tables=true
+
         elif [ "$arg_opt" = 'fc' ] || [ "$arg_opt" = 'feature-count' ]; then
             arg_opt_nargs=0
             feature_count=true
@@ -424,6 +432,9 @@ fi
 
 if [ "$list_geometry" = false ] && [ "$summary_only" = false ] && [ -n "$layer_name" ] && [ "$list_layers" = false ]; then
     ogrinfo_opt_arr+=( '-nogeomtype' )
+fi
+if [ "$list_all_tables" = true ]; then
+    ogrinfo_opt_arr+=( '-oo LIST_ALL_TABLES=YES' )
 fi
 
 if [ "$field_list" = '*' ] && [ "$print_header" = true ]; then

@@ -251,7 +251,7 @@ else
     src_dirent_arr=( "$old_prefix_full" )
 fi
 
-for symlink_file in "${symlink_file_arr[@]+${symlink_file_arr[@]}}"; do
+for symlink_file in ${symlink_file_arr[@]+"${symlink_file_arr[@]}"}; do
     if [ ! -L "$symlink_file" ]; then
         echo_e "--update-symlink provided file is not a symbolic link: ${symlink_file}"
         exit_script_with_status 1
@@ -302,7 +302,7 @@ for src_dirent in "${src_dirent_arr[@]}"; do
     fi
 done
 
-for symlink_file in "${symlink_file_arr[@]+${symlink_file_arr[@]}}"; do
+for symlink_file in ${symlink_file_arr[@]+"${symlink_file_arr[@]}"}; do
     link_orig=$(readlink "$symlink_file")
 
     if [ "$repl_str_provided" = false ]; then

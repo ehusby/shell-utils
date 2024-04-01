@@ -27,6 +27,7 @@ source "$bash_functions_script"
 ## Arguments
 target_srs=''
 res_meters=10
+tap=false
 resampling_choices_common_arr=( 'near' 'bilinear' 'cubic' )
 resampling='near'
 outfile_single=''
@@ -39,9 +40,6 @@ overwrite=false
 srcfile_arr=()
 
 ## Custom globals
-if [ -z "$(env | grep '^BWPY_PREFIX=')" ]; then
-    BWPY_PREFIX=''
-fi
 regexgrp_imgaux_minimum='<MDI key="STATISTICS_MINIMUM">(-?[0-9]+(\.[0-9]*)?)</MDI>'
 regexgrp_imgaux_maximum='<MDI key="STATISTICS_MAXIMUM">(-?[0-9]+(\.[0-9]*)?)</MDI>'
 
@@ -51,10 +49,11 @@ read -r -d '' script_usage << EOM
 Usage: ${script_name}
   [-t_srs {target projection, same as gdalwarp option}]
   [-tr {resolution (meters): <int>} (default=${res_meters})]
+  [-tap {same as gdalwarp option}]
   [-r {resampling method: common options ($(string_join '|' "${resampling_choices_common_arr[@]}"))} (default=${resampling})]
   [-o {downsampled raster file/dir path for single/multiple source file(s) (default is to add "_{resolution}m" suffix to source files)}
   [--thumb]: scale source IMAGE min/max values to 0-255 and output downsampled raster in Byte format (incompatible with -t_srs and --hillshade options)
-  [--hillshade [output hillshade file/dir path for single/multiple source file(s) (default is to add "_{resolution}m_shade" suffix to source files))}]
+  [--hillshade [output hillshade file/dir path for single/multiple source file(s)] (default is to add "_{resolution}m_shade" suffix to source files)]
   [--no-resample]: make hillshade directly from source files, ignoring -tr -r -o arguments
   [--keep-downsampled]: keep intermediate downsampled rasters if --hillshade is provided and -o is not provided
   [--overwrite]: overwrite existing output downsampled and/or hillshade raster files
@@ -99,6 +98,10 @@ while (( $# > 0 )); do
         elif [ "$arg_opt" = 'tr' ]; then
             arg_opt_nargs=1
             res_meters="$arg_val"
+
+        elif [ "$arg_opt" = 'tap' ]; then
+            arg_opt_nargs=0
+            tap=true
 
         elif [ "$arg_opt" = 'r' ]; then
             arg_opt_nargs=1
@@ -205,8 +208,8 @@ if [ -n "$outfile_single" ]; then
 fi
 
 if [ "$do_thumb" = true ]; then
-    if [ -n "$target_srs" ]; then
-        echo_e "-t_srs and --thumb arguments are mutually exclusive"
+    if [ -n "$target_srs" ] || [ "$tap" = true ]; then
+        echo_e "-t_srs/-tap and --thumb arguments are mutually exclusive"
         exit_script_with_status 1
     elif [ "$do_hillshade" = true ]; then
         echo_e "--thumb and --hillshade arguments are mutually exclusive"
@@ -318,7 +321,7 @@ for srcfile in "${srcfile_arr[@]}"; do
                 ## Get image min/max stats
                 imgaux_file="${srcfile}.aux.xml"
                 echo "Getting image min/max stats from source raster: ${srcfile} -> ${imgaux_file}"
-                cmd="${BWPY_PREFIX} gdalinfo -stats ${srcfile}"
+                cmd="gdalinfo -stats ${srcfile}"
                 echo "$cmd"
                 eval "$cmd" 1>/dev/null
                 if [ ! -f "$imgaux_file" ]; then
@@ -338,7 +341,10 @@ for srcfile in "${srcfile_arr[@]}"; do
             ## Create downsampled raster
             created_downsampled_raster=true
             echo "Creating ${res_meters}m downsampled raster: ${srcfile} -> ${outfile}"
-            cmd="${BWPY_PREFIX} ${gdal_dsp_program} ${srcfile} ${outfile} -tr ${res_meters} ${res_meters} -r ${resampling}"
+            cmd="${gdal_dsp_program} ${srcfile} ${outfile} -tr ${res_meters} ${res_meters} -r ${resampling}"
+            if [ "$tap" = true ]; then
+                cmd="${cmd} -tap"
+            fi
             if [ -n "$target_srs" ]; then
                 cmd="${cmd} -t_srs '${target_srs}'"
             fi
@@ -367,7 +373,7 @@ for srcfile in "${srcfile_arr[@]}"; do
         if [ ! -e "$hillshade" ] || [ "$overwrite" = true ]; then
             ## Create hillshade raster
             echo "Creating hillshade raster: ${outfile} -> ${hillshade}"
-            cmd="${BWPY_PREFIX} gdaldem hillshade "$outfile" "$hillshade" -z 3 -compute_edges -of GTiff -co TILED=YES -co BIGTIFF=IF_SAFER -co COMPRESS=LZW"
+            cmd="gdaldem hillshade \"${outfile}\" \"${hillshade}\" -z 3 -compute_edges -of GTiff -co TILED=YES -co BIGTIFF=IF_SAFER -co COMPRESS=LZW"
             echo "$cmd"
             eval "$cmd"
         fi
