@@ -3,7 +3,12 @@ setlocal EnableDelayedExpansion
 
 rem ---------------------
 rem Configure these paths
-if exist "C:\Users\%USERNAME%\Miniconda3\" (
+set target_path="C:\Users\%USERNAME%\Miniconda3\Scripts\activate.bat"
+set starting_conda_env=C:\Users\%USERNAME%\Miniconda3\envs\clip
+if exist "C:\Users\%USERNAME%\AppData\Local\miniforge3" (
+    set target_path="C:\Users\%USERNAME%\AppData\Local\miniforge3\Scripts\activate.bat"
+    set starting_conda_env=C:\Users\%USERNAME%\AppData\Local\miniforge3\envs\clip
+) else if exist "C:\Users\%USERNAME%\Miniconda3\" (
     set target_path="C:\Users\%USERNAME%\Miniconda3\Scripts\activate.bat"
     set starting_conda_env=C:\Users\%USERNAME%\Miniconda3\envs\clip
 ) else if exist "C:\Users\%USERNAME%\miniconda3\" (
@@ -12,9 +17,15 @@ if exist "C:\Users\%USERNAME%\Miniconda3\" (
 ) else if exist "C:\ProgramData\Miniconda3\" (
     set target_path="C:\ProgramData\Miniconda3\Scripts\activate.bat"
     set starting_conda_env=C:\ProgramData\Miniconda3\envs\clip
-) else (
+) else if exist "C:\ProgramData\miniconda3\" (
     set target_path="C:\ProgramData\miniconda3\Scripts\activate.bat"
     set starting_conda_env=C:\ProgramData\miniconda3\envs\clip
+) else if exist "C:\Users\%USERNAME%\AppData\Local\Miniconda3\" (
+    set target_path="C:\Users\%USERNAME%\AppData\Local\Miniconda3\Scripts\activate.bat"
+    set starting_conda_env=C:\Users\%USERNAME%\AppData\Local\Miniconda3\envs\clip
+) else if exist "C:\Users\%USERNAME%\AppData\Local\miniconda3\" (
+    set target_path="C:\Users\%USERNAME%\AppData\Local\miniconda3\Scripts\activate.bat"
+    set starting_conda_env=C:\Users\%USERNAME%\AppData\Local\miniconda3\envs\clip
 )
 rem ---------------------
 
