@@ -49,6 +49,7 @@ if [ -n "$PS1" ]; then
     if grep --color=auto '' /dev/null 1>/dev/null 2>/dev/null; [ "$?" -ne 2 ]; then
         alias grep='grep --color=auto'
     fi
+    export LS_COLORS="$LS_COLORS:ow=1;35:tw=1;35:" # make unreadable bright green background folders purple
     alias tmux='tmux -2'  # enable 256 color support
 
     # Change screen socket directory to avoid recurring permission errors
