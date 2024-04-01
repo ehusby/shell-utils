@@ -1,0 +1,136 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_name=$(basename "${BASH_SOURCE[0]}")
+script_dir=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd)
+script_dir_abs=$({ cd "$(dirname "${BASH_SOURCE[0]}")" || { echo "Failed to access script file directory" >&2; exit; } } && pwd -P)
+script_file="${script_dir}/${script_name}"
+if [ -L "${BASH_SOURCE[0]}" ]; then
+    script_file_abs=$(readlink "${BASH_SOURCE[0]}")
+else
+    script_file_abs="${script_dir_abs}/${script_name}"
+fi
+export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+source "$bash_functions_script"
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+${script_name} Usage:
+    ${script_name} [OPTION]... INDEX_FILE SOURCE_VRT
+    (see 'gdaltindex --help' for further details)
+
+Create spatial index of all 'SourceFilename' source
+raster files within the provided SOURCE_VRT file.
+
+Options:
+[all 'gdaltindex' options]
+EOM
+if (( $# < 1 )); then
+    echo_e -e "$script_usage"
+    exit_script_with_status 1
+fi
+
+
+## Parse arguments
+src_vrt="${script_args[${#script_args[@]}-1]}"
+out_index_file="${script_args[${#script_args[@]}-2]}"
+gdaltindex_args=("${script_args[@]}")
+unset "gdaltindex_args[${#script_args[@]}-1]"
+unset "gdaltindex_args[${#script_args[@]}-2]"
+gdaltindex_args=(${gdaltindex_args[@]+"${gdaltindex_args[@]}"})
+
+
+## Validate and adjust arguments
+if [ ! -f "$src_vrt" ]; then
+    echo_e "SOURCE_VRT path is not an existing file: ${src_vrt}"
+    exit_script_with_status 1
+fi
+out_index_file=$(abspath "$out_index_file")
+
+
+## Perform VRT subsetting
+
+temp_dir=$(mktemp -d)
+temp_vrt_prefix=$(mktemp)
+temp_vrt_suffix=$(mktemp)
+temp_file=$(mktemp)
+
+sed '/<ComplexSource>/Q' "$src_vrt" > "$temp_vrt_prefix"
+tac "$src_vrt" | sed '/<\/ComplexSource>/Q' | tac > "$temp_vrt_suffix"
+
+gt_str=$(grep '<GeoTransform>' "$temp_vrt_prefix" | sed -r \
+    -e 's|^.*<GeoTransform>(.+)</GeoTransform>.*$|\1|' \
+    -e 's|[ ,]+|,|g' -e 's|^,+||' -e 's|,+$||')
+IFS=',' read -r -a gt_arr <<< "$gt_str"
+
+echo "Creating VRT subset files in temp dir: ${temp_dir}"
+
+paste -d':' <(grep -n '<SourceFilename' "$src_vrt") <(grep -n '<\/ComplexSource>' "$src_vrt") > "$temp_file"
+total=$(wc -l "$temp_file" | awk '{print $1}')
+cat "$temp_file" | while IFS= read -r match; do
+    linenum_start=$(echo "$match" | cut -d':' -f1); ((linenum_start--))
+    linenum_end=$(echo "$match" | cut -d':' -f3)
+
+    src_uri=$(echo "$match" | cut -d':' -f2 | sed -r 's|^.*>([^<>]+)<.*$|\1|')
+    src_fname=$(echo "$src_uri" | rev | cut -d'/' -f1 | rev)
+    temp_vrt_fname="$src_fname"
+#    temp_vrt_fname=$(echo "$src_uri" | sed 's|/|@|g')
+    temp_vrt="${temp_dir}/${temp_vrt_fname%.*}.vrt"
+
+    cp "$temp_vrt_prefix" "$temp_vrt"
+    ((linenum_start--)); ((linenum_end++))
+    sed -n "1,${linenum_start}b;${linenum_end}q;p" "$src_vrt" >> "$temp_vrt"
+    cat "$temp_vrt_suffix" >> "$temp_vrt"
+
+    dstrect=$(grep '<DstRect' "$temp_vrt")
+    xsize=$(echo "$dstrect" | grep -Eo 'xSize="[0-9\.]+"' | cut -d'"' -f2)
+    ysize=$(echo "$dstrect" | grep -Eo 'ySize="[0-9\.]+"' | cut -d'"' -f2)
+    xoff=$(echo "$dstrect" | grep -Eo 'xOff="[0-9\.]+"' | cut -d'"' -f2)
+    yoff=$(echo "$dstrect" | grep -Eo 'yOff="[0-9\.]+"' | cut -d'"' -f2)
+
+    add_x=$(echo "scale=20; ${xoff} * ${gt_arr[1]}" | sed -r 's|e([+-])|*10^\1|g' | sed -r 's|\*10\^\+|*10^|g' | bc | xargs printf '%.10f\n')
+    add_y=$(echo "scale=20; ${yoff} * ${gt_arr[5]}" | sed -r 's|e([+-])|*10^\1|g' | sed -r 's|\*10\^\+|*10^|g' | bc | xargs printf '%.10f\n')
+    new_origin_x=$(echo "scale=20; ${gt_arr[0]} + ${add_x}" | sed -r 's|e([+-])|*10^\1|g' | sed -r 's|\*10\^\+|*10^|g' | bc | xargs printf '%.16e\n')
+    new_origin_y=$(echo "scale=20; ${gt_arr[3]} + ${add_y}" | sed -r 's|e([+-])|*10^\1|g' | sed -r 's|\*10\^\+|*10^|g' | bc | xargs printf '%.16e\n')
+
+    perl -i \
+        -pe "s|<VRTDataset [^<>]+>|<VRTDataset rasterXSize=\"${xsize}\" rasterYSize=\"${ysize}\">|;" \
+        -pe "s|<GeoTransform>[^<>]+</GeoTransform>|<GeoTransform>  ${new_origin_x},  ${gt_arr[1]},  ${gt_arr[2]},  ${new_origin_y},  ${gt_arr[4]}, ${gt_arr[5]}</GeoTransform>|;" \
+        -pe "s|<DstRect [^<>]+>|<DstRect xOff=\"0\" yOff=\"0\" xSize=\"${xsize}\" ySize=\"${ysize}\" />|;" \
+        "$temp_vrt"
+
+    echo "done"
+done | tqdm --total "$total" >/dev/null
+
+echo "Running gdaltindex"
+cwd=$(pwd)
+cd "$temp_dir"
+find . -type f -name "*.vrt" -printf '%f\n' | sort | xargs gdaltindex ${gdaltindex_args[@]+"${gdaltindex_args[@]}"} "$out_index_file"
+cmd_status=$?
+cd "$cwd"
+
+if (( cmd_status != 0 )); then
+    echo_e -e "\nReceived non-zero exit status (${cmd_status}) from gdaltindex command"
+fi
+if [ -f "$out_index_file" ]; then
+    echo "Created index file: ${out_index_file}"
+else
+    echo_e "Failed to create index file"
+fi
+
+echo "Removing temp files"
+rm "$temp_vrt_prefix"
+rm "$temp_vrt_suffix"
+rm "$temp_file"
+rm -rf "$temp_dir"
