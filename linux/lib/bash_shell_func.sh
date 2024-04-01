@@ -645,9 +645,10 @@ get_stats() {
 '$nitems=@num_list;'\
 'if ($nitems == 0) { $sum=0; $min=0; $max=0; $med=0; $avg=0; $std=0; } else {'\
 '$min=min(@num_list)+0; $max=max(@num_list)+0; $sum=sum(@num_list); $avg=$sum/$nitems;'\
-'$std=sqrt($sqsum/$nitems-($sum/$nitems)*($sum/$nitems));'\
+'$rng=$max-$min; $int=$rng/($nitems-1);'\
+'$sqsumtemp=$sqsum/$nitems-($sum/$nitems)*($sum/$nitems); if ($sqsumtemp <= 0) { $std=overflow; } else { $std=sqrt($sqsumtemp); };'\
 '$mid=int $nitems/2; @srtd=sort @num_list; if($nitems%2){ $med=$srtd[$mid]+0; }else{ $med=($srtd[$mid-1]+$srtd[$mid])/2; }; };'\
-'print "cnt: ${nitems}\nsum: ${sum}\nmin: ${min}\nmax: ${max}\nmed: ${med}\navg: ${avg}\nstd: ${std}\n";'\
+'print "cnt: ${nitems}\nsum: ${sum}\nmin: ${min}\nmax: ${max}\nmed: ${med}\navg: ${avg}\nstd: ${std}\nrng: ${rng}\nint: ${int}\n";'\
 'if ($nitems == 0) { exit(1); } else { exit(0); };'
     perl -e "$perl_cmd"
 }
