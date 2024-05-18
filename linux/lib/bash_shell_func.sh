@@ -366,6 +366,13 @@ get_csv_cols() {
     :
 }
 
+wread() {
+    IFS= read -r "$@"
+}
+wread0() {
+    IFS= read -r -d '' "$@"
+}
+
 SHELL_UTILS_READ_CSV_IP=false
 # Read CSV file field values line by line.
 #
@@ -781,7 +788,7 @@ find_alias() {
         done
 
     else
-        local stock_depth_funcs=( 'findl' 'findls' 'findlsh' )
+        local stock_depth_funcs=( 'findl' 'findls' 'findlsh' 'findd1' )
         if [ "$(itemOneOf "$find_func_name" "${stock_depth_funcs[@]}")" = true ] && [ "$depth_arg_provided" = false ]; then
             stock_depth_args="-mindepth 1 -maxdepth 1"
         fi
@@ -792,6 +799,8 @@ find_alias() {
             find_cmd_suffix="-ls | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
         elif [ "$find_func_name" = 'findlsh' ]; then
             find_cmd_suffix=" -type f -exec ls -lh {} + | sed -r 's|^[0-9]+\s+[0-9]+\s+||'"
+        elif [ "$find_func_name" = 'findd1' ]; then
+            find_cmd_suffix=" -type d"
         fi
 
         cmd="find ${opt_args_1[*]} ${path_args[*]} ${stock_depth_args} ${opt_args_2[*]} ${find_cmd_suffix}"
@@ -816,6 +825,9 @@ findlsh() {
 }
 findst() {
     find_alias findls "$@" -mindepth 0 -maxdepth 0
+}
+findd1() {
+    find_alias findd1 "$@"
 }
 find_missing_suffix() {
     local search_dir base_suffix check_suffix_arr suffix_exist_cond debug

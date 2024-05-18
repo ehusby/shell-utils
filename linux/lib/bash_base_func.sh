@@ -54,7 +54,11 @@ process_items() {
     local pipe_in_items="$1"; shift
     local cwd_glob_if_no_items_provided="$1"; shift
     local processed_items=false
-    local item
+    local item PROCESS_ITEMS_TOKEN
+    local use_token=false
+    if [ "$(string_contains "$process_func" 'PROCESS_ITEMS_TOKEN')" = true ]; then
+        use_token=true
+    fi
     if (( $# > 0 )); then
         if [ "$pipe_in_items" = true ]; then
             eval "printf '%s\n' \"\$@\" | ${process_func}"
@@ -62,7 +66,12 @@ process_items() {
         else
             while (( $# > 0 )); do
                 item="$1"
-                eval "${process_func} \"${item}\""
+                if [ "$use_token" = true ]; then
+                    PROCESS_ITEMS_TOKEN="$item"
+                    eval "${process_func}"
+                else
+                    eval "${process_func} \"${item}\""
+                fi
                 shift
             done
         fi
@@ -73,7 +82,12 @@ process_items() {
             eval "$process_func"
         else
             while IFS= read -r item; do
-                eval "${process_func} \"${item}\""
+                if [ "$use_token" = true ]; then
+                    PROCESS_ITEMS_TOKEN="$item"
+                    eval "${process_func}"
+                else
+                    eval "${process_func} \"${item}\""
+                fi
             done
         fi
         processed_items=true
@@ -83,10 +97,35 @@ process_items() {
             eval "printf '%s\n' * | ${process_func}"
         else
             for item in *; do
-                eval "${process_func} \"${item}\""
+                if [ "$use_token" = true ]; then
+                    PROCESS_ITEMS_TOKEN="$item"
+                    eval "${process_func}"
+                else
+                    eval "${process_func} \"${item}\""
+                fi
             done
         fi
     fi
+}
+
+FOR_TQDM_TOTAL=$(mktemp)
+for_tqdm_start() {
+    printf '%s' "$#" > "$FOR_TQDM_TOTAL"
+    printf '%s' "$@"
+}
+for_tqdm_end() {
+    tqdm --total "$(cat "$FOR_TQDM_TOTAL")"
+}
+
+WHILE_TQDM_TOTAL=$(mktemp)
+while_tqdm_start() {
+    local temp_store=$(mktemp)
+    cat > "$temp_store"
+    wc -l "$temp_store" | cut -d' ' -f1 > "$WHILE_TQDM_TOTAL"
+    cat "$temp_store"
+}
+while_tqdm_end() {
+    tqdm --total "$(cat "$WHILE_TQDM_TOTAL")"
 }
 
 
@@ -430,6 +469,12 @@ file_not_empty_0() {
 #    find 2>/dev/null -L "$1" -type f -prune ! -empty | grep -q '.'
     { [ -f "$1" ] && [ -s "$1" ]; };
 }
+tar_is_valid_0() {
+    tar -tzf "$1" 1>/dev/null 2>/dev/null
+}
+zip_is_valid_0() {
+    unzip -t "$1" 1>/dev/null 2>/dev/null
+}
 
 parent_dir_exists() {
     if parent_dir_exists_0 "$1"; then
@@ -515,6 +560,26 @@ file_not_empty() {
         echo false
         return 1
     elif file_not_empty_0 "$dirent"; then
+        echo true
+        return 0
+    else
+        echo false
+        return 1
+    fi
+}
+tar_is_valid() {
+    local path="$1"
+    if tar -tzf "$path" 1>/dev/null 2>/dev/null; then
+        echo true
+        return 0
+    else
+        echo false
+        return 1
+    fi
+}
+zip_is_valid() {
+    local path="$1"
+    if unzip -t "$path" 1>/dev/null 2>/dev/null; then
         echo true
         return 0
     else

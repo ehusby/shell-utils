@@ -1,6 +1,22 @@
 #!/bin/bash
 
 
+tif_is_bigtiff() {
+    local resp=$(head -c 3 "$1")
+    if [ "$resp" = "II+" ]; then
+        echo true
+        return 0
+    elif [ "$resp" = "II*" ]; then
+        echo false
+        return 1
+    else
+        echo >&2 "Unhandled response from 'head -c 3 FILE': '${resp}', should be 'II+' or 'II*'"
+        echo false
+        return 1
+    fi
+}
+
+
 gdalinfo_filelist_to_vrt() {
     perl -pe 's|^(.*?)([^/]+?)(:?\..*)?$|    <OGRVRTLayer name="wgs84Extent">\n        <SrcDataSource>\1\2\3</SrcDataSource>\n    </OGRVRTLayer>|;' | \
     sed -e '1s|^|<OGRVRTDataSource>\n|' -e '$a</OGRVRTDataSource>'
