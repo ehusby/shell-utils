@@ -80,6 +80,11 @@ if [ -L "${HOME}/.bashrc" ]; then
     cp -af "${HOME}/.bashrc_integrated" "${HOME}/.bashrc"
 fi
 
+if [ -L "${HOME}/.bash_profile" ]; then
+    echo "Duplicating .bash_profile_integrated symlink as .bash_profile in home directory"
+    cp -af "${HOME}/.bash_profile_integrated" "${HOME}/.bash_profile"
+fi
+
 echo -e "\nDone!"
 if [ "$symlink_errors" = true ]; then
     echo -e "\n!! Errors symlinking one or more config files !!"

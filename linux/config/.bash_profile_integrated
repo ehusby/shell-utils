@@ -1,0 +1,13 @@
+# .bash_profile
+
+# Make unreadable bright green background folders purple
+export LS_COLORS="$LS_COLORS:ow=1;35:tw=1;35:"
+bind 'set colored-stats on'
+
+if [ -f "${HOME}/.bash_profile_system_default" ]; then
+    source "${HOME}/.bash_profile_system_default"
+fi
+
+if [ -f "${HOME}/.bashrc" ]; then
+    source "${HOME}/.bashrc"
+fi
