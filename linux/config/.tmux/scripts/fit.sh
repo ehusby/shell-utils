@@ -8,8 +8,8 @@
 
 client=$( tmux display-message -p '#{client_tty}' )
 #session=$( tmux display-message -t "$client"  -p '#{session_name}' )
-window=$( tmux display-message -t "$client" -p '#{window_index}' )                                                                                   
-#pane=$( tmux display-message -p '#{pane_index}' )                                                                                       
+window=$( tmux display-message -t "$client" -p '#{window_index}' )
+#pane=$( tmux display-message -p '#{pane_index}' )
 
 #echo "# I am client=$client session=$session window=$window"
 
@@ -41,4 +41,3 @@ else
         msg="This is the only client viewing window $window"
 fi
 tmux display-message "$msg"
-
