@@ -1,0 +1,183 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_dir=$(dirname "$script_file")
+script_name=$(basename "$script_file")
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+source "$bash_functions_script"
+
+
+## Arguments
+src_gridfile=''
+out_raster=''
+src_srs=''
+column_order='xyz'
+output_cog=false
+round_for_space_savings=false
+dryrun=false
+
+## Custom globals
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+Usage: ${script_name} [--dryrun] SRC_GRID_FILE
+EOM
+if (( $# < 1 )); then
+    echo_e -e "$script_usage"
+    exit_script_with_status 1
+fi
+
+
+## Parse arguments
+set +u
+while (( $# > 0 )); do
+    arg="$1"
+
+    if [ "$(string_startswith "$arg" '-')" = false ]; then
+        if [ -z "$src_gridfile" ]; then
+            src_gridfile="$arg"
+
+        elif [ -z "$out_raster" ]; then
+            out_raster="$arg"
+        fi
+
+    else
+        arg_opt="$(string_lstrip "$arg" '-')"
+        arg_opt_nargs=''
+        if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+            arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
+            arg_opt="${arg_opt%%=*}"
+            arg_opt_nargs_do_shift=false
+        else
+            arg_val="$2"
+            arg_opt_nargs_do_shift=true
+        fi
+        arg_val_can_start_with_dash=false
+
+        if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
+            arg_opt_nargs=0
+            echo "$script_usage"
+            exit 0
+
+        elif [ "$arg_opt" = 's_srs' ] || [ "$arg_opt" = 'src_srs' ]; then
+            arg_opt_nargs=1
+            src_srs="$arg_val"
+
+        elif [ "$arg_opt" = 'column-order' ]; then
+            arg_opt_nargs=1
+            column_order=$(echo "$arg_val" | tr '[:upper:]' '[:lower:]' | sed 's|[^xyz]||g')
+
+        elif [ "$arg_opt" = 'cog' ] || [ "$arg_opt" = 'output-cog' ]; then
+            arg_opt_nargs=0
+            output_cog=true
+
+        elif [ "$arg_opt" = 'r' ] || [ "$arg_opt" = 'round-for-space-savings' ]; then
+            arg_opt_nargs=0
+            round_for_space_savings=true
+
+        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ -z "$arg_opt_nargs" ]; then
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ "$arg_opt_nargs_do_shift" = true ] && (( arg_opt_nargs >= 1 )); then
+            for arg_num in $(seq 1 $arg_opt_nargs); do
+                shift
+                arg_val="$1"
+                if [ -z "$arg_val" ]; then
+                    echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                    exit_script_with_status 1
+                elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                    echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                    exit_script_with_status 1
+                fi
+            done
+        fi
+    fi
+
+    shift
+done
+set -u
+
+
+## Validate and adjust arguments
+
+if [ -z "$src_gridfile" ]; then
+    echo_e "SRC_GRID_FILE argument must be provided"
+    exit_script_with_status 1
+fi
+if [ ! -f "$src_gridfile" ]; then
+    echo_e "SRC_GRID_FILE must be an existing file"
+    exit_script_with_status 1
+fi
+
+if [ -z "$out_raster" ]; then
+    out_raster="${src_gridfile%.*}.tif"
+fi
+
+if (( ${#column_order} == 3 )) \
+    && [ "$(string_contains "$column_order" 'x' )" = true ] \
+    && [ "$(string_contains "$column_order" 'y' )" = true ] \
+    && [ "$(string_contains "$column_order" 'z' )" = true ]; then
+    :
+else
+    echo_e "COLUMN_ORDER must contain all three letters: x y z"
+    exit_script_with_status 1
+fi
+
+IFS=',' read -a column_order_nums <<< "$(paste -d, <(echo "$column_order" | awk -F '' '{printf "%s\n%s\n%s\n", $1, $2, $3}') <(seq 3) | sort | cut -d',' -f2 | xargs printf '%s,')"
+
+
+## Perform raster conversion
+
+column_order_nums_awk='$'$(printf '%s, $' "${column_order_nums[@]}" | sed -r 's|[^123]+$||')
+
+#out_grid_temp="${out_raster}.tmp.xyz"
+#sed -r -e 's/^[\t ]+//' -e 's/["'"'"']+//g' "$src_gridfile" \
+#    | awk -F '[,;:\r\t |]+' '{printf "%s %s %s\n", '"${column_order_nums_awk}"'}' \
+#    | sed -r 's; (|na|n/a|nan|null|nil|none)$; -9999;I' \
+#    | grep -E '^[-+]?[0-9][0-9\.e\+-]* [-+]?[0-9][0-9\.e\+-]* ' \
+#    | sort -k2r,2r -k1,1 -S 50% --parallel=4 \
+#    > "$out_grid_temp"
+#exit
+
+if [ -n "$src_srs" ]; then
+    gdalwarp_srs_args="-s_srs ${src_srs}"
+else
+    gdalwarp_srs_args=''
+fi
+sed -r -e 's/^[\t ]+//' -e 's/["'"'"']+//g' "$src_gridfile" \
+    | awk -F '[,;:\r\t |]+' '{printf "%s %s %s\n", '"${column_order_nums_awk}"'}' \
+    | sed -r 's; (|na|n/a|nan|null|nil|none)$; -9999;I' \
+    | grep -E '^[-+]?[0-9][0-9\.e\+-]* [-+]?[0-9][0-9\.e\+-]* ' \
+    | sort -k2r,2r -k1,1 -S 50% --parallel=4 \
+    | \
+gdalwarp -overwrite \
+    -of GTiff \
+    -ot Float32 \
+    ${gdalwarp_srs_args} \
+    -dstnodata "-9999" \
+    -oo COLUMN_ORDER=XYZ \
+    -co compress=lzw -co tiled=yes -co bigtiff=yes \
+    '/vsistdin?buffer_limit=10000000000/' \
+    "$out_raster"
