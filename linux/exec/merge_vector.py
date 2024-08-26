@@ -13,7 +13,9 @@ def merge_vector_files(
     in_vector_paths: Sequence[Path],
     out_vector_path: Path,
 ) -> Path:
-    gdf = pd.concat([gpd.read_file(fp) for fp in in_vector_paths]).pipe(gpd.GeoDataFrame)
+    gdf = pd.concat([gpd.read_file(fp) for fp in in_vector_paths]).pipe(
+        gpd.GeoDataFrame
+    )
     if Path(out_vector_path).suffix.lower() in (".parquet", ".geoparquet"):
         gdf.to_parquet(str(out_vector_path))
     else:
@@ -21,5 +23,5 @@ def merge_vector_files(
     return Path(out_vector_path)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run(merge_vector_files)

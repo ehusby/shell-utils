@@ -17,16 +17,14 @@ def etree_to_dict(t):
         for dc in map(etree_to_dict, children):
             for k, v in dc.items():
                 dd[k].append(v)
-        d = {t.tag: {k: v[0] if len(v) == 1 else v
-                     for k, v in dd.items()}}
+        d = {t.tag: {k: v[0] if len(v) == 1 else v for k, v in dd.items()}}
     if t.attrib:
-        d[t.tag].update(('@' + k, v)
-                        for k, v in t.attrib.items())
+        d[t.tag].update(("@" + k, v) for k, v in t.attrib.items())
     if t.text:
         text = t.text.strip()
         if children or t.attrib:
             if text:
-                d[t.tag]['#text'] = text
+                d[t.tag]["#text"] = text
         else:
             d[t.tag] = text
     return d
@@ -39,12 +37,12 @@ def dict_to_etree(d):
         elif isinstance(d, str):
             root.text = d
         elif isinstance(d, dict):
-            for k,v in d.items():
+            for k, v in d.items():
                 assert isinstance(k, str)
-                if k.startswith('#'):
-                    assert k == '#text' and isinstance(v, str)
+                if k.startswith("#"):
+                    assert k == "#text" and isinstance(v, str)
                     root.text = v
-                elif k.startswith('@'):
+                elif k.startswith("@"):
                     assert isinstance(v, str)
                     root.set(k[1:], v)
                 elif isinstance(v, list):
@@ -53,7 +51,8 @@ def dict_to_etree(d):
                 else:
                     _to_etree(v, ET.SubElement(root, k))
         else:
-            assert d == 'invalid type', (type(d), d)
+            assert d == "invalid type", (type(d), d)
+
     assert isinstance(d, dict) and len(d) == 1
     tag, body = next(iter(d.items()))
     node = ET.Element(tag)
@@ -87,10 +86,10 @@ def merge_xml_files(
     tree = ET.ElementTree(dict_to_etree(base_tree_dict))
     ET.indent(tree, space="    ")
 
-    with os.fdopen(sys.stdout.fileno(), 'wb', closefd=False) as stdout:
-        tree.write(stdout, encoding='utf-8', xml_declaration=True)
+    with os.fdopen(sys.stdout.fileno(), "wb", closefd=False) as stdout:
+        tree.write(stdout, encoding="utf-8", xml_declaration=True)
         stdout.flush()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run(merge_xml_files)

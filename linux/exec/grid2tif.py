@@ -5,7 +5,10 @@ from pathlib import Path
 import numpy as np
 import rasterio as rio
 
-from dem_scraping.rasterio_utils import get_valid_data_mask, round_float_values_for_compression
+from dem_scraping.rasterio_utils import (
+    get_valid_data_mask,
+    round_float_values_for_compression,
+)
 
 from typer import run
 
@@ -25,7 +28,9 @@ def grid2tif(
     grid_path = Path(grid_path)
     tif_path = grid_path.with_suffix(".tif") if tif_path is None else Path(tif_path)
     if tif_path.is_file() and tif_path.samefile(grid_path):
-        raise ValueError("Default path for output GeoTIFF is the same as input grid path")
+        raise ValueError(
+            "Default path for output GeoTIFF is the same as input grid path"
+        )
 
     if not isinstance(src_nodata_values, list):
         src_nodata_values = [src_nodata_values]
@@ -60,7 +65,9 @@ def grid2tif(
         data_array = ds_src.read(indexes=1)
 
         # Identify no-data pixels
-        nodata_mask = np.logical_or(np.isnan(data_array), np.isin(data_array, src_nodata_values_arr))
+        nodata_mask = np.logical_or(
+            np.isnan(data_array), np.isin(data_array, src_nodata_values_arr)
+        )
 
         if force_float32:
             data_array = data_array.astype(np.float32, copy=False)

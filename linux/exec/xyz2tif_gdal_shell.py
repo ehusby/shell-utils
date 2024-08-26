@@ -29,9 +29,14 @@ def xyz2tif(
 
         # Determine the order of column indices that map from source column order to
         # XYZ order when printed in AWK command.
-        awk_column_order = r"\$" + r", \$".join([
-            str(i) for _, i in sorted(list(zip(src_column_order, range(1, len(src_column_order) + 1))))
-        ])
+        awk_column_order = r"\$" + r", \$".join(
+            [
+                str(i)
+                for _, i in sorted(
+                    list(zip(src_column_order, range(1, len(src_column_order) + 1)))
+                )
+            ]
+        )
 
         # Always check for these string-type nodata values (case-insensitive)
         sed_nodata_patterns: set[str] = {

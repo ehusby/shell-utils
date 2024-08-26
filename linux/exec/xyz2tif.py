@@ -50,7 +50,9 @@ def get_slices_to_crop_nodata_border(
         return slice(0, nodata_mask.shape[0]), slice(0, nodata_mask.shape[1])
     row_idx_ends = np.flatnonzero(~np.all(nodata_mask, axis=1))[[0, -1]].tolist()
     col_idx_ends = np.flatnonzero(~np.all(nodata_mask, axis=0))[[0, -1]].tolist()
-    return slice(row_idx_ends[0], row_idx_ends[1] + 1), slice(col_idx_ends[0], col_idx_ends[1] + 1)
+    return slice(row_idx_ends[0], row_idx_ends[1] + 1), slice(
+        col_idx_ends[0], col_idx_ends[1] + 1
+    )
 
 
 def round_float_values_for_compression(
@@ -141,7 +143,9 @@ def _convert_xyz_dataframe_to_array(
     # Convert XYZ table into a y-x (row-column) matrix of z values.
     # Missing values (including those for missing rows and columns that we patched earlier)
     # will be filled with nan.
-    mat = df.pivot_table(columns="x", index="y", values="z", fill_value=np.nan, dropna=False)
+    mat = df.pivot_table(
+        columns="x", index="y", values="z", fill_value=np.nan, dropna=False
+    )
     mat.sort_index(axis="index", ascending=False, inplace=True)
     mat.sort_index(axis="columns", ascending=True, inplace=True)
 
@@ -160,7 +164,9 @@ def _convert_xyz_dataframe_to_array(
         ] = np.nan
 
     if crop_nodata_border:
-        row_slice, col_slice = get_slices_to_crop_nodata_border(nodata_mask=np.isnan(arr))
+        row_slice, col_slice = get_slices_to_crop_nodata_border(
+            nodata_mask=np.isnan(arr)
+        )
         if row_slice != slice(0, arr.shape[0]) or col_slice != slice(0, arr.shape[1]):
             y_max, y_min = mat.index.values[[row_slice.start, row_slice.stop - 1]]
             x_min, x_max = mat.columns.values[[col_slice.start, col_slice.stop - 1]]
@@ -175,7 +181,9 @@ def _convert_xyz_dataframe_to_array(
     east = x_max + cellsize_x / 2
 
     # Check that the final array shape and grid spacing are consistent
-    if north != (south + arr.shape[0] * cellsize_y) or east != (west + arr.shape[1] * cellsize_x):
+    if north != (south + arr.shape[0] * cellsize_y) or east != (
+        west + arr.shape[1] * cellsize_x
+    ):
         raise ValueError(
             "Converted array from XYZ file has a shape that does not match the original coordinate grid"
         )
@@ -209,7 +217,9 @@ def xyz2tif(
     src_path = Path(src_path)
     tif_path = src_path.with_suffix(".tif") if tif_path is None else Path(tif_path)
     if tif_path.is_file() and tif_path.samefile(src_path):
-        raise ValueError("Default path for output GeoTIFF is the same as input XYZ file path")
+        raise ValueError(
+            "Default path for output GeoTIFF is the same as input XYZ file path"
+        )
 
     # Handle source nodata values, add +/-inf
     if not isinstance(src_nodata_values, list):
@@ -258,7 +268,9 @@ def xyz2tif(
         df.dropna(axis=0, how="any", subset=["x", "y"], inplace=True)
 
     if df.empty:
-        raise ValueError("XYZ file has no valid values or contains unexpected formatting")
+        raise ValueError(
+            "XYZ file has no valid values or contains unexpected formatting"
+        )
 
     # Convert the XYZ dataframe to a 2D numpy array
     # and retrieve the x/y min/max coordinate extents of the raster.
@@ -292,7 +304,12 @@ def xyz2tif(
             count=1,
             crs=rio.CRS.from_epsg(epsg_code) if epsg_code else None,
             transform=rio.transform.from_bounds(
-                west=west, south=south, east=east, north=north, width=arr.shape[1], height=arr.shape[0]
+                west=west,
+                south=south,
+                east=east,
+                north=north,
+                width=arr.shape[1],
+                height=arr.shape[0],
             ),
             nodata=dst_nodata_value,
             compress="lzw",

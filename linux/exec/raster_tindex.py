@@ -1,10 +1,9 @@
 import math
 from contextlib import suppress
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import geopandas as gpd
-import pandas as pd
 import rasterio as rio
 from pyproj import CRS
 from shapely import box, get_coordinates
@@ -12,7 +11,9 @@ from shapely import box, get_coordinates
 from typer import run
 
 
-def distance_between_coordinates_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+def distance_between_coordinates_meters(
+    lat1: float, lon1: float, lat2: float, lon2: float
+) -> float:
     # https://stackoverflow.com/a/19412565
 
     # Approximate radius of earth in km
@@ -26,7 +27,10 @@ def distance_between_coordinates_meters(lat1: float, lon1: float, lat2: float, l
     dlon = lon2 - lon1
     dlat = lat2 - lat1
 
-    a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    )
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     distance_km = r * c
@@ -51,9 +55,15 @@ def write_raster_tindex_geojson(
     as geometry and extracted raster metadata as attribute fields.
     """
     raster_path = Path(raster_path)
-    geojson_path = raster_path.with_suffix(".geojson") if geojson_path is None else Path(geojson_path)
+    geojson_path = (
+        raster_path.with_suffix(".geojson")
+        if geojson_path is None
+        else Path(geojson_path)
+    )
     if geojson_path.is_file() and geojson_path.samefile(raster_path):
-        raise ValueError("Default path for output GeoJSON is the same as input raster path")
+        raise ValueError(
+            "Default path for output GeoJSON is the same as input raster path"
+        )
 
     with open(raster_path, "rb") as fo:
         is_bigtiff = fo.read(3) == b"II+"
@@ -63,7 +73,9 @@ def write_raster_tindex_geojson(
         bbox = box(*ds.bounds)
 
         # Get CRS to use for calculations
-        use_crs = ds.crs or (rio.CRS.from_epsg(missing_crs_epsg_code) if missing_crs_epsg_code else None)
+        use_crs = ds.crs or (
+            rio.CRS.from_epsg(missing_crs_epsg_code) if missing_crs_epsg_code else None
+        )
 
         # Calculate statistics
         with suppress(rio.errors.StatisticsError):
@@ -80,7 +92,9 @@ def write_raster_tindex_geojson(
             stats = ds.tags(1)
         except IndexError:
             stats = {}
-        stats["STATISTICS_APPROXIMATE"] = str(stats.get("STATISTICS_APPROXIMATE", approx_stats)).lower() in (
+        stats["STATISTICS_APPROXIMATE"] = str(
+            stats.get("STATISTICS_APPROXIMATE", approx_stats)
+        ).lower() in (
             "yes",
             "true",
         )
@@ -105,19 +119,27 @@ def write_raster_tindex_geojson(
         pixel_dx_meters = None
         pixel_dy_meters = None
         if use_crs and pixel_dx and pixel_dy:
-            crs_unit = CRS(use_crs).axis_info[0].unit_name.lower().replace("metre", "meter")
+            crs_unit = (
+                CRS(use_crs).axis_info[0].unit_name.lower().replace("metre", "meter")
+            )
             if crs_unit == "degree":
                 center_lon, center_lat = get_coordinates(bbox.centroid).flatten()
                 pixel_dx_meters = round(
                     distance_between_coordinates_meters(
-                        center_lat, center_lon - pixel_dx, center_lat, center_lon + pixel_dx
+                        center_lat,
+                        center_lon - pixel_dx,
+                        center_lat,
+                        center_lon + pixel_dx,
                     )
                     / 2,
                     4,
                 )
                 pixel_dy_meters = round(
                     distance_between_coordinates_meters(
-                        center_lat - pixel_dy, center_lon, center_lat + pixel_dy, center_lon
+                        center_lat - pixel_dy,
+                        center_lon,
+                        center_lat + pixel_dy,
+                        center_lon,
                     )
                     / 2,
                     4,
@@ -173,7 +195,9 @@ def write_raster_tindex_geojson(
             export_meta["compress"] = export_meta.pop("COMPRESSION", None)
 
         # Rename fields
-        export_meta.pop("count", None)  # Already set "band_count" in `export_meta` above
+        export_meta.pop(
+            "count", None
+        )  # Already set "band_count" in `export_meta` above
 
         added_extra_data = False
 
@@ -182,7 +206,9 @@ def write_raster_tindex_geojson(
             if extra_data and add_fieldname_prefix_to_extra_data:
                 export_meta = {**export_meta, **extra_data}
                 added_extra_data = True
-            export_meta = {f"{add_fieldname_prefix}{k}": v for k, v in export_meta.items()}
+            export_meta = {
+                f"{add_fieldname_prefix}{k}": v for k, v in export_meta.items()
+            }
 
         # Add extra data
         if extra_data and not added_extra_data:

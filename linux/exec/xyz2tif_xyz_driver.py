@@ -109,7 +109,11 @@ def xyz2tif(
             with rio.open(tif_path, mode="w", **tif_profile) as ds_tif:
                 for _, window in ds_xyz.block_windows(1):
                     if xyz_internal_nodata is None:
-                        ds_tif.write(ds_xyz.read(indexes=1, window=window).astype(np.float32), indexes=1, window=window)
+                        ds_tif.write(
+                            ds_xyz.read(indexes=1, window=window).astype(np.float32),
+                            indexes=1,
+                            window=window,
+                        )
                     else:
                         chunk = ds_xyz.read(indexes=1, window=window).astype(np.float32)
                         chunk[chunk == xyz_internal_nodata] = dst_nodata_value

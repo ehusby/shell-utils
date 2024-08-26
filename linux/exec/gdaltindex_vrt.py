@@ -38,15 +38,12 @@ def main():
             " the source raster extents."
         )
     )
+    arg_parser.add_argument("-i", "--input-vrt", type=str, help="Input VRT file")
     arg_parser.add_argument(
-        "-i", "--input-vrt",
+        "-o",
+        "--output-file",
         type=str,
-        help="Input VRT file"
-    )
-    arg_parser.add_argument(
-        "-o", "--output-file",
-        type=str,
-        help="Output file for extracted source raster features"
+        help="Output file for extracted source raster features",
     )
     args = arg_parser.parse_args()
 
@@ -93,7 +90,7 @@ def main():
             "yOff",
             "xSize",
             "ySize",
-        ]
+        ],
     )
     df.insert(0, "dataType", dataType_list)
     df.insert(0, "sourceFilename", sourceFilename_list)

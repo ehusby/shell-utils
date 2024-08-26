@@ -55,7 +55,9 @@ def mapserver_layer_download(
         gdf.set_crs(epsg=epsg_code, inplace=True, allow_override=True)
 
     if xmin_ymin_xmax_ymax_fields:
-        gdf["geometry"] = gdf.apply(lambda row: box(*row[list(xmin_ymin_xmax_ymax_fields)]), axis=1)
+        gdf["geometry"] = gdf.apply(
+            lambda row: box(*row[list(xmin_ymin_xmax_ymax_fields)]), axis=1
+        )
 
     if str(output_path).lower().endswith((".parquet", ".geoparquet")):
         gdf.to_parquet(str(output_path))
