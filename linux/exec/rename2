@@ -190,7 +190,7 @@ while (( $# > 0 )); do
 
         else
             arg_opt_nargs=0
-            
+
             if [ -n "$src_path" ] && [ -n "$new_name" ]; then
                 parsing_fwd_args=true
                 continue

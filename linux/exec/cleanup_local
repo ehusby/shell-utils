@@ -58,7 +58,7 @@ Options:
         Local directory on cluster nodes where cleanup will be performed.
     --ssh-pw
         SSH key passphrase for all SSH connections established when
-        METHOD is 'ssh'. If this option is not provided, the passphrase 
+        METHOD is 'ssh'. If this option is not provided, the passphrase
         may need to be entered upon each serial SSH connection to
         cluster nodes.
     --all

@@ -423,7 +423,7 @@ elif [ "$return_type" = 'stereo' ] || [ "$return_type" = 'both' ]; then
         stereo_catids_filt="$stereo_catids"
     else
         ## Apply secondary filter to stereo records
-        
+
         if [ "$filt_field_mode" = 'min' ]; then
             compare_op='<'
         elif [ "$filt_field_mode" = 'max' ]; then
@@ -457,7 +457,7 @@ if [ -z "$dbase_out" ]; then
     echo "$return_list"
 else
     ## Export features from input MFP selection belonging to filtered Catalog IDs
-    
+
     if [ "$debug" = true ]; then
         echo -e "\nFiltered Catalog ID results:"
         echo "$return_list"

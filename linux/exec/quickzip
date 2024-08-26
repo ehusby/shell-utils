@@ -178,7 +178,7 @@ while (( $# > 0 )); do
 
         else
             arg_opt_nargs=0
-            
+
             if (( ${#src_path_arr[@]} > 0 )); then
                 parsing_fwd_args=true
                 continue
