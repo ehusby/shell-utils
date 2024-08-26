@@ -33,7 +33,7 @@ def grid2tif(
         )
 
     if not isinstance(src_nodata_values, list):
-        src_nodata_values = [src_nodata_values]
+        src_nodata_values = [src_nodata_values]  # type: ignore [list-item]
 
     # We have to force float32 output if the dst nodata value isn't an integer
     force_float32 |= dst_nodata_value != int(dst_nodata_value)

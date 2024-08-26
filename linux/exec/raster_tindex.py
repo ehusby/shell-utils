@@ -41,7 +41,7 @@ def distance_between_coordinates_meters(
 def write_raster_tindex_geojson(
     raster_path: Path,
     *,
-    geojson_path: Path = None,
+    geojson_path: Path | None = None,
     approx_stats: bool = True,
     extra_data: dict[str, Any] | None = None,
     missing_crs_epsg_code: int | None = None,

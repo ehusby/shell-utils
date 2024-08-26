@@ -9,9 +9,12 @@ import xml.etree.ElementTree as ET
 import geopandas as gpd
 from pyproj import CRS
 from shapely.geometry import Polygon
+from numpy.typing import NDArray
 
 
-def make_source_geom(vrt_geotrans, src_DstRect):
+def make_source_geom(
+    vrt_geotrans: NDArray, src_DstRect: pd.core.series.Series
+) -> Polygon:
     vrt_ul_x = vrt_geotrans[0]
     vrt_ul_y = vrt_geotrans[3]
     dx = vrt_geotrans[1]
@@ -30,7 +33,7 @@ def make_source_geom(vrt_geotrans, src_DstRect):
     return polygon
 
 
-def main():
+def main() -> None:
     arg_parser = argparse.ArgumentParser(
         description=(
             "Take a GDAL VRT file of `<ComplexSource>` raster source files and"
@@ -51,9 +54,9 @@ def main():
     tree = ET.parse(args.input_vrt)
     root = tree.getroot()
 
-    proj_wkt = root.find("SRS").text
-    vrt_geotrans = re.sub(r"\s+", "", root.find("GeoTransform").text)
-    vrt_geotrans = np.fromstring(vrt_geotrans, dtype=float, sep=",")
+    proj_wkt = str(root.find("SRS").text)  # type: ignore [union-attr]
+    vrt_geotrans = str(re.sub(r"\s+", "", root.find("GeoTransform").text))  # type: ignore [union-attr, arg-type]
+    vrt_geotrans_arr = np.fromstring(vrt_geotrans, dtype=float, sep=",")
 
     num_sources = len(list(root.iter("ComplexSource")))
     sourceFilename_list = []
@@ -94,7 +97,9 @@ def main():
     )
     df.insert(0, "dataType", dataType_list)
     df.insert(0, "sourceFilename", sourceFilename_list)
-    df["geometry"] = df.apply(lambda row: make_source_geom(vrt_geotrans, row), axis=1)
+    df["geometry"] = df.apply(
+        lambda row: make_source_geom(vrt_geotrans_arr, row), axis=1
+    )
     df.drop(columns=["xOff", "yOff", "xSize", "ySize"], inplace=True)
 
     gdf = gpd.GeoDataFrame(df, geometry=df.geometry)

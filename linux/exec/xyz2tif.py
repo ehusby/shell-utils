@@ -81,7 +81,8 @@ def _fill_missing_xyz_dataframe_rowcol(
     2D array that represents the full raster grid.
     """
 
-    c_unique_sorted = np.unique(df[axis].values)  # Values are in sorted order
+    # Values are in sorted order
+    c_unique_sorted = np.unique(df[axis].values)  # type: ignore [arg-type]
     c_min = c_unique_sorted[0]
     c_max = c_unique_sorted[-1]
 
@@ -192,7 +193,7 @@ def _convert_xyz_dataframe_to_array(
 
 
 def xyz2tif(
-    src_path: Path,
+    src_path_: Path,
     epsg_code: int | None = None,
     *,
     tif_path: Path | None = None,
@@ -214,7 +215,7 @@ def xyz2tif(
       if order of columns in the XYZ file are (Y, X, Z), provide
       `src_column_order="yxz".
     """
-    src_path = Path(src_path)
+    src_path = Path(src_path_)
     tif_path = src_path.with_suffix(".tif") if tif_path is None else Path(tif_path)
     if tif_path.is_file() and tif_path.samefile(src_path):
         raise ValueError(
@@ -223,7 +224,7 @@ def xyz2tif(
 
     # Handle source nodata values, add +/-inf
     if not isinstance(src_nodata_values, list):
-        src_nodata_values = [src_nodata_values]
+        src_nodata_values = [src_nodata_values]  # type: ignore [list-item]
     src_nodata_values_arr = np.array(
         list({np.inf, -np.inf, *src_nodata_values} - {None}),
         dtype=float,
@@ -255,7 +256,7 @@ def xyz2tif(
     )
 
     # Convert any input src nodata z values to nan
-    df.loc[np.where(np.isin(df["z"], src_nodata_values_arr))[0], "z"] = np.nan
+    df.loc[np.where(np.isin(df["z"], src_nodata_values_arr))[0], "z"] = np.nan  # type: ignore [index]
 
     if crop_nodata_border:
         # Drop rows with nan in either x/y coordinate column or z value

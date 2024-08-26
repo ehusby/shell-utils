@@ -9,7 +9,7 @@ from typer import run
 
 
 def xyz2tif(
-    xyz_path: str,
+    xyz_path_: Path,
     crs: int,
     *,
     tif_path: Path | None = None,
@@ -17,7 +17,7 @@ def xyz2tif(
     dst_nodata_value: float = -9999,
     src_column_order: str = "xyz",
 ) -> Path:
-    xyz_path = Path(xyz_path)
+    xyz_path = Path(xyz_path_)
     tif_path = xyz_path.with_suffix(".tif") if tif_path is None else Path(tif_path)
 
     try:

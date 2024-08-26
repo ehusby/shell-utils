@@ -15,7 +15,7 @@ from typer import run
 
 def mapserver_layer_download(
     layer_url: str,
-    output_path: Path = os.getcwd(),
+    output_path: Path = Path(os.getcwd()),
     output_path_default_ext: str = ".parquet",
     epsg_code: int | None = None,
     records_chunk_size: int | None = None,

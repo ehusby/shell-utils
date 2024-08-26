@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from collections import Sequence
+from typing import Sequence
 from pathlib import Path
 
 import geopandas as gpd

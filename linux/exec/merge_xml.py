@@ -2,6 +2,7 @@
 
 import os
 import sys
+from typing import Any
 from pathlib import Path
 from collections import defaultdict
 from xml.etree import ElementTree as ET
@@ -9,8 +10,8 @@ from xml.etree import ElementTree as ET
 from typer import run
 
 
-def etree_to_dict(t):
-    d = {t.tag: {} if t.attrib else None}
+def etree_to_dict(t: ET.Element) -> dict[str, Any]:
+    d: dict[str, Any] = {t.tag: {} if t.attrib else None}
     children = list(t)
     if children:
         dd = defaultdict(list)
@@ -30,8 +31,8 @@ def etree_to_dict(t):
     return d
 
 
-def dict_to_etree(d):
-    def _to_etree(d, root):
+def dict_to_etree(d: dict[str, Any]) -> ET.Element:
+    def _to_etree(d: dict[str, Any] | str, root: ET.Element) -> None:
         if not d:
             pass
         elif isinstance(d, str):
@@ -60,7 +61,7 @@ def dict_to_etree(d):
     return node
 
 
-def merge_etree_dicts(t_dest, t_input):
+def merge_etree_dicts(t_dest: dict[str, Any], t_input: dict[str, Any]) -> None:
     for in_k, in_v in t_input.items():
         if in_k not in t_dest:
             t_dest[in_k] = in_v
@@ -78,7 +79,7 @@ def merge_etree_dicts(t_dest, t_input):
 
 def merge_xml_files(
     *in_xml_paths: Path,
-):
+) -> None:
     base_tree_dict = etree_to_dict(ET.parse(sys.argv[1]).getroot())
     for xml_fp in in_xml_paths:
         merge_etree_dicts(base_tree_dict, etree_to_dict(ET.parse(xml_fp).getroot()))

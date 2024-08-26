@@ -11,7 +11,7 @@ from typer import run
 
 
 def xyz2tif(
-    xyz_path,
+    xyz_path_,
     epsg_code,
     *,
     tif_path: Path | None = None,
@@ -22,7 +22,7 @@ def xyz2tif(
     drop_nodata_height_values: bool = False,
     round_1_128_space_saving: bool = False,
 ) -> Path:
-    xyz_path = Path(xyz_path)
+    xyz_path = Path(xyz_path_)
     tif_path = xyz_path.with_suffix(".tif") if tif_path is None else Path(tif_path)
     xyz_temp_path = tif_path.with_suffix(".tif.tmp.xyz")
 

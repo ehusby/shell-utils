@@ -11,25 +11,18 @@ from clize import run
 
 
 def xyz2tif(
-    xyz_path,
+    xyz_path_,
     epsg_code,
     *,
-    tif_path=None,
-    src_nodata_values=None,
-    dst_nodata_value=-9999,
-    src_column_order="xyz",
-    src_delimiter=r"\s+",
-    drop_nodata_height_values=False,
-    round_1_128_space_saving=False,
-    # tif_path: str | Path | None = None,
-    # src_nodata_values: list[int | float] | None = None,
-    # dst_nodata_value: float = -9999,
-    # src_column_order: str = "xyz",
-    # src_delimiter: str = r"\s+",
-    # drop_nodata_height_values: bool = False,
-    # round_1_128_space_saving: bool = False,
+    tif_path: Path | None = None,
+    src_nodata_values: list[float] | None = None,
+    dst_nodata_value: float = -9999,
+    src_column_order: str = "xyz",
+    src_delimiter: str = r"\s+",
+    drop_nodata_height_values: bool = False,
+    round_1_128_space_saving: bool = False,
 ) -> Path:
-    xyz_path = Path(xyz_path)
+    xyz_path = Path(xyz_path_)
     tif_path = xyz_path.with_suffix(".tif") if tif_path is None else Path(tif_path)
 
     try:
