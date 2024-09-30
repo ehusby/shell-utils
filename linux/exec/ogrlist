@@ -32,7 +32,7 @@ sql_where=''
 sql_query=''
 export_path=''
 export_layer=''
-export_fields='*'
+export_fields=''
 export_mode_choices=( 'overwrite' 'append' 'update' )
 export_mode=''
 export_geometry=true
@@ -40,6 +40,7 @@ delimiter=','
 list_layers=false
 list_fields=false
 list_geometry=false
+list_geometry_only=false
 list_trim=false
 list_sort=false
 list_csv=false
@@ -111,8 +112,12 @@ Options:
         exported dataset.
         Values from multiple fields can be listed by providing
         a comma-separated string of field names.
-        By default, all fields and geometry information are
-        exported.
+        If --export-fields is not provided while --field arguments
+        are provided, the --field arguments (plus feature geometries)
+        are used for the export. Otherwise, by default all fields
+        and geometry information are exported.
+        Provide --export-no-geom to disable automatic inclusion
+        of feature geometries in the export.
 -em,--export-mode={$(string_join '|' "${export_mode_choices[@]}")}
         ogr2ogr option for writing to existing output dataset.
     --export-no-geom
@@ -132,6 +137,8 @@ Options:
         Force listing of DBASE layer fields.
 -lg,--list-geometry
         Include layer geometry type info in layers list.
+    --list-geometry-only
+        Only include layer geometry type info in layers list.
 -lt,--list-trim
         Trim numbering from layer list, or trim field type
         info from field list.
@@ -268,6 +275,10 @@ while (( $# > 0 )); do
             arg_opt_nargs=0
             list_geometry=true
 
+        elif [ "$arg_opt" = 'lg' ] || [ "$arg_opt" = 'list-geometry-only' ]; then
+            arg_opt_nargs=0
+            list_geometry_only=true
+
         elif [ "$arg_opt" = 'lt' ] || [ "$arg_opt" = 'list-trim' ]; then
             arg_opt_nargs=0
             list_trim=true
@@ -383,9 +394,6 @@ if [ -n "$export_path" ]; then
         exit_script_with_status 1
     fi
 fi
-if [ -z "$export_fields" ]; then
-    echo_e "--export-fields cannot be an empty string"
-fi
 if [ -n "$export_mode" ] && [ "$(itemOneOf "$export_mode" "${export_mode_choices[@]}")" = false ]; then
     echo_e "--export-mode must be one of the following: ${export_mode_choices[*]}"
     exit_script_with_status 1
@@ -403,8 +411,11 @@ fi
 if [ -n "$sql_query" ]; then
     sql_query=$(echo "$sql_query" | sed -r "s|\"|\'|g")
 fi
-if [ -z "$field_list" ] && { [ -n "$sql_where" ] || [ -n "$sql_query" ]; }; then
+if [ -z "$field_list" ] && { [ -n "$sql_where" ] || [ -n "$sql_query" ] || [ -n "$export_path" ]; }; then
     field_list='*'
+fi
+if [ -z "$export_fields" ]; then
+    export_fields="$field_list"
 fi
 
 if [ -n "$export_path" ]; then
@@ -430,7 +441,10 @@ else
     ogrinfo_opt_arr=( '-ro' '-so' '-nomd' '-nocount' '-noextent' )
 fi
 
-if [ "$list_geometry" = false ] && [ "$summary_only" = false ] && [ -n "$layer_name" ] && [ "$list_layers" = false ]; then
+if [ "$list_geometry_only" = true ]; then
+    list_geometry=true
+fi
+if [ "$list_geometry" = false ] && [ -n "$field_list" ]; then
     ogrinfo_opt_arr+=( '-nogeomtype' )
 fi
 if [ "$list_all_tables" = true ]; then
@@ -444,6 +458,13 @@ else
     header_all_fields=false
     header_line="${field_list//,/${delimiter}}"
 fi
+
+if [ "$list_geometry_only" = true ]; then
+    filter_fields_cmd=" | grep -E '^Geometry'"
+else
+    filter_fields_cmd=''
+fi
+parse_fields_cmd="sed -n '/Layer/,\$p' | grep -Ev '^(Layer |\(unknown\))' ${filter_fields_cmd} | sed -r 's|^Geometry: (.*)|geometry: \1|' | sed -r 's|^Geometry \(([^ ]+)\): (.*)|\1: \2|' | sed -r 's|(.*Column ?[0-9]*) ?= ([^ ]+).*|\2: \1|' | grep -E '^[^ ]+\:' | sed -r 's| +$||' | tac | awk -F': ' '"'BEGIN { field_idx = -1; } { if ($1 in field_info) { field_info[$1] = sprintf("%s (%s)", field_info[$1], $2); } else { field_info[$1] = $2; field_idx++; field_idx_name[field_idx] = $1; } } END { idx = 0; while (idx <= field_idx) { field = field_idx_name[idx]; printf "%s: %s\n", field, field_info[field]; idx++; } }'"' | tac"
 
 if [ "$field_list" = '*' ] && { [ "$list_layers" = false ] && [ "$list_fields" = false ]; }; then
     list_csv=true
@@ -464,26 +485,45 @@ fi
 
 if [ -n "$export_path" ]; then
     ## Export features and exit
-
-    if [ "$export_geometry" = false ] || [ "$(string_endswith "$(string_to_lowercase "$export_path")" '.csv')" = true ]; then
-        if [ "$export_fields" = '*' ]; then
-            cmd="bash \"${script_file}\" \"${dbase_path}\" --layer \"${layer_name}\" --list-csv"
-            if [ "$debug" = true ]; then
-                echo "Re-calling ${script_name} to get list of all field names for CSV/no-geom export:"
-                echo "$cmd"
-                echo
-            fi
-            export_fields=$(eval "$cmd")
-            cmd_status=$?
-            if (( cmd_status != 0 )); then
-                echo_e "Received non-zero exit status (${cmd_status}) from child ${script_name} command:"
-                echo_e "$cmd"
-                exit_script_with_status 1
-            fi
+    
+    if [ "$export_fields" = '*' ]; then
+        cmd="bash \"${script_file}\" \"${dbase_path}\" --layer \"${layer_name}\" --list-csv"
+        if [ "$debug" = true ]; then
+            echo "Re-calling ${script_name} to get list of all field names for export logic:"
+            echo "$cmd"
+            echo
         fi
-    elif [ "$export_geometry" = true ] && [ "$export_fields" != '*' ]; then
-        if [ "$(string_contains "$export_fields" 'geometry')" = false ]; then
-            export_fields="${export_fields},geometry"
+        export_fields=$(eval "$cmd")
+        cmd_status=$?
+        if (( cmd_status != 0 )); then
+            echo_e "Received non-zero exit status (${cmd_status}) from child ${script_name} command:"
+            echo_e "$cmd"
+            exit_script_with_status 1
+        fi
+    fi
+    
+    cmd="bash \"${script_file}\" \"${dbase_path}\" --layer \"${layer_name}\" --list-csv --list-geometry-only"
+    if [ "$debug" = true ]; then
+        echo "Re-calling ${script_name} to get list of geometry field names for export logic:"
+        echo "$cmd"
+        echo
+    fi
+    source_fields_geom=$(eval "$cmd")
+    cmd_status=$?
+    if (( cmd_status != 0 )); then
+        echo_e "Received non-zero exit status (${cmd_status}) from child ${script_name} command:"
+        echo_e "$cmd"
+        exit_script_with_status 1
+    fi
+
+    if [ -n "$source_fields_geom" ]; then
+        export_fields_geom=$(comm -1 -2 <(echo "$export_fields" | tr ',' '\n' | sort) <(echo "$source_fields_geom" | tr ',' '\n' | sort) | tr '\n' ',' | sed -r 's|,+$||')
+        export_fields_no_geom=$(comm -2 -3 <(echo "$export_fields" | tr ',' '\n' | sort) <(echo "$source_fields_geom" | tr ',' '\n' | sort) | tr '\n' ',' | sed -r 's|,+$||')
+
+        if [ "$export_geometry" = true ] && [ -z "$export_fields_geom" ]; then
+            export_fields="${export_fields},${source_fields_geom}"
+        elif [ "$export_geometry" = false ] && [ -n "$export_fields_geom" ]; then
+            export_fields="$export_fields_no_geom"
         fi
     fi
 
@@ -550,7 +590,7 @@ elif [ -z "$field_list" ] || [ "$list_fields" = true ] || [ "$header_all_fields"
         cmd="${ogrinfo_cmd} | grep -E '^Feature Count: [0-9]+$' | grep -Eo [0-9]+"
     elif [ "$summary_only" = true ]; then
         if [ "$no_fields" = true ]; then
-            cmd="${ogrinfo_cmd} | grep -E -v '^[^[:space:]]+\: [^[:space:]]+ \([0-9]+\.?[0-9]*\) ?'"
+            cmd="${ogrinfo_cmd} | ${parse_fields_cmd}"
         else
             cmd="$ogrinfo_cmd"
         fi
@@ -562,7 +602,7 @@ elif [ -z "$field_list" ] || [ "$list_fields" = true ] || [ "$header_all_fields"
         if [ "$list_sort" = true ]; then
             list_mod_cmd="${list_mod_cmd} | sort"
         fi
-        cmd="${ogrinfo_cmd} | grep -E '^[^[:space:]]+\: [^[:space:]]+ \([0-9]+\.?[0-9]*\) ?' ${list_mod_cmd} ${list_csv_cmd}"
+        cmd="${ogrinfo_cmd} | ${parse_fields_cmd} ${list_mod_cmd} ${list_csv_cmd}"
         if [ "$header_all_fields" = true ]; then
             get_fields_cmd="header_line=\$(${cmd}); all_fields_csv=\$(echo \"\${header_line}\" | sed 's|${delimiter}|,|g')"
             field_list="\${all_fields_csv}"
