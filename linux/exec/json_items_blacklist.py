@@ -4,7 +4,7 @@ import json
 import sys
 
 blacklist_pairs = [
-    tuple(item.strip().strip('"') for item in line.strip().rstrip(",").split(":"))
+    tuple(item.strip().strip('"') for item in line.strip().rstrip(",").split(":", 1))
     for line in sys.stdin.readlines()
 ]
 
