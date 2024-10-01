@@ -1,16 +1,59 @@
 #!/usr/bin/env python
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import rasterio as rio
-
-from dem_scraping.rasterio_utils import (
-    get_valid_data_mask,
-    round_float_values_for_compression,
-)
+from numpy.typing import NDArray
+from scipy.ndimage import binary_erosion, binary_fill_holes
 
 from typer import run
+
+
+def get_valid_data_mask(
+    arr: NDArray[Any],
+    nodata_value: int | float = np.nan,
+    erode_pixels: int = 0,
+    erode_ignores_holes: bool = False,
+    fill_holes: bool = False,
+) -> NDArray[np.bool_]:
+    mask = ~np.isnan(arr) if np.isnan(nodata_value) else arr != nodata_value
+
+    if fill_holes:
+        mask = binary_fill_holes(mask)
+
+    if erode_pixels > 0:
+        erode_kernel_size = erode_pixels * 2 + 1
+        holes: NDArray | None = None
+
+        if erode_ignores_holes and not fill_holes:
+            mask_no_holes = binary_fill_holes(mask)
+            holes = np.logical_xor(mask, mask_no_holes)
+            mask = mask_no_holes
+
+        mask = binary_erosion(
+            input=mask,
+            structure=np.ones((erode_kernel_size, erode_kernel_size), dtype=bool),
+        )
+        if holes is not None:
+            mask[holes] = False
+
+    return mask
+
+
+def round_float_values_for_compression(
+    arr: NDArray[np.floating],
+    inplace: bool = False,
+) -> NDArray[np.floating]:
+    """
+    Optimize compression factor when writing floating point raster data
+    by rounding the array values to the nearest 1/128 of the pixel value unit.
+    """
+    out = np.multiply(arr, 128.0, out=arr if inplace else None)
+    np.round(arr, decimals=0, out=out)
+    np.divide(arr, 128.0, out=out)
+    return out
 
 
 def grid2tif(

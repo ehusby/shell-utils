@@ -1,14 +1,114 @@
+#!/usr/bin/env python
+
+import json
 import math
+import pyproj
+from enum import Enum
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
 import geopandas as gpd
 import rasterio as rio
-from pyproj import CRS
-from shapely import box, get_coordinates
+import shapely.geometry
+from shapely import get_coordinates
 
 from typer import run
+
+
+class HorizontalUnit(str, Enum):
+    ARCSEC = "arcsec"
+    DEGREE = "degree"
+    FOOT = "foot"
+    METER = "meter"
+
+
+class VerticalUnit(str, Enum):
+    FOOT = "foot"
+    US_SURVEY_FOOT = "us_survey_foot"
+    METER = "meter"
+    CENTIMETER = "centimeter"
+
+
+UNIT_IN_METERS = {
+    "meter": 1,
+    "centimeter": 0.01,
+    "foot": 0.3048,
+    "us_survey_foot": 0.3048006096,
+}
+
+
+def validate_epsg_code(v: int | None) -> int | None:
+    if v is None:
+        return None
+    try:
+        crs = pyproj.CRS.from_epsg(v)
+        if crs is None:
+            raise ValueError("Invalid EPSG code; 'pyproj.CRS.from_epsg' returns None")
+    except pyproj.exceptions.CRSError as exc:
+        raise ValueError(
+            f"Invalid EPSG code; 'pyproj.CRS.from_epsg' throws error: {exc}"
+        ) from exc
+    return v
+
+
+def get_pyproj_crs_and_epsg_code(
+    epsg_code_or_pyproj_crs: int | pyproj.CRS,
+) -> tuple[pyproj.CRS, int | None]:
+    if epsg_code_or_pyproj_crs is None:
+        raise ValueError("Argument 'epsg_code_or_pyproj_crs' is None")
+
+    epsg_code: int | None
+    if isinstance(epsg_code_or_pyproj_crs, int):
+        epsg_code = epsg_code_or_pyproj_crs
+        validate_epsg_code(epsg_code)
+        crs = pyproj.CRS.from_epsg(epsg_code)
+    else:
+        crs = epsg_code_or_pyproj_crs
+        epsg_code = epsg_code_or_pyproj_crs.to_epsg()
+
+    return crs, epsg_code
+
+
+def get_crs_horizontal_unit(
+    epsg_code_or_pyproj_crs: int | pyproj.CRS,
+) -> HorizontalUnit:
+    crs, epsg_code = get_pyproj_crs_and_epsg_code(epsg_code_or_pyproj_crs)
+
+    horiz_axis_list = [
+        axis
+        for axis in crs.axis_info
+        if axis.abbrev.lower() in ("x", "y", "lat", "lon")
+        or axis.direction.lower() in ("north", "south", "east", "west")
+    ]
+    if len(horiz_axis_list) == 0:
+        raise ValueError(
+            " ".join(
+                [
+                    "Could not find horizontal axis in pyproj.CRS.axis_info list for",
+                    f"EPSG code: {epsg_code}"
+                    if epsg_code is not None
+                    else f"CRS: {crs}",
+                ]
+            )
+        )
+
+    horiz_axis = horiz_axis_list[0]
+
+    unit_raw = horiz_axis.unit_name.lower().replace(" ", "_").replace("metre", "meter")
+    try:
+        return HorizontalUnit(unit_raw)
+    except ValueError as e:
+        raise ValueError(
+            " ".join(
+                [
+                    f"Unhandled horizontal unit name '{unit_raw}' from",
+                    f"EPSG code: {epsg_code}"
+                    if epsg_code is not None
+                    else f"CRS: {crs}",
+                ]
+            )
+        ) from e
 
 
 def distance_between_coordinates_meters(
@@ -38,12 +138,33 @@ def distance_between_coordinates_meters(
     return distance_km * 1000
 
 
+def get_approx_spacing_from_degrees_to_meters(
+    bbox_deg: shapely.geometry.box, dx_deg: float, dy_deg: float
+) -> tuple[float, float]:
+    center_lon, center_lat = get_coordinates(bbox_deg.centroid).flatten()
+    dx_meters = round(
+        distance_between_coordinates_meters(
+            center_lat, center_lon - dx_deg, center_lat, center_lon + dx_deg
+        )
+        / 2,
+        4,
+    )
+    dy_meters = round(
+        distance_between_coordinates_meters(
+            center_lat - dy_deg, center_lon, center_lat + dy_deg, center_lon
+        )
+        / 2,
+        4,
+    )
+    return dx_meters, dy_meters
+
+
 def write_raster_tindex_geojson(
     raster_path: Path,
     *,
-    geojson_path: Path | None = None,
+    output_path: Path | None = None,
     approx_stats: bool = True,
-    extra_data: dict[str, Any] | None = None,
+    extra_data_str: str | None = None,
     missing_crs_epsg_code: int | None = None,
     set_missing_crs_in_meta: bool = False,
     add_fieldname_prefix: str | None = None,
@@ -54,15 +175,17 @@ def write_raster_tindex_geojson(
     input raster containing a single feature, with the raster bounding box
     as geometry and extracted raster metadata as attribute fields.
     """
+    extra_data = json.loads(extra_data_str) if extra_data_str else None
+
     raster_path = Path(raster_path)
-    geojson_path = (
+    output_path = (
         raster_path.with_suffix(".geojson")
-        if geojson_path is None
-        else Path(geojson_path)
+        if output_path is None
+        else Path(output_path)
     )
-    if geojson_path.is_file() and geojson_path.samefile(raster_path):
+    if output_path.is_file() and output_path.samefile(raster_path):
         raise ValueError(
-            "Default path for output GeoJSON is the same as input raster path"
+            "Default path for output file is the same as input raster path"
         )
 
     with open(raster_path, "rb") as fo:
@@ -70,7 +193,7 @@ def write_raster_tindex_geojson(
 
     with rio.open(raster_path) as ds:
         # Get raster full extent bounding box
-        bbox = box(*ds.bounds)
+        bbox = shapely.geometry.box(*ds.bounds)
 
         # Get CRS to use for calculations
         use_crs = ds.crs or (
@@ -119,30 +242,14 @@ def write_raster_tindex_geojson(
         pixel_dx_meters = None
         pixel_dy_meters = None
         if use_crs and pixel_dx and pixel_dy:
-            crs_unit = (
-                CRS(use_crs).axis_info[0].unit_name.lower().replace("metre", "meter")
-            )
+            crs_unit = get_crs_horizontal_unit(pyproj.CRS(use_crs))
             if crs_unit == "degree":
-                center_lon, center_lat = get_coordinates(bbox.centroid).flatten()
-                pixel_dx_meters = round(
-                    distance_between_coordinates_meters(
-                        center_lat,
-                        center_lon - pixel_dx,
-                        center_lat,
-                        center_lon + pixel_dx,
+                pixel_dx_meters, pixel_dy_meters = (
+                    get_approx_spacing_from_degrees_to_meters(
+                        bbox_deg=bbox,
+                        dx_deg=pixel_dx,
+                        dy_deg=pixel_dy,
                     )
-                    / 2,
-                    4,
-                )
-                pixel_dy_meters = round(
-                    distance_between_coordinates_meters(
-                        center_lat - pixel_dy,
-                        center_lon,
-                        center_lat + pixel_dy,
-                        center_lon,
-                    )
-                    / 2,
-                    4,
                 )
 
         # Assemble metadata to be exported to the table
@@ -151,12 +258,15 @@ def write_raster_tindex_geojson(
         export_meta = {
             "filename": raster_path.name,
             "file_ext": "".join(raster_path.suffixes),
+            "filesize": raster_path.stat().st_size,
             "crs": ds.meta.get(
                 "crs", None
             ),  # Populate this field in case source raster has no "crs" meta tag
             "band_count": ds.meta.get("count", None),
             **ds.meta,
             "crs_unit": crs_unit,
+            "center_lat": None,  # Set after bbox reprojection to WGS84
+            "center_lon": None,  # Set after bbox reprojection to WGS84
             "origin_x": origin_x,
             "origin_y": origin_y,
             "pixel_dx": pixel_dx,
@@ -214,16 +324,13 @@ def write_raster_tindex_geojson(
         if extra_data and not added_extra_data:
             export_meta = {**export_meta, **extra_data}
 
-        def _parse_meta_value(_token: Any) -> str | float | bool | None:
-            if _token is None:
-                return None
-            _token_str = str(_token)
-            try:
-                return float(_token_str)
-            except (TypeError, ValueError):
-                if _token_str.lower() in ("true", "false", "yes", "no"):
-                    return _token_str.lower() in ("true", "yes")
-                return _token_str
+        def _parse_meta_value(token: Any) -> str | int | float | bool | None:
+            if token is None or isinstance(token, (int, float)):
+                return token
+            token_str = str(token)
+            if token_str.lower() in ("true", "false", "yes", "no"):
+                return token_str.lower() in ("true", "yes")
+            return token_str
 
         # Assemble data frame with raster bounding box and metadata,
         # then write out to GeoJSON file.
@@ -238,14 +345,25 @@ def write_raster_tindex_geojson(
         )
         if gdf.crs:
             gdf.to_crs(crs=rio.CRS.from_epsg(4326), inplace=True)
+        gdf["center_lon"], gdf["center_lat"] = get_coordinates(
+            gdf.head(1).geometry.centroid
+        ).flatten()
         gdf.reset_index(drop=True, inplace=True)
         try:
-            gdf.to_file(str(geojson_path), driver="GeoJSON")
+            if output_path.suffix.lower() in (".parquet", ".geoparquet"):
+                gdf.to_parquet(str(output_path))
+            else:
+                gdf.to_file(
+                    str(output_path),
+                    driver="GeoJSON"
+                    if output_path.suffix.lower() in (".json", ".geojson")
+                    else None,
+                )
         except Exception:
-            geojson_path.unlink(missing_ok=True)
+            output_path.unlink(missing_ok=True)
             raise
 
-        return geojson_path
+        return output_path
 
 
 if __name__ == "__main__":
