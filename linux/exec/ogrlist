@@ -485,7 +485,7 @@ fi
 
 if [ -n "$export_path" ]; then
     ## Export features and exit
-    
+
     if [ "$export_fields" = '*' ]; then
         cmd="bash \"${script_file}\" \"${dbase_path}\" --layer \"${layer_name}\" --list-csv"
         if [ "$debug" = true ]; then
@@ -501,7 +501,7 @@ if [ -n "$export_path" ]; then
             exit_script_with_status 1
         fi
     fi
-    
+
     cmd="bash \"${script_file}\" \"${dbase_path}\" --layer \"${layer_name}\" --list-csv --list-geometry-only"
     if [ "$debug" = true ]; then
         echo "Re-calling ${script_name} to get list of geometry field names for export logic:"
