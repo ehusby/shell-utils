@@ -11,7 +11,7 @@ from typer import run
 
 
 def xyz2tif(
-    xyz_path_,
+    xyz_path_: Path,
     epsg_code: int | None = None,
     *,
     tif_path: Path | None = None,
