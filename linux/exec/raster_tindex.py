@@ -11,9 +11,18 @@ from typing import Any
 import geopandas as gpd
 import rasterio as rio
 import shapely.geometry
+from pydantic import BaseModel, ConfigDict, field_validator
 from shapely import get_coordinates
 
 from typer import run
+
+
+UNIT_IN_METERS = {
+    "meter": 1,
+    "centimeter": 0.01,
+    "foot": 0.3048,
+    "us_survey_foot": 0.3048006096,
+}
 
 
 class HorizontalUnit(str, Enum):
@@ -28,14 +37,6 @@ class VerticalUnit(str, Enum):
     US_SURVEY_FOOT = "us_survey_foot"
     METER = "meter"
     CENTIMETER = "centimeter"
-
-
-UNIT_IN_METERS = {
-    "meter": 1,
-    "centimeter": 0.01,
-    "foot": 0.3048,
-    "us_survey_foot": 0.3048006096,
-}
 
 
 def validate_epsg_code(v: int | None) -> int | None:
@@ -159,6 +160,54 @@ def get_approx_spacing_from_degrees_to_meters(
     return dx_meters, dy_meters
 
 
+class RasterTindexMetadata(BaseModel):
+    model_config: ConfigDict = ConfigDict(use_enum_values=True, extra="allow")  # type: ignore [misc]
+
+    filename: str
+    file_ext: str
+    filesize: int
+    crs: str
+    band_count: int
+    driver: str
+    dtype: str
+    nodata: float | int
+    width: int
+    height: int
+    transform: str | None
+    crs_unit: HorizontalUnit | None
+    center_lat: float | None
+    center_lon: float | None
+    origin_x: float | int | None
+    origin_y: float | int | None
+    pixel_dx: float | int | None
+    pixel_dy: float | int | None
+    pixel_dx_approx_meters: float | int | None
+    pixel_dy_approx_meters: float | int | None
+    blockxsize: int | None
+    blockysize: int | None
+    tiled: bool | None
+    compress: str | None
+    interleave: str | None
+    LAYOUT: str | None
+    PREDICTOR: int | bool | None
+    BIGTIFF: bool
+    AREA_OR_POINT: str | None
+    LAYER_TYPE: str | None
+    STATISTICS_MINIMUM: float | int | None
+    STATISTICS_MAXIMUM: float | int | None
+    STATISTICS_MEAN: float | int | None
+    STATISTICS_STDDEV: float | int | None
+    STATISTICS_VALID_PERCENT: float | int | None
+    STATISTICS_APPROXIMATE: bool
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def change_str_to_bool(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.lower() in ("true", "false", "yes", "no"):
+            return v.lower() in ("true", "yes")
+        return v
+
+
 def write_raster_tindex_geojson(
     raster_path: Path,
     *,
@@ -251,6 +300,9 @@ def write_raster_tindex_geojson(
                         dy_deg=pixel_dy,
                     )
                 )
+            elif crs_unit in UNIT_IN_METERS:
+                pixel_dx_meters = pixel_dx * UNIT_IN_METERS[crs_unit]
+                pixel_dy_meters = pixel_dy * UNIT_IN_METERS[crs_unit]
 
         # Assemble metadata to be exported to the table
         # For metadata accessed through `ds.tags(ns="NAME")`, see background info:
@@ -259,9 +311,7 @@ def write_raster_tindex_geojson(
             "filename": raster_path.name,
             "file_ext": "".join(raster_path.suffixes),
             "filesize": raster_path.stat().st_size,
-            "crs": ds.meta.get(
-                "crs", None
-            ),  # Populate this field in case source raster has no "crs" meta tag
+            "crs": str(ds.crs) if ds.crs else None,
             "band_count": ds.meta.get("count", None),
             **ds.meta,
             "crs_unit": crs_unit,
@@ -282,8 +332,12 @@ def write_raster_tindex_geojson(
         }
 
         # Set CRS if missing and setting the meta is desired
-        if export_meta["crs"] is None and set_missing_crs_in_meta:
-            export_meta["crs"] = use_crs
+        # Ensure the CRS is converted to a string representation (e.g. "EPSG:4326")
+        if export_meta["crs"] is None:
+            if set_missing_crs_in_meta:
+                export_meta["crs"] = str(use_crs)
+        else:
+            export_meta["crs"] = str(export_meta["crs"])
 
         # Remove/modify unnecessary items (especially if the values are long strings)
         if not ds.transform:
@@ -324,30 +378,34 @@ def write_raster_tindex_geojson(
         if extra_data and not added_extra_data:
             export_meta = {**export_meta, **extra_data}
 
-        def _parse_meta_value(token: Any) -> str | int | float | bool | None:
-            if token is None or isinstance(token, (int, float)):
-                return token
-            token_str = str(token)
-            if token_str.lower() in ("true", "false", "yes", "no"):
-                return token_str.lower() in ("true", "yes")
-            return token_str
+        # Run the metadata through a pydantic model for some sanitizing
+        export_meta_model = RasterTindexMetadata(**export_meta)
 
         # Assemble data frame with raster bounding box and metadata,
         # then write out to GeoJSON file.
         gdf = gpd.GeoDataFrame.from_dict(
             data={
-                **{k: [_parse_meta_value(v)] for k, v in export_meta.items()},
+                **{k: [v] for k, v in export_meta_model.model_dump().items()},
+                **(
+                    {k: [v] for k, v in export_meta_model.model_extra.items()}
+                    if export_meta_model.model_extra is not None
+                    else {}
+                ),
                 # Set geometry in the `data` arg dict because there may be a bug in
                 # setting through the `geometry` arg when `crs` is None.
                 "geometry": bbox,
             },
             crs=use_crs,
         )
+
+        # If the raster has a CRS, convert the bbox geometry to WGS84 and set derived metadata values
         if gdf.crs:
             gdf.to_crs(crs=rio.CRS.from_epsg(4326), inplace=True)
-        gdf["center_lon"], gdf["center_lat"] = get_coordinates(
-            gdf.head(1).geometry.centroid
-        ).flatten()
+            gdf["center_lon"], gdf["center_lat"] = get_coordinates(
+                gdf.to_crs("+proj=cea").head(1).geometry.centroid.to_crs(gdf.crs)
+            ).flatten()
+
+        # Write out the geodataframe to file
         gdf.reset_index(drop=True, inplace=True)
         try:
             if output_path.suffix.lower() in (".parquet", ".geoparquet"):
