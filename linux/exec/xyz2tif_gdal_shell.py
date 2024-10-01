@@ -10,7 +10,7 @@ from typer import run
 
 def xyz2tif(
     xyz_path_: Path,
-    crs: int,
+    epsg_code: int | None = None,
     *,
     tif_path: Path | None = None,
     src_nodata_values: list[float] | None = None,
@@ -96,7 +96,7 @@ sed -r -e 's/^[\t ]+//' -e 's/["'"'"']+//g' "{xyz_path}" \
 gdalwarp -overwrite \
     -of GTiff \
     -ot Float32 \
-    -s_srs "EPSG:{crs}" \
+    -s_srs "EPSG:{epsg_code}" \
     -dstnodata "{dst_nodata_value}" \
     -oo COLUMN_ORDER=XYZ \
     -co COMPRESS=LZW -co TILED=YES -co BIGTIFF=YES \

@@ -7,12 +7,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from clize import run
+from typer import run
 
 
 def xyz2tif(
     xyz_path_,
-    epsg_code,
+    epsg_code: int | None = None,
     *,
     tif_path: Path | None = None,
     src_nodata_values: list[float] | None = None,
