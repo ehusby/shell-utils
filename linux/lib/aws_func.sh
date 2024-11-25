@@ -4,17 +4,17 @@
 source "$(dirname "${BASH_SOURCE[0]}")/bash_base_func.sh"
 
 
-#aws_cmd() {
+#aws_s3() {
 #    aws s3 "$@"
 #}
-#aws_cmd() {
+#aws_s3() {
 #    aws s3 --profile Developer "$@"
 #}
 
 s3path2url() {
     local region='eu-central-1';
     sed -r \
-        -e "s|^.*s3://([^/]+)/([^ ]+).*$|https://${region}.console.aws.amazon.com/s3/object/\1\?region=eu-central\-1\&bucketType=general\&prefix=\2|" \
+        -e "s|^.*s3://([^/]+)/([^ ]+).*$|https://${region}.console.aws.amazon.com/s3/object/\1\?region=${region}\&bucketType=general\&prefix=\2|" \
         -e "s|(/[^/\.]+)$|\1/|" \
         -e "s|/$|/\&showversions=false|" \
         -e "s|aws.amazon.com/s3/object/(.*/\&showversions=false)|aws.amazon.com/s3/buckets/\1|"
@@ -22,10 +22,10 @@ s3path2url() {
 
 
 aws_ls1() {
-    aws_cmd ls "$@" | rev | cut -d' ' -f1 | rev
+    aws_s3 ls "$@" | rev | cut -d' ' -f1 | rev
 }
 aws_lsh() {
-    aws_cmd ls --human-readable "$@"
+    aws_s3 ls --human-readable "$@"
 }
 
 aws_ls_s3() {
@@ -36,7 +36,7 @@ aws_ls_s3() {
     else
         s3_dir_uri="$(echo "$s3_path" | rev | cut -d'/' -f2- | rev)/"
     fi
-    aws_cmd ls "$s3_path" | rev | cut -d' ' -f1 | rev | grep -Ev '^[[:space:]]*$' | sed -r "s|^|${s3_dir_uri}|"
+    aws_s3 ls "$s3_path" | rev | cut -d' ' -f1 | rev | grep -Ev '^[[:space:]]*$' | sed -r "s|^|${s3_dir_uri}|"
 }
 aws_ls_vsis3() {
     local s3_path="$1"
@@ -45,10 +45,10 @@ aws_ls_vsis3() {
 
 
 aws_ls_prefix_size() {
-    aws_cmd ls --recursive "$@" | rev | cut -d'/' -f2- | rev | awk '{prefix_size_dict[$4] += $3} END {for (prefix in prefix_size_dict) printf "%s,%s\n", prefix, prefix_size_dict[prefix]}' | sort
+    aws_s3 ls --recursive "$@" | rev | cut -d'/' -f2- | rev | awk '{prefix_size_dict[$4] += $3} END {for (prefix in prefix_size_dict) printf "%s,%s\n", prefix, prefix_size_dict[prefix]}' | sort
 }
 aws_ls_folder_size() {
-    aws_cmd ls --recursive "$@" | awk '
+    aws_s3 ls --recursive "$@" | awk '
 BEGIN {}
 {
     file_prefix = $4;
@@ -72,10 +72,10 @@ BEGIN {}
 aws_glob() {
     local rootdir="$(echo "$1" | cut -d"*" -f1 | rev | cut -d"/" -f2- | rev)/"
     local pattern="^${1//\*/'[^/]+'}"
-    aws_cmd cp "$rootdir" ./. --recursive --dryrun  | cut -d" " -f3 | grep -Eo "$pattern" | sort -u
+    aws_s3 cp "$rootdir" ./. --recursive --dryrun  | cut -d" " -f3 | grep -Eo "$pattern" | sort -u
 }
 aws_find() {
-    aws_cmd cp "$1" ./. --recursive --dryrun --exclude "*" --include "$2" | cut -d" " -f3
+    aws_s3 cp "$1" ./. --recursive --dryrun --exclude "*" --include "$2" | cut -d" " -f3
 }
 aws_resolve_path() {
     if [ "$(string_contains "$SHELLOPTS" 'monitor')" = true ]; then
@@ -113,7 +113,7 @@ aws_resolve_path_recursive() {
         fi
         local pid_arr=()
         for prefix in "${prefix_arr[@]}"; do
-            aws_cmd ls "${prefix%/}/" | grep -E "^[[:space:]]+PRE [^/]+/$" | rev | cut -d' ' -f1 | rev | while IFS= read -r folder; do
+            aws_s3 ls "${prefix%/}/" | grep -E "^[[:space:]]+PRE [^/]+/$" | rev | cut -d' ' -f1 | rev | while IFS= read -r folder; do
                 ${echo_cmd} "${prefix%/}/${folder%/}/${postfix#/}"
             done &
             pid_arr+=( $! )
@@ -124,22 +124,22 @@ aws_resolve_path_recursive() {
     fi
 }
 
-aws_cp_multiple_to_dir() {
+aws_cp_t() {
     local target_dir="$1"; shift
-    process_items "aws_cmd cp \${PROCESS_ITEMS_TOKEN} ${target_dir}" false false "$@"
+    process_items "aws_s3 cp \${PROCESS_ITEMS_TOKEN} ${target_dir}" false false "$@"
 }
 
 aws_cpr() {
-    aws_cmd cp --recursive "$@"
+    aws_s3 cp --recursive "$@"
 }
 aws_cpre() {
-    aws_cmd cp --recursive --exclude "*" "$@"
+    aws_s3 cp --recursive --exclude "*" "$@"
 }
 aws_cpr_flat_helper() {
     local srcdir="$1"; shift
     local dstdir="$1"; shift
     local tmpdir="./tmp_aws_cpr_flat/"
-    aws_cmd cp "$srcdir" "$tmpdir" "$@"
+    aws_s3 cp "$srcdir" "$tmpdir" "$@"
     local status="$?"
     if (( status != 0 )); then
         echo >/dev/stderr "Non-zero exit code from 'aws s3 cp' command (${status}), returning early"
@@ -158,6 +158,17 @@ aws_cpre_flat() {
     local srcdir="$1"; shift
     local dstdir="$1"; shift
     aws_cpr_flat_helper "$srcdir" "$dstdir" --recursive --exclude "*" "$@"
+}
+
+aws_cp_include() {
+    local srcdir="$1"; shift
+    local dstdir="$1"; shift
+    eval aws_cpre "$srcdir" "$dstdir" $(printf ' --include "%s"' "$@")
+}
+aws_cp_exclude() {
+    local srcdir="$1"; shift
+    local dstdir="$1"; shift
+    eval aws_cpr "$srcdir" "$dstdir" $(printf ' --exclude "%s"' "$@")
 }
 
 
@@ -255,7 +266,7 @@ aws_process_ds() {
 aws_process_ds_root() {
     local root_uri="${1%/}/"
     aws_ls_s3 "$root_uri" | while IFS= read -r ds_uri; do
-        if aws_cmd ls "${ds_uri%/}/cogs" >/dev/null; then
+        if aws_s3 ls "${ds_uri%/}/cogs" >/dev/null; then
             aws_process_ds "${ds_uri%/}/cogs"
         else
             aws_process_ds "$ds_uri"
