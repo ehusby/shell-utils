@@ -1,0 +1,285 @@
+#!/bin/bash
+
+## Bash settings
+set -uo pipefail
+
+## Script globals
+script_file=$(readlink -f "${BASH_SOURCE[0]}"); export CURRENT_PARENT_BASH_SCRIPT_FILE="$script_file"
+script_dir=$(dirname "$script_file")
+script_name=$(basename "$script_file")
+script_args=("$@")
+
+## Script imports
+lib_dir="${script_dir}/../lib"
+bash_functions_script="${lib_dir}/bash_script_func.sh"
+
+## Source imports
+source "$bash_functions_script"
+
+
+## Arguments
+src_raster=''
+out_raster=''
+out_vector=''
+out_vector_ext='shp'
+out_suffix='_coverage'
+dryrun=false
+
+## Custom globals
+unsupported_vector_tweak_ext_arr=( 'gpkg' )
+
+
+## Script usage
+read -r -d '' script_usage << EOM
+Usage: ${script_name} [--dryrun] SRC_RASTER
+EOM
+if (( $# < 1 )); then
+    echo_e -e "$script_usage"
+    exit_script_with_status 1
+fi
+
+
+## Parse arguments
+set +u
+while (( $# > 0 )); do
+    arg="$1"
+
+    if [ "$(string_startswith "$arg" '-')" = false ]; then
+        if [ -z "$src_raster" ]; then
+            src_raster="$arg"
+        fi
+
+    else
+        arg_opt="$(string_lstrip "$arg" '-')"
+        arg_opt_nargs=''
+        if [ "$(string_contains "$arg_opt" '=')" = true ]; then
+            arg_val=$(printf '%s' "${arg_opt#*=}" | sed -r -e "s|^['\"]+||" -e "s|['\"]+$||")
+            arg_opt="${arg_opt%%=*}"
+            arg_opt_nargs_do_shift=false
+        else
+            arg_val="$2"
+            arg_opt_nargs_do_shift=true
+        fi
+        arg_val_can_start_with_dash=false
+
+        if [ "$arg_opt" = 'h' ] || [ "$arg_opt" = 'help' ]; then
+            arg_opt_nargs=0
+            echo "$script_usage"
+            exit 0
+
+        elif [ "$arg_opt" = 'r' ] || [ "$arg_opt" = 'out-raster' ]; then
+            arg_opt_nargs=1
+            if [ "$arg_opt_nargs_do_shift" = true ]; then
+                out_raster=true
+            else
+                out_raster="$arg_val"
+            fi
+
+        elif [ "$arg_opt" = 'v' ] || [ "$arg_opt" = 'out-vector' ]; then
+            arg_opt_nargs=1
+            if [ "$arg_opt_nargs_do_shift" = true ]; then
+                out_vector=true
+            else
+                out_vector="$arg_val"
+            fi
+
+        elif [ "$arg_opt" = 'vf' ] || [ "$arg_opt" = 'out-vector-format' ]; then
+            arg_opt_nargs=1
+            out_vector_ext=$(echo "${arg_val##*.}" | tr '[:upper:]' '[:lower:]')
+
+        elif [ "$arg_opt" = 'os' ] || [ "$arg_opt" = 'out-suffix' ]; then
+            arg_opt_nargs=1
+            out_suffix="$arg_val"
+
+        elif [ "$arg_opt" = 'dr' ] || [ "$arg_opt" = 'dryrun' ]; then
+            arg_opt_nargs=0
+            dryrun=true
+
+        else
+            echo_e "Unexpected argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ -z "$arg_opt_nargs" ]; then
+            echo_e "Developer error! "'$arg_opt_nargs'" was not set for argument: ${arg}"
+            exit_script_with_status 1
+        fi
+
+        if [ "$arg_opt_nargs_do_shift" = true ] && (( arg_opt_nargs >= 1 )); then
+            for arg_num in $(seq 1 $arg_opt_nargs); do
+
+                if [ "$arg_opt" = 'r' ] || [ "$arg_opt" = 'out_raster' ]; then
+                    arg_val="$2"
+                    if [ -n "$arg_val" ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                        out_raster="$arg_val"
+                        shift
+                    fi
+
+                elif [ "$arg_opt" = 'v' ] || [ "$arg_opt" = 'out_vector' ]; then
+                    arg_val="$2"
+                    if [ -n "$arg_val" ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                        out_vector="$arg_val"
+                        shift
+                    fi
+
+                else
+                    shift
+                    arg_val="$1"
+                    if [ -z "$arg_val" ]; then
+                        echo_e "Missing expected value (#${arg_num}) for argument: ${arg}"
+                        exit_script_with_status 1
+                    elif [ "$arg_val_can_start_with_dash" = false ] && [ "$(string_startswith "$arg_val" '-')" = true ]; then
+                        echo_e "Unexpected argument value: ${arg} ${arg_val}"
+                        exit_script_with_status 1
+                    fi
+                fi
+            done
+        fi
+    fi
+
+    shift
+done
+set -u
+
+
+## Validate arguments
+
+if [ -z "$src_raster" ]; then
+    echo_e "SRC_RASTER argument must be provided"
+    exit_script_with_status 1
+fi
+
+
+## Adjust arguments
+
+if [ -z "$out_raster" ] && [ -z "$out_vector" ]; then
+    out_raster=trye
+    out_vector=true
+fi
+
+if [ -n "$out_raster" ]; then
+    keep_out_raster=true
+else
+    keep_out_raster=false
+fi
+if [ -n "$out_vector" ]; then
+    keep_out_vector=true
+else
+    keep_out_vector=false
+fi
+
+default_coverage_file_suffix="_coverage"
+if [ -z "$out_raster" ] || [ "$out_raster" = true ]; then
+    if [ -z "$out_suffix" ]; then
+        echo_e "OUT_SUFFIX cannot be empty string when using default OUT_RASTER filepath"
+        exit_script_with_status 1
+    fi
+    out_raster="${src_raster%.*}${out_suffix}.${src_raster##*.}"
+fi
+if [ -z "$out_vector" ] || [ "$out_vector" = true ]; then
+    out_vector="${src_raster%.*}${out_suffix}.${out_vector_ext}"
+    used_out_suffix_for_vector=true
+else
+    used_out_suffix_for_vector=false
+fi
+out_vector_tmp="${out_vector%.*}_tmp.${out_vector##*.}"
+
+out_vector_ext=$(echo "${out_vector##*.}" | tr '[:upper:]' '[:lower:]')
+
+
+## Main program
+
+echo "Creating output raster coverage file: ${out_raster}"
+cmd="\
+gdal_translate -b mask -of COG -ot Byte -co NBITS=1 \
+-co OVERVIEWS=IGNORE_EXISTING -co RESAMPLING=NEAREST \
+-co PREDICTOR=NO -co COMPRESS=DEFLATE -co BIGTIFF=YES \
+\"${src_raster}\" \"${out_raster}\""
+echo "$cmd"
+if [ "$dryrun" = false ]; then
+    eval "$cmd"
+    if [ -f "$out_raster" ]; then
+        echo "Generated output coverage raster: ${out_raster}"
+    else
+        echo "Failed to generate output coverage raster: ${out_raster}"
+        exit_script_with_status 1
+    fi
+fi
+
+echo "Tweaking raster coverage file"
+cmd="gdal_edit.py -a_nodata 0 \"${out_raster}\""
+echo "$cmd"
+if [ "$dryrun" = false ]; then
+    eval "$cmd"
+fi
+
+if [ "$keep_out_vector" = false ]; then
+    exit 0
+fi
+
+echo "Creating output vector coverage file: ${out_vector_tmp}"
+if [ "$out_vector_ext" = 'shp' ]; then
+    layer_name=$(basename "${out_vector_tmp%.*}")
+else
+    layer_name=$(basename "${out_vector%.*}")
+fi
+cmd="gdal_polygonize.py -overwrite \"${out_raster}\" \"${out_vector_tmp}\" \"${layer_name}\""
+echo "$cmd"
+if [ "$dryrun" = false ]; then
+    eval "$cmd"
+    if [ -f "$out_vector_tmp" ]; then
+        echo "Generated output coverage vector file: ${out_vector_tmp}"
+    else
+        echo "Failed to generate output coverage vector file: ${out_vector_tmp}"
+        exit_script_with_status 1
+    fi
+fi
+
+if [ "$keep_out_raster" = false ]; then
+    echo "Removing temporary coverage raster file: ${out_raster}"
+    if [ "$dryrun" = false ]; then
+        rm "$out_raster"
+    fi
+fi
+
+if [ "$dryrun" = true ]; then
+    exit 0
+fi
+
+echo "Tweaking vector coverage file"
+if [ "$out_vector_ext" = 'shp' ]; then
+    layer_name_in=$(basename "${out_vector_tmp%.*}")
+else
+    layer_name_in=$(basename "${out_vector%.*}")
+fi
+layer_name_out=$(basename "${out_vector%.*}")
+if [ "$out_vector_ext" = 'gpkg' ]; then
+    geom_field_name='geom'
+else
+    geom_field_name='geometry'
+fi
+ogr2ogr "${out_vector}" "${out_vector_tmp}" -nln "$layer_name_out" -dialect sqlite -sql "SELECT ST_Union(${geom_field_name}) AS ${geom_field_name} FROM ${layer_name_in}"
+
+if [ -f "$out_vector_tmp" ]; then
+    echo "Generated final coverage vector file: ${out_vector}"
+else
+    echo "Failed to generate output coverage vector: ${out_vector}"
+    exit_script_with_status 1
+fi
+
+rm ${out_vector_tmp%.*}*
+
+if [ "$(itemOneOf "$out_vector_ext" "${unsupported_vector_tweak_ext_arr[@]}")" = true ]; then
+    echo "Skipping vector coverage file addition of 'filename' field due to unsupported output vector file type: ${out_vector_ext}"
+    exit 0
+fi
+
+layer_name=$(basename "${out_vector%.*}")
+if [ "$used_out_suffix_for_vector" = true ]; then
+    filename_value=$(echo "$layer_name" | sed "s|${default_coverage_file_suffix}$||")
+else
+    filename_value="$layer_name"
+fi
+ogrinfo "${out_vector}" -sql "ALTER TABLE ${layer_name} DROP COLUMN FID"
+ogrinfo "${out_vector}" -sql "ALTER TABLE ${layer_name} ADD COLUMN filename character(255)"
+ogrinfo "${out_vector}" -dialect SQLite -sql "UPDATE ${layer_name} SET filename = '${filename_value}'"
