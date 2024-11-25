@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import json
+import logging
 import math
 import pyproj
 from enum import Enum
@@ -9,12 +10,15 @@ from pathlib import Path
 from typing import Any
 
 import geopandas as gpd
+import numpy as np
 import rasterio as rio
 import shapely.geometry
 from pydantic import BaseModel, ConfigDict, field_validator
 from shapely import get_coordinates
 
 from typer import run
+
+logger = logging.getLogger(__name__)
 
 
 UNIT_IN_METERS = {
@@ -170,34 +174,34 @@ class RasterTindexMetadata(BaseModel):
     band_count: int
     driver: str
     dtype: str
-    nodata: float | int
+    nodata: float | int | None
     width: int
     height: int
-    transform: str | None
-    crs_unit: HorizontalUnit | None
-    center_lat: float | None
-    center_lon: float | None
-    origin_x: float | int | None
-    origin_y: float | int | None
-    pixel_dx: float | int | None
-    pixel_dy: float | int | None
-    pixel_dx_approx_meters: float | int | None
-    pixel_dy_approx_meters: float | int | None
-    blockxsize: int | None
-    blockysize: int | None
-    tiled: bool | None
-    compress: str | None
-    interleave: str | None
-    LAYOUT: str | None
-    PREDICTOR: int | bool | None
+    transform: str | None = None
+    crs_unit: HorizontalUnit | None = None
+    center_lat: float | None = None
+    center_lon: float | None = None
+    origin_x: float | int | None = None
+    origin_y: float | int | None = None
+    pixel_dx: float | int | None = None
+    pixel_dy: float | int | None = None
+    pixel_dx_approx_meters: float | int | None = None
+    pixel_dy_approx_meters: float | int | None = None
+    blockxsize: int | None = None
+    blockysize: int | None = None
+    tiled: bool | None = None
+    compress: str | None = None
+    interleave: str | None = None
+    LAYOUT: str | None = None
+    PREDICTOR: int | bool | None = None
     BIGTIFF: bool
-    AREA_OR_POINT: str | None
-    LAYER_TYPE: str | None
-    STATISTICS_MINIMUM: float | int | None
-    STATISTICS_MAXIMUM: float | int | None
-    STATISTICS_MEAN: float | int | None
-    STATISTICS_STDDEV: float | int | None
-    STATISTICS_VALID_PERCENT: float | int | None
+    AREA_OR_POINT: str | None = None
+    LAYER_TYPE: str | None = None
+    STATISTICS_MINIMUM: float | int | None = None
+    STATISTICS_MAXIMUM: float | int | None = None
+    STATISTICS_MEAN: float | int | None = None
+    STATISTICS_STDDEV: float | int | None = None
+    STATISTICS_VALID_PERCENT: float | int | None = None
     STATISTICS_APPROXIMATE: bool
 
     @field_validator("*", mode="before")
@@ -208,6 +212,64 @@ class RasterTindexMetadata(BaseModel):
         return v
 
 
+class AllowAnythingModel(BaseModel):
+    model_config: ConfigDict = ConfigDict(extra="allow")  # type: ignore [misc]
+
+
+def get_stats_metadata_dict(ds: rio.DatasetReader, approx_stats: bool = False) -> dict[str, Any]:
+    # Calculate GDAL statistics.
+    # Suppress `StatisticsError`, which can be caused by raster pixels being all
+    # (or nearly all, if `approx_stats=True`) NoData values.
+    with suppress(rio.errors.StatisticsError):
+        ds.statistics(bidx=1, approx=approx_stats, clear_cache=True)
+
+    # Get GDAL band 1 info, which should contain only the stats info we just calculated.
+    # It won't exist if stats calculation failed with suppressed error.
+    try:
+        stats = ds.tags(1)
+    except IndexError:
+        return {
+            "STATISTICS_APPROXIMATE": approx_stats,
+            "STATISTICS_MINIMUM": None,
+            "STATISTICS_MAXIMUM": None,
+            "STATISTICS_MEAN": None,
+            "STATISTICS_STDDEV": None,
+            "STATISTICS_VALID_PERCENT": None,
+        }
+
+    stats_approximate = str(stats.pop("STATISTICS_APPROXIMATE", approx_stats)).lower() in (
+        "yes",
+        "true",
+    )
+
+    dtype_cast_func = int if np.issubdtype(np.dtype(ds.dtypes[0]), np.integer) else float
+    stats_min = dtype_cast_func(stats.pop("STATISTICS_MINIMUM"))
+    stats_max = dtype_cast_func(stats.pop("STATISTICS_MAXIMUM"))
+
+    return {
+        "STATISTICS_APPROXIMATE": stats_approximate,
+        "STATISTICS_MINIMUM": stats_min,
+        "STATISTICS_MAXIMUM": stats_max,
+        **{key: float(value) for key, value in stats.items()},
+    }
+
+
+def get_geoseries_centroid(geoseries: gpd.GeoSeries) -> gpd.GeoSeries:
+    source_crs = geoseries.crs
+    try:
+        geoseries_equal_area = geoseries.to_crs("+proj=cea")
+        if not geoseries_equal_area.values[0].is_valid:
+            raise ValueError(
+                "Failed to reproject geometry to Equal Area Cylindrical projection ('+proj=cea')"
+            )
+        return geoseries_equal_area.centroid.to_crs(source_crs)
+    except Exception:
+        logger.exception(
+            "Hit the follwing error when reprojecting geometry to equal area for centroid calculation, falling back to regular centroid calculation"
+        )
+        return geoseries.centroid
+
+
 def write_raster_tindex_geojson(
     raster_path: Path,
     *,
@@ -216,7 +278,7 @@ def write_raster_tindex_geojson(
     extra_data_str: str | None = None,
     missing_crs_epsg_code: int | None = None,
     set_missing_crs_in_meta: bool = False,
-    add_fieldname_prefix: str | None = None,
+    add_fieldname_prefix: str | None = "_",
     add_fieldname_prefix_to_extra_data: bool = False,
 ) -> Path:
     """
@@ -227,15 +289,12 @@ def write_raster_tindex_geojson(
     extra_data = json.loads(extra_data_str) if extra_data_str else None
 
     raster_path = Path(raster_path)
-    output_path = (
-        raster_path.with_suffix(".geojson")
-        if output_path is None
-        else Path(output_path)
-    )
+    output_path = raster_path.with_suffix(".geojson") if output_path is None else Path(output_path)
     if output_path.is_file() and output_path.samefile(raster_path):
-        raise ValueError(
-            "Default path for output file is the same as input raster path"
-        )
+        raise ValueError("Default path for output file is the same as input raster path")
+
+    if add_fieldname_prefix is None:
+        add_fieldname_prefix = ""
 
     with open(raster_path, "rb") as fo:
         is_bigtiff = fo.read(3) == b"II+"
@@ -245,32 +304,16 @@ def write_raster_tindex_geojson(
         bbox = shapely.geometry.box(*ds.bounds)
 
         # Get CRS to use for calculations
-        use_crs = ds.crs or (
-            rio.CRS.from_epsg(missing_crs_epsg_code) if missing_crs_epsg_code else None
-        )
+        use_crs = ds.crs or (rio.CRS.from_epsg(missing_crs_epsg_code) if missing_crs_epsg_code else None)
 
-        # Calculate statistics
-        with suppress(rio.errors.StatisticsError):
-            ds.statistics(bidx=1, approx=approx_stats, clear_cache=True)
+        # Calculate statistics and get GDAL stats metadata
+        stats = get_stats_metadata_dict(ds, approx_stats=approx_stats)
 
         # Get some base GDAL meta info
         try:
             gdal_meta_tag0 = ds.tags(0)
         except IndexError:
             gdal_meta_tag0 = {}
-
-        # Get GDAL band 1 stats info, standardize STATISTICS_APPROXIMATE value and location in dict
-        try:
-            stats = ds.tags(1)
-        except IndexError:
-            stats = {}
-        stats["STATISTICS_APPROXIMATE"] = str(
-            stats.get("STATISTICS_APPROXIMATE", approx_stats)
-        ).lower() in (
-            "yes",
-            "true",
-        )
-        stats["STATISTICS_APPROXIMATE"] = stats.pop("STATISTICS_APPROXIMATE")
 
         # Get raster origin coords and pixel resolution
         # https://gdal.org/tutorials/geotransforms_tut.html
@@ -293,12 +336,10 @@ def write_raster_tindex_geojson(
         if use_crs and pixel_dx and pixel_dy:
             crs_unit = get_crs_horizontal_unit(pyproj.CRS(use_crs))
             if crs_unit == "degree":
-                pixel_dx_meters, pixel_dy_meters = (
-                    get_approx_spacing_from_degrees_to_meters(
-                        bbox_deg=bbox,
-                        dx_deg=pixel_dx,
-                        dy_deg=pixel_dy,
-                    )
+                pixel_dx_meters, pixel_dy_meters = get_approx_spacing_from_degrees_to_meters(
+                    bbox_deg=bbox,
+                    dx_deg=pixel_dx,
+                    dy_deg=pixel_dy,
                 )
             elif crs_unit in UNIT_IN_METERS:
                 pixel_dx_meters = pixel_dx * UNIT_IN_METERS[crs_unit]
@@ -311,8 +352,9 @@ def write_raster_tindex_geojson(
             "filename": raster_path.name,
             "file_ext": "".join(raster_path.suffixes),
             "filesize": raster_path.stat().st_size,
-            "crs": str(ds.crs) if ds.crs else None,
             "band_count": ds.meta.get("count", None),
+            "crs": str(ds.crs) if ds.crs else None,
+            "compress": None,  # Overridden by `ds.meta` item if it exists, or gdal 'COMPRESSION' metadata
             **ds.meta,
             "crs_unit": crs_unit,
             "center_lat": None,  # Set after bbox reprojection to WGS84
@@ -353,15 +395,13 @@ def write_raster_tindex_geojson(
         for key in export_meta_keys:
             if key != key.lower() and key.lower() in export_meta:
                 export_meta.pop(key)
-        if "compress" in export_meta:
-            export_meta.pop("COMPRESSION", None)
-        else:
+        if export_meta["compress"] is None:
             export_meta["compress"] = export_meta.pop("COMPRESSION", None)
+        else:
+            export_meta.pop("COMPRESSION", None)
 
         # Rename fields
-        export_meta.pop(
-            "count", None
-        )  # Already set "band_count" in `export_meta` above
+        export_meta.pop("count", None)  # Already set "band_count" in `export_meta` above
 
         added_extra_data = False
 
@@ -370,16 +410,16 @@ def write_raster_tindex_geojson(
             if extra_data and add_fieldname_prefix_to_extra_data:
                 export_meta = {**export_meta, **extra_data}
                 added_extra_data = True
-            export_meta = {
-                f"{add_fieldname_prefix}{k}": v for k, v in export_meta.items()
-            }
+            export_meta = {f"{add_fieldname_prefix}{k}": v for k, v in export_meta.items()}
 
         # Add extra data
         if extra_data and not added_extra_data:
             export_meta = {**export_meta, **extra_data}
 
         # Run the metadata through a pydantic model for some sanitizing
-        export_meta_model = RasterTindexMetadata(**export_meta)
+        export_meta_model = (
+            AllowAnythingModel(**export_meta) if add_fieldname_prefix else RasterTindexMetadata(**export_meta)
+        )
 
         # Assemble data frame with raster bounding box and metadata,
         # then write out to GeoJSON file.
@@ -401,9 +441,9 @@ def write_raster_tindex_geojson(
         # If the raster has a CRS, convert the bbox geometry to WGS84 and set derived metadata values
         if gdf.crs:
             gdf.to_crs(crs=rio.CRS.from_epsg(4326), inplace=True)
-            gdf["center_lon"], gdf["center_lat"] = get_coordinates(
-                gdf.to_crs("+proj=cea").head(1).geometry.centroid.to_crs(gdf.crs)
-            ).flatten()
+            gdf[f"{add_fieldname_prefix}center_lon"], gdf[f"{add_fieldname_prefix}center_lat"] = (
+                get_coordinates(get_geoseries_centroid(gdf.geometry).values[0]).flatten()
+            )
 
         # Write out the geodataframe to file
         gdf.reset_index(drop=True, inplace=True)
@@ -413,9 +453,7 @@ def write_raster_tindex_geojson(
             else:
                 gdf.to_file(
                     str(output_path),
-                    driver="GeoJSON"
-                    if output_path.suffix.lower() in (".json", ".geojson")
-                    else None,
+                    driver="GeoJSON" if output_path.suffix.lower() in (".json", ".geojson") else None,
                 )
         except Exception:
             output_path.unlink(missing_ok=True)
