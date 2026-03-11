@@ -153,7 +153,7 @@ fi
 ## Adjust arguments
 
 if [ -z "$out_raster" ] && [ -z "$out_vector" ]; then
-    out_raster=trye
+    out_raster=true
     out_vector=true
 fi
 
@@ -163,12 +163,11 @@ else
     keep_out_raster=false
 fi
 if [ -n "$out_vector" ]; then
-    keep_out_vector=true
+    make_out_vector=true
 else
-    keep_out_vector=false
+    make_out_vector=false
 fi
 
-default_coverage_file_suffix="_coverage"
 if [ -z "$out_raster" ] || [ "$out_raster" = true ]; then
     if [ -z "$out_suffix" ]; then
         echo_e "OUT_SUFFIX cannot be empty string when using default OUT_RASTER filepath"
@@ -178,22 +177,19 @@ if [ -z "$out_raster" ] || [ "$out_raster" = true ]; then
 fi
 if [ -z "$out_vector" ] || [ "$out_vector" = true ]; then
     out_vector="${src_raster%.*}${out_suffix}.${out_vector_ext}"
-    used_out_suffix_for_vector=true
-else
-    used_out_suffix_for_vector=false
 fi
-out_vector_tmp="${out_vector%.*}_tmp.${out_vector##*.}"
 
 out_vector_ext=$(echo "${out_vector##*.}" | tr '[:upper:]' '[:lower:]')
+out_vector_tmp="${out_vector%.*}_tmp.${out_vector_ext}"
 
 
 ## Main program
 
 echo "Creating output raster coverage file: ${out_raster}"
 cmd="\
-gdal_translate -b mask -of COG -ot Byte -co NBITS=1 \
+gdal_translate -b mask -of COG -ot Byte \
 -co OVERVIEWS=IGNORE_EXISTING -co RESAMPLING=NEAREST \
--co PREDICTOR=NO -co COMPRESS=DEFLATE -co BIGTIFF=YES \
+-co PREDICTOR=NO -co COMPRESS=DEFLATE \
 \"${src_raster}\" \"${out_raster}\""
 echo "$cmd"
 if [ "$dryrun" = false ]; then
@@ -213,17 +209,17 @@ if [ "$dryrun" = false ]; then
     eval "$cmd"
 fi
 
-if [ "$keep_out_vector" = false ]; then
+if [ "$make_out_vector" = false ]; then
     exit 0
 fi
 
 echo "Creating output vector coverage file: ${out_vector_tmp}"
 if [ "$out_vector_ext" = 'shp' ]; then
-    layer_name=$(basename "${out_vector_tmp%.*}")
+    layer_name_tmp=$(basename "${out_vector_tmp%.*}")
 else
-    layer_name=$(basename "${out_vector%.*}")
+    layer_name_tmp=$(basename "${out_vector%.*}")
 fi
-cmd="gdal_polygonize.py -overwrite \"${out_raster}\" \"${out_vector_tmp}\" \"${layer_name}\""
+cmd="gdal_polygonize.py -overwrite \"${out_raster}\" \"${out_vector_tmp}\" \"${layer_name_tmp}\""
 echo "$cmd"
 if [ "$dryrun" = false ]; then
     eval "$cmd"
@@ -247,18 +243,13 @@ if [ "$dryrun" = true ]; then
 fi
 
 echo "Tweaking vector coverage file"
-if [ "$out_vector_ext" = 'shp' ]; then
-    layer_name_in=$(basename "${out_vector_tmp%.*}")
-else
-    layer_name_in=$(basename "${out_vector%.*}")
-fi
 layer_name_out=$(basename "${out_vector%.*}")
 if [ "$out_vector_ext" = 'gpkg' ]; then
     geom_field_name='geom'
 else
     geom_field_name='geometry'
 fi
-ogr2ogr "${out_vector}" "${out_vector_tmp}" -nln "$layer_name_out" -dialect sqlite -sql "SELECT ST_Union(${geom_field_name}) AS ${geom_field_name} FROM ${layer_name_in}"
+ogr2ogr "${out_vector}" "${out_vector_tmp}" -nln "$layer_name_out" -dialect sqlite -sql "SELECT ST_Union(${geom_field_name}) AS ${geom_field_name} FROM ${layer_name_tmp}"
 
 if [ -f "$out_vector_tmp" ]; then
     echo "Generated final coverage vector file: ${out_vector}"
@@ -267,19 +258,16 @@ else
     exit_script_with_status 1
 fi
 
-rm ${out_vector_tmp%.*}*
+rm -v ${out_vector_tmp%.*}*
 
 if [ "$(itemOneOf "$out_vector_ext" "${unsupported_vector_tweak_ext_arr[@]}")" = true ]; then
-    echo "Skipping vector coverage file addition of 'filename' field due to unsupported output vector file type: ${out_vector_ext}"
+    echo "Skipping addition of vector coverage filename fields due to unsupported output vector file type: ${out_vector_ext}"
     exit 0
 fi
 
-layer_name=$(basename "${out_vector%.*}")
-if [ "$used_out_suffix_for_vector" = true ]; then
-    filename_value=$(echo "$layer_name" | sed "s|${default_coverage_file_suffix}$||")
-else
-    filename_value="$layer_name"
-fi
-ogrinfo "${out_vector}" -sql "ALTER TABLE ${layer_name} DROP COLUMN FID"
-ogrinfo "${out_vector}" -sql "ALTER TABLE ${layer_name} ADD COLUMN filename character(255)"
-ogrinfo "${out_vector}" -dialect SQLite -sql "UPDATE ${layer_name} SET filename = '${filename_value}'"
+ogrinfo "${out_vector}" -sql "ALTER TABLE ${layer_name_out} DROP COLUMN FID"
+ogrinfo "${out_vector}" -sql "ALTER TABLE ${layer_name_out} ADD COLUMN srcfile character(254)"
+ogrinfo "${out_vector}" -sql "ALTER TABLE ${layer_name_out} ADD COLUMN srcf_stem character(254)"
+ogrinfo "${out_vector}" -sql "ALTER TABLE ${layer_name_out} ADD COLUMN outfile character(254)"
+ogrinfo "${out_vector}" -sql "ALTER TABLE ${layer_name_out} ADD COLUMN outf_stem character(254)"
+ogrinfo "${out_vector}" -dialect SQLite -sql "UPDATE ${layer_name_out} SET srcfile='$(basename ${src_raster})', srcf_stem='$(basename ${src_raster%.*})', outfile='$(basename ${out_vector})', outf_stem='$(basename ${out_vector%.*})'"

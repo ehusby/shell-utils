@@ -28,7 +28,7 @@ async def async_read_files(paths: Sequence[Path | str]) -> list[gpd.GeoDataFrame
 
 def merge_vector_files(
     out_vector_path: Path,
-    in_vector_paths: Sequence[Path],
+    in_vector_paths: list[Path],
     convert_obj_to_str: bool = False,
     convert_all_dtypes: bool = False,
     cast_numeric_cols: bool = False,
@@ -62,9 +62,7 @@ def merge_vector_files(
     else:
         gdf.to_file(
             str(out_vector_path),
-            driver="GeoJSON"
-            if out_vector_path.suffix.lower() in (".json", ".geojson")
-            else None,
+            driver="GeoJSON" if out_vector_path.suffix.lower() in (".json", ".geojson") else None,
         )
 
     return out_vector_path

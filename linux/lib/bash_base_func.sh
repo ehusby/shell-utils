@@ -53,26 +53,45 @@ process_items() {
     local process_func="$1"; shift
     local pipe_in_items="$1"; shift
     local cwd_glob_if_no_items_provided="$1"; shift
+    local parallel_max_proc="$1"; shift
     local processed_items=false
-    local item PROCESS_ITEMS_TOKEN
+    local item PROCESS_ITEMS_TOKEN parallel_count
     local use_token=false
+    local do_parallel=false
     if [ "$(string_contains "$process_func" 'PROCESS_ITEMS_TOKEN')" = true ]; then
         use_token=true
+    fi
+    if [ -n "$parallel_max_proc" ] && (( parallel_max_proc > 0 )); then
+        do_parallel=true
     fi
     if (( $# > 0 )); then
         if [ "$pipe_in_items" = true ]; then
             eval "printf '%s\n' \"\$@\" | ${process_func}"
             while (( $# > 0 )); do shift; done
         else
+            parallel_count=0
             while (( $# > 0 )); do
+                ((parallel_count++))
                 item="$1"
                 if [ "$use_token" = true ]; then
                     PROCESS_ITEMS_TOKEN="$item"
-                    eval "${process_func}"
+                    if [ "$do_parallel" = true ]; then
+                        eval "${process_func}" &
+                    else
+                        eval "${process_func}"
+                    fi
                 else
-                    eval "${process_func} \"${item}\""
+                    if [ "$do_parallel" = true ]; then
+                        eval "${process_func} \"${item}\"" &
+                    else
+                        eval "${process_func} \"${item}\""
+                    fi
                 fi
                 shift
+                if [ "$do_parallel" = true ] && (( parallel_count >= parallel_max_proc )); then
+                    wait
+                    parallel_count=0
+                fi
             done
         fi
         processed_items=true
@@ -81,12 +100,26 @@ process_items() {
         if [ "$pipe_in_items" = true ]; then
             eval "$process_func"
         else
+            parallel_count=0
             while IFS= read -r item; do
+                ((parallel_count++))
                 if [ "$use_token" = true ]; then
                     PROCESS_ITEMS_TOKEN="$item"
-                    eval "${process_func}"
+                    if [ "$do_parallel" = true ]; then
+                        eval "${process_func}" &
+                    else
+                        eval "${process_func}"
+                    fi
                 else
-                    eval "${process_func} \"${item}\""
+                    if [ "$do_parallel" = true ]; then
+                        eval "${process_func} \"${item}\"" &
+                    else
+                        eval "${process_func} \"${item}\""
+                    fi
+                fi
+                if [ "$do_parallel" = true ] && (( parallel_count >= parallel_max_proc )); then
+                    wait
+                    parallel_count=0
                 fi
             done
         fi
@@ -99,9 +132,21 @@ process_items() {
             for item in *; do
                 if [ "$use_token" = true ]; then
                     PROCESS_ITEMS_TOKEN="$item"
-                    eval "${process_func}"
+                    if [ "$do_parallel" = true ]; then
+                        eval "${process_func}" &
+                    else
+                        eval "${process_func}"
+                    fi
                 else
-                    eval "${process_func} \"${item}\""
+                    if [ "$do_parallel" = true ]; then
+                        eval "${process_func} \"${item}\"" &
+                    else
+                        eval "${process_func} \"${item}\""
+                    fi
+                fi
+                if [ "$do_parallel" = true ] && (( parallel_count >= parallel_max_proc )); then
+                    wait
+                    parallel_count=0
                 fi
             done
         fi
@@ -819,40 +864,40 @@ derefpath_oe() {
 }
 
 abspath_all() {
-    process_items 'abspath' false true "$@"
+    process_items 'abspath' false true 0 "$@"
 }
 abspath_all_e() {
-    process_items 'abspath_e' false true "$@"
+    process_items 'abspath_e' false true 0 "$@"
 }
 abspath_all_oe() {
-    process_items 'abspath_oe' false true "$@"
+    process_items 'abspath_oe' false true 0 "$@"
 }
 fullpath_all() {
-    process_items 'fullpath' false true "$@"
+    process_items 'fullpath' false true 0 "$@"
 }
 fullpath_all_e() {
-    process_items 'fullpath_e' false true "$@"
+    process_items 'fullpath_e' false true 0 "$@"
 }
 fullpath_all_oe() {
-    process_items 'fullpath_oe' false true "$@"
+    process_items 'fullpath_oe' false true 0 "$@"
 }
 derefpath_all() {
     local deref_count="$1"; shift
-    process_items "derefpath ${deref_count}" false true "$@"
+    process_items "derefpath ${deref_count}" false true 0 "$@"
 }
 derefpath_all_e() {
     local deref_count="$1"; shift
-    process_items "derefpath_e ${deref_count}" false true "$@"
+    process_items "derefpath_e ${deref_count}" false true 0 "$@"
 }
 derefpath_all_oe() {
     local deref_count="$1"; shift
-    process_items "derefpath_oe ${deref_count}" false true "$@"
+    process_items "derefpath_oe ${deref_count}" false true 0 "$@"
 }
 basename_all() {
-    process_items 'basename' false true "$@"
+    process_items 'basename' false true 0 "$@"
 }
 dirname_all() {
-    process_items 'dirname' false true "$@"
+    process_items 'dirname' false true 0 "$@"
 }
 
 cut_slice_alias() {
@@ -912,7 +957,7 @@ cut_slice_alias() {
         cmd="rev | ${cmd} | rev"
     fi
 
-    process_items "$cmd" true false "$@"
+    process_items "$cmd" true false 0 "$@"
 }
 pathfrombegin() {
     cut_slice_alias pathfrombegin 'path' '/' false "$@"

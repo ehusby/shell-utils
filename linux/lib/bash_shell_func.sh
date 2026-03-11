@@ -240,6 +240,53 @@ link_or_copy() {
     fi
 }
 
+conda_activate() {
+    local env_name="$(basename "$(abspath .)")"
+    conda activate "$env_name"
+}
+
+pixi_create() {
+    local env_name
+    if [ -n "$1" ]; then
+        env_name="$1"
+    else
+        env_name="$(basename "$(abspath .)")"
+    fi
+    if [ -z "$env_name" ]; then
+        echo "Error: local var 'env_name' is empty" >/dev/null
+        return
+    fi
+
+    local env_path="${HOME}/mini_pixi_envs/${env_name}"
+    local pixi_dir=".pixi"
+
+    set -x
+    mkdir -p "$env_path"
+    ln -sTf "$env_path" "$pixi_dir"
+    set +x
+}
+
+pixi_remove() {
+    local env_name
+    if [ -n "$1" ]; then
+        env_name="$1"
+    else
+        env_name="$(basename "$(abspath .)")"
+    fi
+    if [ -z "$env_name" ]; then
+        echo "Error: local var 'env_name' is empty" >/dev/null
+        return
+    fi
+
+    set -x
+    local env_path="${HOME}/mini_pixi_envs/${env_name}"
+    local pixi_dir=".pixi"
+
+    rm -rf "$env_path"
+    rm -f "$pixi_dir"
+    set +x
+}
+
 absymlink_defunct() {
     local arg_arr arg
     arg_arr=()
@@ -518,7 +565,7 @@ smart_sort() {
 }
 
 wc_nlines() {
-    process_items 'wc -l' false true "$@" | awk '{print $1}'
+    process_items 'wc -l' false true 0 "$@" | awk '{print $1}'
 }
 
 count_items() {

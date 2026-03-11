@@ -651,22 +651,22 @@ derefpath() {
 }
 
 abspath_all() {
-    process_items 'abspath' false true "$@"
+    process_items 'abspath' false true 0 "$@"
 }
 fullpath_all() {
-    process_items 'fullpath' false true "$@"
+    process_items 'fullpath' false true 0 "$@"
 }
 abspath_all_e() {
-    process_items 'abspath_e' false true "$@"
+    process_items 'abspath_e' false true 0 "$@"
 }
 fullpath_all_e() {
-    process_items 'fullpath_e' false true "$@"
+    process_items 'fullpath_e' false true 0 "$@"
 }
 basename_all() {
-    process_items 'basename' false true "$@"
+    process_items 'basename' false true 0 "$@"
 }
 dirname_all() {
-    process_items 'dirname' false true "$@"
+    process_items 'dirname' false true 0 "$@"
 }
 
 cut_slice_alias() {
@@ -714,7 +714,7 @@ cut_slice_alias() {
         cmd="rev | ${cmd} | rev"
     fi
 
-    process_items "$cmd" true false "$@"
+    process_items "$cmd" true false 0 "$@"
 }
 pathfrombegin() {
     cut_slice_alias pathfrombegin 'path' '/' false "$@"
@@ -1051,7 +1051,7 @@ du_g() { du --block-size=1G "$@" | awk '{print $1}'; }
 du_t() { du --block-size=1T "$@" | awk '{print $1}'; }
 
 wc_nlines() {
-    process_items 'wc -l' false true "$@" | awk '{print $1}'
+    process_items 'wc -l' false true 0 "$@" | awk '{print $1}'
 }
 
 count_by_date() {

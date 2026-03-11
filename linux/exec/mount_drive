@@ -152,7 +152,7 @@ for drive in "${drive_arr[@]}"; do
     if [ -n "$fstab_line_exists" ]; then
         echo -e "-> Drive setting already exists in /etc/fstab:\n    ${fstab_drive_line}"
     else
-        cmd="sudo bash -c 'echo ${drive_upper}: /mnt/${drive_lower} drvfs defaults 0 0 >> /etc/fstab'"
+        cmd="sudo bash -c 'echo ${fstab_drive_line} >> /etc/fstab'"
         echo -e "-> Adding drive setting to /etc/fstab with command:\n    ${cmd}"
         if [ "$dryrun" = false ]; then
             eval "$cmd"

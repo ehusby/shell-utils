@@ -74,8 +74,14 @@ aws_glob() {
     local pattern="^${1//\*/'[^/]+'}"
     aws_s3 cp "$rootdir" ./. --recursive --dryrun  | cut -d" " -f3 | grep -Eo "$pattern" | sort -u
 }
-aws_find() {
-    aws_s3 cp "$1" ./. --recursive --dryrun --exclude "*" --include "$2" | cut -d" " -f3
+aws_find_all() {
+    aws_s3 cp "$1" ./. --recursive --dryrun | sed 's| to .*||' | cut -d" " -f3-
+}
+aws_find_include() {
+    aws_s3 cp "$1" ./. --recursive --dryrun --exclude "*" --include "$2" | sed 's| to .*||' | cut -d" " -f3-
+}
+aws_find_exclude() {
+    aws_s3 cp "$1" ./. --recursive --dryrun --exclude "$2" | sed 's| to .*||' | cut -d" " -f3-
 }
 aws_resolve_path() {
     if [ "$(string_contains "$SHELLOPTS" 'monitor')" = true ]; then
@@ -124,9 +130,13 @@ aws_resolve_path_recursive() {
     fi
 }
 
+aws_rm() {
+    process_items "aws_s3 rm" false false 5 "$@"
+}
+
 aws_cp_t() {
     local target_dir="$1"; shift
-    process_items "aws_s3 cp \${PROCESS_ITEMS_TOKEN} ${target_dir}" false false "$@"
+    process_items "aws_s3 cp \${PROCESS_ITEMS_TOKEN} ${target_dir}" false false 5 "$@"
 }
 
 aws_cpr() {

@@ -30,8 +30,8 @@ chmod_mode_choices=(  'add' 'set' 'remove' )
 chmod_mode_operator_arr=(  '+'   '='    '-'    )
 chmod_mode='set'
 sticky_arg_choices=( 'off' 'files' 'folders' 'all' )
-add_group_s='off'
-remove_group_s='off'
+add_group_s='off'  # typical default may be 'folders'
+remove_group_s='off'  # typical default may be 'files'
 add_user_s='off'
 remove_user_s='off'
 add_file_x=false

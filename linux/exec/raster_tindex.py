@@ -220,14 +220,21 @@ def get_stats_metadata_dict(ds: rio.DatasetReader, approx_stats: bool = False) -
     # Calculate GDAL statistics.
     # Suppress `StatisticsError`, which can be caused by raster pixels being all
     # (or nearly all, if `approx_stats=True`) NoData values.
-    with suppress(rio.errors.StatisticsError):
+    try:
         ds.statistics(bidx=1, approx=approx_stats, clear_cache=True)
+    except rio.errors.StatisticsError as exc:
+        logger.exception(str(exc))
+        if approx_stats:
+            logger.warning(f"`approx_stats={approx_stats}`, meaning raster might actually contain some valid pixels")
+        logger.warning("Due to stats calc failure, stats fields will be left null in output tindex file")
 
     # Get GDAL band 1 info, which should contain only the stats info we just calculated.
     # It won't exist if stats calculation failed with suppressed error.
     try:
         stats = ds.tags(1)
-    except IndexError:
+        if "STATISTICS_MINIMUM" not in stats:
+            raise ValueError("Stats field 'STATISTICS_MINIMUM' not found in dataset `ds.tags(1)`")
+    except (IndexError, ValueError):
         return {
             "STATISTICS_APPROXIMATE": approx_stats,
             "STATISTICS_MINIMUM": None,
@@ -243,14 +250,18 @@ def get_stats_metadata_dict(ds: rio.DatasetReader, approx_stats: bool = False) -
     )
 
     dtype_cast_func = int if np.issubdtype(np.dtype(ds.dtypes[0]), np.integer) else float
-    stats_min = dtype_cast_func(stats.pop("STATISTICS_MINIMUM"))
-    stats_max = dtype_cast_func(stats.pop("STATISTICS_MAXIMUM"))
+
+    def cast_numeric_or_string(value: str | float) -> str | int | float:
+        try:
+            return dtype_cast_func(value)
+        except ValueError:
+            return str(value)
 
     return {
         "STATISTICS_APPROXIMATE": stats_approximate,
-        "STATISTICS_MINIMUM": stats_min,
-        "STATISTICS_MAXIMUM": stats_max,
-        **{key: float(value) for key, value in stats.items()},
+        "STATISTICS_MINIMUM": dtype_cast_func(stats.pop("STATISTICS_MINIMUM")),
+        "STATISTICS_MAXIMUM": dtype_cast_func(stats.pop("STATISTICS_MAXIMUM")),
+        **{key: cast_numeric_or_string(value) for key, value in stats.items()},
     }
 
 
@@ -350,6 +361,7 @@ def write_raster_tindex_geojson(
         # https://gdal.org/user/raster_data_model.html
         export_meta = {
             "filename": raster_path.name,
+            "file_stem": "".join(raster_path.stem),
             "file_ext": "".join(raster_path.suffixes),
             "filesize": raster_path.stat().st_size,
             "band_count": ds.meta.get("count", None),
