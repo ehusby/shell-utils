@@ -988,6 +988,27 @@ prompt_y_or_n() {
     fi
 }
 
+confirm() {
+    # call with a prompt string or use a default
+    read -r -p "${1:-Are you sure?} [y/N] " response
+    case "$response" in
+        [yY]|[yY][eE][sS])
+            true
+            ;;
+        *)
+            false
+            ;;
+    esac
+}
+
+
+## Git helper commands
+
+git_branch_cleanup() {
+    git fetch --prune
+    git branch -vv | grep ': gone]' | awk '{print $1}' | xargs git branch -D
+}
+
 
 ## Other
 

@@ -294,3 +294,48 @@ aws_process_ds_list() {
         aws_process_ds_root "$root_uri"
     done
 }
+
+
+robotocore_run() {
+    docker run --name robotocore -d -p 4566:4566 ghcr.io/robotocore/robotocore:2026.3.20.7
+}
+robotocore_stop() {
+    docker stop robotocore
+}
+robotocore_rm() {
+    docker rm -f robotocore
+}
+robotocore_s3_rm() {
+    s3_rm_local
+}
+
+s3_rm_local() {
+    echo "Listing buckets to be deleted..."
+    OUTPUT=$( \
+    AWS_ENDPOINT_URL="http://127.0.0.1:4566" \
+    AWS_ACCESS_KEY_ID="dummy" \
+    AWS_SECRET_ACCESS_KEY="dummy" \
+    aws s3 ls)
+    status=$?
+    if (( status != 0 )); then return $status; fi
+    if [ -z "$OUTPUT" ]; then
+        echo "No buckets found"
+        return
+    fi
+    echo
+    echo "$OUTPUT"
+    echo
+    confirm "Proceed with bucket deletion?" || return 0
+    echo
+    buckets=$(echo "$OUTPUT" | rev | cut -d' ' -f1 | rev)
+    echo "$buckets"
+    echo
+    confirm "Confirm again the parsed bucket names to be REMOVED" || return 0
+    echo
+    for bucket in $buckets; do
+        AWS_ENDPOINT_URL="http://127.0.0.1:4566" \
+        AWS_ACCESS_KEY_ID="dummy" \
+        AWS_SECRET_ACCESS_KEY="dummy" \
+        aws s3 rb "s3://${bucket}" --force
+    done
+}
