@@ -1002,14 +1002,6 @@ confirm() {
 }
 
 
-## Git helper commands
-
-git_branch_cleanup() {
-    git fetch --prune
-    git branch -vv | grep ': gone]' | awk '{print $1}' | xargs git branch -D
-}
-
-
 ## Other
 
 parse_xml_value() {

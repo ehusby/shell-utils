@@ -1020,6 +1020,10 @@ git_apply_force() {
 git_remove_local_branches() {
     git branch | grep -v '\*' | xargs -r git branch -D
 }
+git_branch_cleanup() {
+    git fetch --prune
+    git branch -vv | grep ': gone]' | awk '{print $1}' | xargs git branch -D
+}
 
 git_make_exec() {
     if ! git rev-parse --is-inside-work-tree 1>/dev/null; then
