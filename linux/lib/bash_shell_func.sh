@@ -524,7 +524,13 @@ read_csv() {
                 return "$read_status"
             fi
         fi
-        IFS="$csv_delim" read -ra csv_line_arr <<< "$csv_line"
+        readarray -t csv_line_arr < <(echo "$csv_line" | awk -v FPAT="([^${csv_delim}]*)|(\"[^\"]*\")" '{
+          for(i=1;i<=NF;i++){
+            f=$i
+            gsub(/^"|"$/,"",f)
+            print f
+          }
+        }')
     fi
 
     local i field_name field_idx field_val
@@ -532,7 +538,11 @@ read_csv() {
         field_name="${SHELL_UTILS_READ_CSV_GET_FIELDS_NAME_ARR[$i]}"
         field_idx="${SHELL_UTILS_READ_CSV_GET_FIELDS_IDX_ARR[$i]}"
         field_val="${csv_line_arr[$field_idx]}"
-        eval "${field_name}=\"${field_val}\""
+        if [[ $field_val =~ ^\".*\"$ ]]; then
+            eval "${field_name}=${field_val}"
+        else
+            eval "${field_name}=\"${field_val}\""
+        fi
     done
 
     return "$read_status"
