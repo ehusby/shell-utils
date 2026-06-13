@@ -6,11 +6,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/bash_base_func.sh"
 
 ## Debugging
 
+# Trace files opened by an interactive Bash startup.
 bash_strace() { echo exit | strace bash -li |& grep '^open'; }
 
 
 ## Bash prompts
 
+# Print the current Python virtualenv prompt prefix from PS1.
 prompt_venv_prefix() { printf '%s' "$PS1" | grep -Eo '^[[:space:]]*\([^\(\)]*\)[[:space:]]+'; }
 
 # no colors
@@ -22,13 +24,20 @@ prompt_venv_prefix() { printf '%s' "$PS1" | grep -Eo '^[[:space:]]*\([^\(\)]*\)[
 #prompt_reset() { export PS1="[\u@\h:\w]\$ "; }
 
 # colors
+# Set PS1 to show only the current directory name in blue.
 prompt_dname() { export PS1="$(prompt_venv_prefix)\[\033[01;34m\]\W\[\033[00m\] \$ "; }
+# Set PS1 to show the full current path in blue.
 prompt_dfull() { export PS1="$(prompt_venv_prefix)\[\033[01;34m\]\w\[\033[00m\] \$ "; }
+# Set PS1 to show user, short host, and current directory name.
 prompt_short() { export PS1="$(prompt_venv_prefix)[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\W\[\033[00m\]]\$ "; }
+# Set PS1 to show user, short host, and full current path.
 prompt_med()   { export PS1="$(prompt_venv_prefix)[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ "; }
+# Set PS1 to show user, fully-qualified host, and full current path.
 prompt_long()  { export PS1="$(prompt_venv_prefix)[\[\033[01;32m\]\u@\H\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ "; }
+# Reset PS1 to the default colored shell-utils prompt.
 prompt_reset() { export PS1="[\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]\$ "; }
 
+# Read, save, and evaluate one interactive command line.
 ccmd() {
     read -r -e -p "$ " cmd
     history -s "$cmd"
@@ -37,11 +46,17 @@ ccmd() {
 
 
 ## Colorize output streams
+# Run a command while coloring its stderr stream red.
+#
+# $@ - Command and arguments to execute.
 color() { "$@" 2> >(sed $'s,.*,\e[31m&\e[m,'>&2); }
 
 
 ## String manipulation
 
+# Convert newline-separated text to a single space-separated line.
+#
+# Takes input from stdin when piped, otherwise from the first argument.
 line2space() {
     local str result
     if [[ -p /dev/stdin ]]; then
@@ -52,14 +67,17 @@ line2space() {
     result=$(string_strip "$str" | tr '\n' ' ')
     echo "$result"
 }
+# Convert spaces in stdin to newlines.
 space2line() { tr ' ' '\n'; }
 
+# Convert whitespace-separated stdin tokens to single-quoted CSV values.
 line2csstring() {
     local result=$(xargs printf "'%s',")
     result=$(string_rstrip "$result" ',')
     echo "$result"
 }
 
+# Convert newline-separated stdin tokens to single-quoted CSV values.
 line2csstring_alt() {
     tr '\n' ',' | sed -r -e "s|\s||g" -e "s|^,*|'|" -e "s|,*$|'|" -e "s|,+|,|g" -e "s|,|','|g"
 }
@@ -157,6 +175,12 @@ echoeval() {
     eval "echo ${echo_args}"
 }
 
+# Apply a token replacement template to each token from stdin.
+#
+# Takes tokens from stdin. If stdin contains one line, tokens are split on
+# spaces; otherwise each line is treated as one token.
+#
+# $1 - Template string where each `%` is replaced with the current token.
 tokentx() {
     local tx="$1"
     local token_arr=()
@@ -178,6 +202,11 @@ tokentx() {
     printf "%s${token_delim}" "${token_tx_arr[@]}"
 }
 
+# Expand numbered placeholders in a command and execute it.
+#
+# `%0`, `%1`, and later placeholders are replaced with the corresponding
+# command arguments. Use `-debug`, `-dryrun`, `-db`, or `-dr` to print the
+# expanded command instead of executing it.
 layz() {
     local cmd_arr_in cmd_arr_out
     local arg_idx rep_idx
@@ -213,6 +242,7 @@ layz() {
     fi
 }
 
+# Convert compact timestamps to `YYYY-MM-DD HH:MM:SS` strings.
 timestmap2datestr() {
     sed -r 's|([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})|\1-\2-\3 \4:\5:\6|'
 }
@@ -240,11 +270,15 @@ link_or_copy() {
     fi
 }
 
+# Activate a Conda environment named after the current directory.
 conda_activate() {
     local env_name="$(basename "$(abspath .)")"
     conda activate "$env_name"
 }
 
+# Create a `.pixi` symlink to a shared Pixi environment directory.
+#
+# $1 - Environment name. Defaults to the basename of the current directory.
 pixi_create() {
     local env_name
     if [ -n "$1" ]; then
@@ -266,6 +300,9 @@ pixi_create() {
     set +x
 }
 
+# Remove the shared Pixi environment and local `.pixi` symlink.
+#
+# $1 - Environment name. Defaults to the basename of the current directory.
 pixi_remove() {
     local env_name
     if [ -n "$1" ]; then
@@ -287,6 +324,10 @@ pixi_remove() {
     set +x
 }
 
+# Create symlinks using absolute target paths.
+#
+# Non-option arguments are resolved with `readlink -f` before passing them to
+# `ln -s`.
 absymlink_defunct() {
     local arg_arr arg
     arg_arr=()
@@ -301,6 +342,10 @@ absymlink_defunct() {
     ln -s "${arg_arr[@]}"
 }
 
+# Move files or directories and leave absolute symlinks in their place.
+#
+# Accepts normal `mv`-style source and destination arguments. Use `-dryrun`,
+# `-debug`, `-dr`, or `-db` to print the move and symlink commands.
 mv_and_absymlink() {
     local src_arr=()
     local dst=''
@@ -362,6 +407,9 @@ mv_and_absymlink() {
     done
 }
 
+# Recursively touch all files under one or more directories.
+#
+# $@ - Directories whose contained files should be touched.
 touch_all() {
     echo "Will recursively search through argument directories and touch all files within"
     if (( $# == 0 )); then
@@ -376,6 +424,10 @@ touch_all() {
     echo "Done!"
 }
 
+# Move paths to trash and save removal metadata next to each path.
+#
+# Uses `trash-put` from `trash-cli`. Arguments before the first option are
+# treated as paths; remaining arguments are passed to `find`.
 trashem() {
     # Utilizes trash-cli: https://github.com/andreafrancia/trash-cli
     if (( $# == 0 )); then
@@ -405,17 +457,23 @@ trashem() {
 
 ## Read inputs
 
+# Print the first and last N lines from stdin.
+#
+# $1 - Number of lines to print from the head and tail.
 headtail() {
     perl -e 'my $size = '$1'; my @buf = (); while (<>) { print if $. <= $size; push(@buf, $_); if ( @buf > $size ) { shift(@buf); } } print "------\n"; print @buf;'
 }
 
+# Placeholder for CSV column extraction.
 get_csv_cols() {
     :
 }
 
+# Read a line with `IFS` cleared.
 wread() {
     IFS= read -r "$@"
 }
+# Read a NUL-delimited value with `IFS` cleared.
 wread0() {
     IFS= read -r -d '' "$@"
 }
@@ -551,19 +609,35 @@ read_csv() {
 
 ## Distill information
 
+# Print file modification times as Unix epoch seconds.
+#
+# $@ - Paths passed to `stat`.
 stat_sec() {
     stat --format '%Y' "$@"
 }
 
+# Print disk usage in 1K blocks.
 du_k() { du --block-size=1K "$@" | awk '{print $1}'; }
+# Print disk usage in 1M blocks.
 du_m() { du --block-size=1M "$@" | awk '{print $1}'; }
+# Print disk usage in 1G blocks.
 du_g() { du --block-size=1G "$@" | awk '{print $1}'; }
+# Print disk usage in 1T blocks.
 du_t() { du --block-size=1T "$@" | awk '{print $1}'; }
 
+# Remove duplicate stdin lines while preserving first-seen order.
 uniq_preserve_order() {
     awk '!visited[$0]++'
 }
 
+# Sort lines by a formatted numeric substring.
+#
+# $1 - Extended regex with a capture group for the sort key.
+# $2 - `printf` format used to zero-pad or otherwise normalize the sort key.
+#
+# Examples
+#
+#   ls *_meta.txt | smart_sort '_seg([0-9]+)_' '_seg%04d_'
 smart_sort() {
     # Example: ls WV01_20140716_102001003208CC00_102001003223F500_2m_lsf_v040310/*_meta.txt | smart_sort '_seg([0-9]+)_' '_seg%04d_'
     local substr_pattern_capture_sort_group="$1"
@@ -574,27 +648,39 @@ smart_sort() {
         | sort | sed -r "s|^(.*)(${substr_pattern})(.*),(${substr_pattern})$|\1\4\3|"
 }
 
+# Count lines in each input item.
+#
+# $@ - Items passed through `process_items`.
 wc_nlines() {
     process_items 'wc -l' false true 0 "$@" | awk '{print $1}'
 }
 
+# Count repeated stdin items and print counts sorted by item.
 count_items() {
     awk '{item_count_dict[$0]++} END {for (item in item_count_dict) printf "%5s <-- %s\n", item_count_dict[item], item}' | sort -k3
 }
 
+# Count month-day occurrences found in stdin.
 count_by_date() {
     grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$0]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort
 }
+# Count month occurrences found in stdin.
 count_by_month() {
     grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+' | awk '{date_count_dict[$1]++} END {for (date in date_count_dict) printf "%s : %5s\n", date, date_count_dict[date]}' | sort
 }
+# Count month-day occurrences and include one matching example line.
 count_by_date_with_ex() {
     grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+.*$' | awk '{date=sprintf("%s %2s", $1, $2); date_count_dict[date]++; date_ex_dict[date]=$0} END {for (date in date_count_dict) printf "%s : %5s : %s\n", date, date_count_dict[date], date_ex_dict[date]}' | sort
 }
+# Count month occurrences and include one matching example line.
 count_by_month_with_ex() {
     grep -Eo '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+[0-9]+.*$' | awk '{date=$1; date_count_dict[date]++; date_ex_dict[date]=$0} END {for (date in date_count_dict) printf "%s : %5s : %s\n", date, date_count_dict[date], date_ex_dict[date]}' | sort
 }
 
+# Normalize column delimiters in stdin.
+#
+# $1 - Input column delimiter. Defaults to a space.
+# $2 - Output column delimiter. Defaults to a space.
 strip_cols() {
     local col_delim_in=' '
     local col_delim_out=' '
@@ -617,6 +703,10 @@ BEGIN {}
 } END {}'
 }
 
+# Print selected columns from stdin.
+#
+# Numeric arguments select columns. The first non-numeric argument sets the
+# input delimiter, and the second sets the output delimiter.
 get_cols() {
     local col_idx_arr=()
     local col_delim_in=''
@@ -670,6 +760,9 @@ BEGIN {}
 } END {}'
 }
 
+# Sum each column from delimited numeric stdin.
+#
+# $1 - Column delimiter. Defaults to a space.
 sum_cols() {
     local col_delim=' '
     if (( $# >= 1 )); then
@@ -693,6 +786,9 @@ BEGIN {}
 }'
 }
 
+# Sum all numeric fields from delimited stdin.
+#
+# $1 - Column delimiter. Defaults to a space.
 sum_all() {
     local col_delim=' '
     if (( $# >= 1 )); then
@@ -709,6 +805,7 @@ BEGIN {}
 }'
 }
 
+# Print count, sum, min, max, median, average, standard deviation, range, and interval for stdin numbers.
 get_stats() {
     # Adapted from https://stackoverflow.com/a/9790056/8896374
     local perl_cmd
@@ -726,10 +823,16 @@ get_stats() {
     perl -e "$perl_cmd"
 }
 
+# Print differences between consecutive numeric stdin values.
 get_intervals() {
     awk 'BEGIN {prev_val="";} {curr_val=$0; if (prev_val!="") print curr_val-prev_val; prev_val=curr_val;}'
 }
 
+# Compare matching file sizes between two directory trees.
+#
+# $1 - Base directory.
+# $2 - Comparison directory.
+# $@ - Additional `find` arguments after the first two paths.
 filesize_diff_perc() {
     local base_dir="$1"; shift
     local comp_dir="$1"; shift
@@ -746,6 +849,10 @@ filesize_diff_perc() {
 #alias findl='find -mindepth 1 -maxdepth 1'
 #alias findls='find -mindepth 1 -maxdepth 1 -ls | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
 #alias findlsh='find -mindepth 1 -maxdepth 1 -type f -exec ls -lh {} + | sed -r "s|^[0-9]+\s+[0-9]+\s+||"'
+# Dispatch shared parsing and execution for shell-utils find wrappers.
+#
+# $1 - Wrapper name controlling default depth and output behavior.
+# $@ - Arguments passed through to `find` after wrapper-specific parsing.
 find_alias() {
     local find_func_name="$1"; shift
 
@@ -868,24 +975,38 @@ find_alias() {
         fi
     fi
 }
+# Search upward from paths using `find` at each ancestor directory.
 findup() {
     find_alias findup "$@"
 }
+# Run `find` at depth one by default.
 findl() {
     find_alias findl "$@"
 }
+# Run `find -ls` at depth one by default with trimmed listing output.
 findls() {
     find_alias findls "$@"
 }
+# Run a human-readable `ls -lh` for files found at depth one by default.
 findlsh() {
     find_alias findlsh "$@"
 }
+# Run `findls` for the starting path itself.
 findst() {
     find_alias findls "$@" -mindepth 0 -maxdepth 0
 }
+# Find directories at depth one by default.
 findd1() {
     find_alias findd1 "$@"
 }
+# Find files whose sibling files with related suffixes are missing.
+#
+# $1 - Directory to search.
+# $2 - Base suffix used to identify candidate files.
+# $@ - Suffixes to check, followed by optional `find` arguments.
+#
+# Use `-any` to require any checked suffix, `-all` to require all checked
+# suffixes, and `-inverse` to invert the match.
 find_missing_suffix() {
     local search_dir base_suffix check_suffix_arr suffix_exist_cond debug
     search_dir="$1"; shift
@@ -962,6 +1083,9 @@ find_missing_suffix() {
     fi
 }
 
+# List suffixes under paths beginning with a prefix.
+#
+# $1 - Path prefix to strip from matching entries.
 ls_suffix() {
     ls -1 ${1}* | sed "s|^${1}||"
 }
@@ -969,14 +1093,17 @@ ls_suffix() {
 
 ## Package management
 
+# Update apt metadata and remove cached or unused packages.
 apt_cleanup() {
     sudo apt-get update && sudo apt-get autoclean && sudo apt-get clean && sudo apt-get autoremove
 }
 
+# Export the active Conda environment from explicit history.
 conda_history() {
     conda env export --from-history
 }
 
+# List installed Python packages with verbose metadata.
 pip_history() {
     python -m pip list --verbose
 }
@@ -984,10 +1111,12 @@ pip_history() {
 
 ## Git
 
+# Print the current repository origin URL.
 git_remote() {
     git config --get remote.origin.url
 }
 
+# Open the current repository origin URL in Google Chrome.
 git_webpage() {
     if ! git rev-parse --is-inside-work-tree 1>/dev/null; then
         return
@@ -1006,35 +1135,43 @@ git_webpage() {
     open -a "Google Chrome" "$url"
 }
 
+# Drop all unstaged and staged working tree changes.
 git_drop_all_changes() {
     git checkout -- .
 }
 
+# Reset HEAD back one commit while keeping working tree changes.
 git_reset_keep_changes() {
     git reset HEAD^
 }
 
+# Hard-reset the current repository to HEAD.
 git_reset_drop_changes() {
     git reset --hard HEAD
 }
 
+# Apply the stash tree directly without Git's merge machinery.
 git_stash_apply_no_merge() {
     git read-tree stash^{tree}
     git checkout-index -af
 }
 
+# Apply a patch with rejects and whitespace fixes.
 git_apply_force() {
     git apply --reject --whitespace=fix "$@"
 }
 
+# Delete all local branches except the current branch.
 git_remove_local_branches() {
     git branch | grep -v '\*' | xargs -r git branch -D
 }
+# Fetch pruned refs and delete local branches whose upstream is gone.
 git_branch_cleanup() {
     git fetch --prune
     git branch -vv | grep ': gone]' | awk '{print $1}' | xargs git branch -D
 }
 
+# Mark files executable in Git index and filesystem.
 git_make_exec() {
     if ! git rev-parse --is-inside-work-tree 1>/dev/null; then
         return
@@ -1044,6 +1181,7 @@ git_make_exec() {
     chmod +x "$@"
 }
 
+# Mark files non-executable in Git index and filesystem.
 git_remove_exec() {
     if ! git rev-parse --is-inside-work-tree 1>/dev/null; then
         return
@@ -1053,6 +1191,7 @@ git_remove_exec() {
     chmod -x "$@"
 }
 
+# Create a zip archive of the current repository HEAD.
 git_zip() {
     if ! git rev-parse --is-inside-work-tree 1>/dev/null; then
         return
@@ -1065,6 +1204,10 @@ git_zip() {
     git archive --format zip --output "$zipfile" HEAD
 }
 
+# Run one or more Git commands across repository directories.
+#
+# $1 - Command group name used in usage output.
+# $@ - Git command names, options, and repository directories.
 git_cmd_in() {
 
     ## Arguments
@@ -1184,15 +1327,22 @@ EOM
     echo "Done!"
 }
 
+# Run `git branch` across repository directories.
 git_branch_in() {
     git_cmd_in branch branch "$@"
 }
+# Run `git status` across repository directories.
 git_status_in() {
     git_cmd_in status status "$@"
 }
+# Run `git fetch` across repository directories.
 git_fetch_in() {
     git_cmd_in fetch fetch "$@"
 }
+# Run `git pull` across repository directories.
+#
+# Use `-stash` to run `git stash`, `git pull`, and `git stash apply` in each
+# repository.
 git_pull_in() {
     local func_args_in=("$@")
     local func_args_out=()
@@ -1223,10 +1373,14 @@ git_pull_in() {
 
     eval git_cmd_in pull ${git_cmd_arr[*]} ${func_args_out[*]}
 }
+# Create Git HEAD zip archives across repository directories.
 git_zip_in() {
     git_cmd_in zip git_zip "$@"
 }
 
+# Clone a repository and replace an existing same-named local directory.
+#
+# $1 - Git repository URL.
 git_clone_replace() {
     local repo_url repo_url_bname repo_name
     local cmd status
@@ -1269,6 +1423,10 @@ git_clone_replace() {
 
 ## Other
 
+# Print PBS `qstat` job information, optionally filtered.
+#
+# Options include `-user USER`, `-state STATE`, `-logs`, `-home`, and
+# `-dryrun`.
 qstat_info() {
     local user=''
     local job_state=''
@@ -1334,20 +1492,28 @@ qstat_info() {
         eval "$cmd"
     fi
 }
+# Print running PBS job IDs and names for the current user.
 qstat_r_jobs() {
     qstat -fx -u "$USER" | sed 's|</Job>|</Job>\n|g' | grep '<job_state>R</job_state>' | sed -r 's|.*<Job_Id>([^<]+)</Job_Id>.*<Job_Name>([^<]+)</Job_Name>.*|\1,\2|'
 }
+# Print running PBS job log paths for the current user.
 qstat_r_joblogs() {
     qstat -fx -u "$USER" | sed 's|</Job>|</Job>\n|g' | grep '<job_state>R</job_state>' | grep -v '<Job_Name>STDIN</Job_Name>' | sed -r 's|.*<Output_Path>([^<]+)</Output_Path>.*|\1|' | sed -r 's|^.+:([^:]+)$|\1|'
 }
+# Print running PBS job log paths rewritten under `$HOME`.
 qstat_r_joblogs_home() {
     qstat -fx -u "$USER" | sed 's|</Job>|</Job>\n|g' | grep '<job_state>R</job_state>' | grep -v '<Job_Name>STDIN</Job_Name>' | sed -r 's|.*<Output_Path>([^<]+)</Output_Path>.*|\1|' | sed -r 's|^.+:([^:]+)$|\1|' | basename_all | sed "s|^|${HOME}/|"
 }
 
+# SSH to a host using `~/.bashrc_from_ssh` as the remote Bash rcfile.
 ssh_alias() {
     set -x; ssh "$@" -t "bash --rcfile ~/.bashrc_from_ssh"; set +x
 }
 
+# Run SSH through `expect` and provide a key passphrase.
+#
+# $1 - SSH key passphrase.
+# $@ - SSH arguments after the passphrase.
 ssh_expect_passphrase() {
     local passphrase="$1"; shift
     local ssh_args=$(echo "$@" | sed -r -e "s|'|\\\\\"|g" -e "s|;|\\\\;|g")
@@ -1355,6 +1521,11 @@ ssh_expect_passphrase() {
 }
 
 #alias rsync_example='rsync_alias auto user@hostname -rtLPv'
+# Build and run an rsync command with automatic remote direction support.
+#
+# $1 - Direction: `to-remote`, `from-remote`, or `auto`.
+# $2 - Remote host.
+# $@ - Optional rsync arguments, then source and destination paths.
 rsync_alias() {
     local direction_choices=( 'to-remote' 'from-remote' 'auto' )
     local direction="$1"; shift
@@ -1419,6 +1590,11 @@ rsync_alias() {
     fi
 }
 
+# Run `rsync_alias auto` with default recursive transfer options.
+#
+# $1 - Remote host.
+# $@ - Source and destination paths, plus any trailing arguments accepted by
+#      `rsync_alias`.
 rsync_alias_defopt() {
     local remote_host="$1"; shift
     rsync_alias auto "$remote_host" -rtlv --partial-dir='.rsync-partial' --progress --exclude '.DS_Store' "$@"
